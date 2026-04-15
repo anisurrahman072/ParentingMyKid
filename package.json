@@ -2,6 +2,9 @@
   "name": "parentingmykid",
   "version": "1.0.0",
   "private": true,
+  "dependencies": {
+    "react-dom": "19.1.0"
+  },
   "workspaces": [
     "apps/*",
     "packages/*"
@@ -32,12 +35,14 @@
       "prettier --write"
     ]
   },
+  "packageManager": "npm@10.8.2",
   "engines": {
     "node": ">=20.0.0",
     "npm": ">=10.0.0"
   },
   "overrides": {
     "react": "19.1.0",
+    "react-dom": "19.1.0",
     "react-native": "0.81.5"
   }
 }
