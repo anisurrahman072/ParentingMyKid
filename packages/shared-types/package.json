@@ -1,0 +1,14 @@
+{
+  "name": "@parentingmykid/shared-types",
+  "version": "1.0.0",
+  "private": true,
+  "main": "./src/index.js",
+  "types": "./src/index.d.ts",
+  "scripts": {
+    "type-check": "tsc --noEmit",
+    "build": "tsc"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.3"
+  }
+}

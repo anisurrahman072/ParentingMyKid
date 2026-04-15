@@ -1,0 +1,96 @@
+/**
+ * @module api.client.ts
+ * @description Axios HTTP client with automatic JWT token injection and refresh.
+ *              All API calls in the app use this client — never raw fetch().
+ *
+ * @business-rule Token refresh flow:
+ *   1. Request goes out with access token in Authorization header
+ *   2. If server returns 401 (token expired), interceptor silently refreshes
+ *   3. Original request is retried with new access token
+ *   4. If refresh also fails → user is logged out (session truly expired)
+ */
+
+import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
+import { API_BASE_URL, API_ENDPOINTS } from '../constants/api';
+import { useAuthStore, getStoredRefreshToken } from '../store/auth.store';
+
+const apiClient = axios.create({
+  baseURL: API_BASE_URL,
+  timeout: 30000, // 30 second timeout — AI endpoints can be slow
+  headers: {
+    'Content-Type': 'application/json',
+  },
+});
+
+// ─── Request Interceptor — Attach JWT ─────────────────────────────────────────
+
+apiClient.interceptors.request.use(
+  (config: InternalAxiosRequestConfig) => {
+    const { accessToken } = useAuthStore.getState();
+    if (accessToken) {
+      config.headers.Authorization = `Bearer ${accessToken}`;
+    }
+    return config;
+  },
+  (error) => Promise.reject(error),
+);
+
+// ─── Response Interceptor — Handle Token Refresh ──────────────────────────────
+
+let isRefreshing = false;
+let refreshQueue: Array<(token: string) => void> = [];
+
+apiClient.interceptors.response.use(
+  (response) => response,
+  async (error: AxiosError) => {
+    const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean };
+
+    if (error.response?.status === 401 && !originalRequest._retry) {
+      if (isRefreshing) {
+        // Queue this request until refresh completes
+        return new Promise((resolve) => {
+          refreshQueue.push((token: string) => {
+            originalRequest.headers.Authorization = `Bearer ${token}`;
+            resolve(apiClient(originalRequest));
+          });
+        });
+      }
+
+      originalRequest._retry = true;
+      isRefreshing = true;
+
+      try {
+        const refreshToken = await getStoredRefreshToken();
+        if (!refreshToken) {
+          await useAuthStore.getState().logout();
+          return Promise.reject(error);
+        }
+
+        const response = await axios.post(`${API_BASE_URL}${API_ENDPOINTS.auth.refresh}`, {
+          refreshToken,
+        });
+
+        const { accessToken } = response.data as { accessToken: string; refreshToken: string };
+        useAuthStore.getState().setAccessToken(accessToken);
+
+        // Drain the queue with new token
+        refreshQueue.forEach((callback) => callback(accessToken));
+        refreshQueue = [];
+
+        // Retry the original request
+        originalRequest.headers.Authorization = `Bearer ${accessToken}`;
+        return apiClient(originalRequest);
+      } catch {
+        // Refresh failed — session is truly expired
+        await useAuthStore.getState().logout();
+        return Promise.reject(error);
+      } finally {
+        isRefreshing = false;
+      }
+    }
+
+    return Promise.reject(error);
+  },
+);
+
+export { apiClient };

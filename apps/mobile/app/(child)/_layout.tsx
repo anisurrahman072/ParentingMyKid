@@ -1,0 +1,95 @@
+/**
+ * Child stack layout.
+ * All screens here are gated to UserRole.CHILD (PIN-authenticated).
+ * Navigation structure:
+ *   - Bottom tabs: Missions, Rewards, Games, Islamic (optional), Me
+ *   - Tab bar uses bright, playful styling
+ *   - Each tab navigates to kid-friendly screens
+ */
+
+import { Tabs } from 'expo-router';
+import { Platform } from 'react-native';
+import { COLORS } from '../../src/constants/colors';
+import { useFamilyStore } from '../../src/store/family.store';
+
+function TabBarIcon({ icon, focused }: { icon: string; focused: boolean }) {
+  const { Text } = require('react-native');
+  return (
+    <Text
+      style={{
+        fontSize: 26,
+        opacity: focused ? 1 : 0.55,
+        transform: [{ scale: focused ? 1.15 : 1 }],
+      }}
+    >
+      {icon}
+    </Text>
+  );
+}
+
+export default function ChildLayout() {
+  const { activeChild } = useFamilyStore();
+  const islamicEnabled = activeChild?.islamicModuleEnabled ?? false;
+
+  return (
+    <Tabs
+      screenOptions={{
+        headerShown: false,
+        tabBarStyle: {
+          backgroundColor: '#FFFFFF',
+          borderTopColor: 'rgba(0,0,0,0.06)',
+          borderTopWidth: 1,
+          paddingBottom: Platform.OS === 'ios' ? 24 : 10,
+          paddingTop: 8,
+          height: Platform.OS === 'ios' ? 90 : 68,
+        },
+        tabBarActiveTintColor: COLORS.kids.primary,
+        tabBarInactiveTintColor: COLORS.kids.textMuted,
+        tabBarLabelStyle: {
+          fontSize: 12,
+          fontFamily: 'Nunito_400Regular',
+          fontWeight: '700',
+          marginTop: 0,
+        },
+      }}
+    >
+      <Tabs.Screen
+        name="missions/index"
+        options={{
+          title: 'Missions',
+          tabBarIcon: ({ focused }) => <TabBarIcon icon="⚡" focused={focused} />,
+        }}
+      />
+      <Tabs.Screen
+        name="rewards/index"
+        options={{
+          title: 'Rewards',
+          tabBarIcon: ({ focused }) => <TabBarIcon icon="🏆" focused={focused} />,
+        }}
+      />
+      <Tabs.Screen
+        name="games/index"
+        options={{
+          title: 'Games',
+          tabBarIcon: ({ focused }) => <TabBarIcon icon="🎮" focused={focused} />,
+        }}
+      />
+      {islamicEnabled && (
+        <Tabs.Screen
+          name="islamic/index"
+          options={{
+            title: 'Islam',
+            tabBarIcon: ({ focused }) => <TabBarIcon icon="🌙" focused={focused} />,
+          }}
+        />
+      )}
+      <Tabs.Screen
+        name="profile/index"
+        options={{
+          title: 'Me',
+          tabBarIcon: ({ focused }) => <TabBarIcon icon="😊" focused={focused} />,
+        }}
+      />
+    </Tabs>
+  );
+}

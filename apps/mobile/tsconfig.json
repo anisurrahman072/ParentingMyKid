@@ -1,0 +1,22 @@
+{
+  "extends": "../../node_modules/expo/tsconfig.base",
+  "compilerOptions": {
+    "strict": true,
+    "baseUrl": ".",
+    "paths": {
+      "@parentingmykid/shared-types": [
+        "../../packages/shared-types/src/index.ts"
+      ],
+      "@/*": [
+        "./src/*"
+      ]
+    }
+  },
+  "include": [
+    "**/*.ts",
+    "**/*.tsx",
+    ".expo/types/**/*.d.ts",
+    "expo-env.d.ts",
+    ".expo/types/**/*.ts"
+  ]
+}

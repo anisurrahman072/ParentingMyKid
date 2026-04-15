@@ -1,0 +1,1331 @@
+/**
+ * Prisma Schema — ParentingMyKid
+ *
+ * Database: PostgreSQL via Neon.tech (serverless, free tier)
+ * ORM: Prisma 5
+ *
+ * This schema covers all 14 feature groups from the master plan:
+ * 1. Core Users & Families      8. Safety & Protection
+ * 2. Child Profiles             9. Nutrition & Health
+ * 3. Daily Missions & Habits   10. Tutor Integration
+ * 4. Reward Engine             11. Islamic Module
+ * 5. Gamification              12. Family Finance
+ * 6. Gaming Zone               13. Homework & Study
+ * 7. Memory & Calendar         14. Parent Community
+ *
+ * + Subscriptions (RevenueCat), AI, Analytics
+ */
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Enums ───────────────────────────────────────────────────────────────────
+
+enum UserRole {
+  PARENT
+  CHILD
+  TUTOR
+  ADMIN
+}
+
+enum FamilyMemberRole {
+  PRIMARY
+  CO_PARENT
+  GUARDIAN
+  TUTOR
+}
+
+enum SubscriptionPlan {
+  FREE
+  STANDARD
+  PRO
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  TRIAL
+  EXPIRED
+  CANCELLED
+}
+
+enum SubscriptionEventType {
+  TRIAL_STARTED
+  SUBSCRIBED
+  RENEWED
+  CANCELLED
+  EXPIRED
+  REFUNDED
+}
+
+enum MissionCategory {
+  ACADEMIC
+  PHYSICAL
+  HABIT
+  SOCIAL
+  ISLAMIC
+  CREATIVE
+  SELF_CARE
+}
+
+enum ProofType {
+  MANUAL
+  PHOTO
+  VOICE
+  SENSOR
+}
+
+enum BadgeTier {
+  BRONZE
+  SILVER
+  GOLD
+  PLATINUM
+  ROYAL
+}
+
+enum RewardStatus {
+  PENDING
+  ACTIVE
+  ACHIEVED
+  REDEEMED
+  EXPIRED
+}
+
+enum WishStatus {
+  PENDING
+  APPROVED_WITH_GOAL
+  APPROVED_AS_GIFT
+  DECLINED
+}
+
+enum LocationEventType {
+  CHECK_IN
+  GEOFENCE_ENTER
+  GEOFENCE_EXIT
+  SOS
+}
+
+enum GeofenceType {
+  HOME
+  SCHOOL
+  SAFE_ZONE
+}
+
+enum AlertCategory {
+  CYBERBULLYING
+  SEXUAL_CONTENT
+  SELF_HARM
+  DEPRESSION
+  DRUG_REFERENCE
+  VIOLENCE
+  PREDATORY_BEHAVIOR
+  ALCOHOL
+  HATE_SPEECH
+  ONLINE_SCAM
+  DANGEROUS_CHALLENGE
+  STRANGER_CONTACT
+  AI_CHAT_RISK
+  EXCESSIVE_SCREEN_TIME
+  LATE_NIGHT_ACTIVITY
+}
+
+enum AlertSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum HealthRecordType {
+  HEIGHT
+  WEIGHT
+  SLEEP
+  BMI
+  ACTIVITY_MINUTES
+}
+
+enum MealType {
+  BREAKFAST
+  LUNCH
+  DINNER
+  SNACK
+}
+
+enum SalahName {
+  FAJR
+  DHUHR
+  ASR
+  MAGHRIB
+  ISHA
+}
+
+enum MemoryType {
+  PHOTO
+  VIDEO
+  MILESTONE
+  ACHIEVEMENT
+  TRIP
+}
+
+enum StudySessionType {
+  AI_HELP
+  FLASHCARD
+  PRACTICE_TEST
+  READING
+}
+
+enum GameCategory {
+  MATH
+  LANGUAGE
+  GEOGRAPHY
+  SCIENCE
+  ISLAMIC
+  GENERAL
+}
+
+enum FinanceEntryType {
+  INCOME
+  EXPENSE
+}
+
+enum FinanceCategory {
+  EDUCATION
+  HEALTH
+  FOOD
+  ENTERTAINMENT
+  ACTIVITIES
+  CLOTHING
+  TRANSPORT
+  SAVINGS
+  CHARITY
+  OTHER
+}
+
+// ─── Core: Users & Families ──────────────────────────────────────────────────
+
+/// The master user record — shared across all roles (parent, child, tutor, admin).
+/// Role determines which UI the user sees and what data they can access.
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  phone        String?
+  name         String
+  passwordHash String
+  role         UserRole @default(PARENT)
+  avatarUrl    String?
+
+  // Parental consent — required before any data collection for child accounts
+  parentalConsentGiven   Boolean   @default(false)
+  parentalConsentAt      DateTime?
+  parentalConsentVersion String?   // Track which version of privacy policy was agreed to
+
+  // Push notification token (Expo Push Service)
+  expoPushToken String?
+
+  // Language preference for the app UI
+  languagePreference String @default("en")
+
+  // Timestamps
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  lastLoginAt DateTime?
+
+  // Relations
+  familyMemberships FamilyMember[]
+  childProfile      ChildProfile?
+  tutorInvitesSent  TutorInvite[]  @relation("ParentTutorInvites")
+  communityPosts    CommunityPost[]
+  parentMoodLogs    ParentMoodLog[]
+  sessionTokens     SessionToken[]
+
+  @@map("users")
+}
+
+/// JWT refresh tokens stored in DB for rotation + revocation.
+/// Short-lived access tokens validated against Redis cache for speed.
+model SessionToken {
+  id        String   @id @default(uuid())
+  userId    String
+  tokenHash String   @unique // Hashed refresh token — never store raw tokens
+  expiresAt DateTime
+  isRevoked Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("session_tokens")
+}
+
+/// Family groups — the core organizational unit of the app.
+/// One family can have multiple children and multiple parent-role members.
+/// Divorced families: both parents in the same family with different roles.
+model FamilyGroup {
+  id          String   @id @default(uuid())
+  name        String
+  createdById String
+
+  // Settings
+  timezone             String @default("Asia/Dhaka")
+  islamicModuleEnabled Boolean @default(false)
+  islamicCountry       String? // Used for prayer time API
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  members          FamilyMember[]
+  children         ChildProfile[]
+  subscription     Subscription?
+  calendarEvents   FamilyCalendarEvent[]
+  memories         Memory[]
+  financeEntries   FamilyFinanceEntry[]
+  savingsGoals     SavingsGoal[]
+  communityGroups  CommunityGroup[]      @relation("FamilyGroups")
+
+  @@map("family_groups")
+}
+
+/// Join table: user ↔ family with role.
+/// A user can be in multiple families with different roles (e.g., primary parent in Family A, co-parent in Family B).
+model FamilyMember {
+  id       String           @id @default(uuid())
+  familyId String
+  userId   String
+  role     FamilyMemberRole @default(PRIMARY)
+
+  // Granular permissions for co-parents — set by primary parent
+  canViewSafetyData    Boolean @default(true)
+  canChangeScreenTime  Boolean @default(false)
+  canApproveRewards    Boolean @default(true)
+  canManageSubscription Boolean @default(false)
+
+  joinedAt DateTime @default(now())
+
+  family FamilyGroup @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  user   User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([familyId, userId])
+  @@map("family_members")
+}
+
+// ─── Child Profiles ───────────────────────────────────────────────────────────
+
+/// Child profile — stores all personal data for one child in a family.
+/// The child's User record holds login credentials; this holds growth data.
+model ChildProfile {
+  id       String @id @default(uuid())
+  userId   String @unique  // Linked to User record for child login
+  familyId String
+  parentId String  // Primary parent
+
+  name      String
+  nickname  String?
+  dob       DateTime
+  grade     String
+  school    String?
+  avatarUrl String?
+
+  // Child's PIN (4-digit, bcrypt hashed) for app login
+  // PIN login is age-appropriate and doesn't require typing an email
+  pinHash String?
+
+  // Profile personalization
+  languagePreference String   @default("en")
+  allergies          String[] // Food allergy list — used by nutrition AI
+  foodPreferences    String[]
+  favoriteActivities String[]
+  learningStyle      String?  // 'visual' | 'auditory' | 'kinesthetic' — from baseline quiz
+
+  // Islamic module toggle per child
+  islamicModuleEnabled Boolean @default(false)
+
+  // Social media monitoring toggle (parent-controlled, child-informed)
+  socialMonitoringEnabled Boolean @default(false)
+
+  // Gamification state
+  level         Int @default(1)
+  xp            Int @default(0)
+  totalPoints   Int @default(0)
+  spendableCoins Int @default(0)
+  currentStreak  Int @default(0)
+  longestStreak  Int @default(0)
+
+  // AI-calculated daily wellbeing score (0-100)
+  wellbeingScore Float?
+  wellbeingUpdatedAt DateTime?
+
+  // Baseline assessment completion
+  baselineCompletedAt DateTime?
+  baselineScores      Json?    // Scores across 8 dimensions from the assessment
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  user                User              @relation(fields: [userId], references: [id])
+  family              FamilyGroup       @relation(fields: [familyId], references: [id])
+  devices             ChildDevice[]
+  habits              Habit[]
+  habitCompletions    HabitCompletion[]
+  dailyMissions       DailyMission[]
+  moodLogs            MoodLog[]
+  skillAssessments    SkillAssessment[]
+  rewards             Reward[]
+  pointsLedger        PointsLedgerEntry[]
+  badges              Badge[]
+  wishRequests        WishRequest[]
+  locationEvents      LocationEvent[]
+  geofences           Geofence[]
+  screenUsageLogs     ScreenUsageLog[]
+  safetyAlerts        SafetyAlert[]
+  contentFilterEvents ContentFilterEvent[]
+  mealLogs            MealLog[]
+  healthRecords       HealthRecord[]
+  medicationReminders MedicationReminder[]
+  growthPlans         AiGrowthPlan[]
+  aiRecommendations   AiRecommendation[]
+  tutorInvites        TutorInvite[]
+  salahLogs           SalahLog[]
+  quranLogs           QuranLog[]
+  memories            Memory[]
+  gameSessions        GameSession[]
+  gameAchievements    GameAchievement[]
+  quizBattlesInitiated FamilyQuizBattle[] @relation("QuizInitiator")
+  studySessions       StudySession[]
+  practiceQuestions   PracticeQuestion[]
+  readingLogs         ReadingLog[]
+  flashcardSets       FlashcardSet[]
+  allowance           ChildAllowance?
+  tuitionRecords      TuitionRecord[]
+
+  @@map("child_profiles")
+}
+
+/// Paired child devices — monitored for safety and screen time.
+/// A child can have multiple devices (phone + tablet).
+model ChildDevice {
+  id           String   @id @default(uuid())
+  childId      String
+  deviceToken  String   // Expo push token for this device
+  platform     String   // 'android' | 'ios'
+  deviceName   String?  // "Ahmed's Samsung"
+  pairedAt     DateTime @default(now())
+  lastActiveAt DateTime?
+  isActive     Boolean  @default(true)
+  batteryLevel Int?     // Last known battery % — sent with location pings
+
+  child ChildProfile @relation(fields: [childId], references: [id], onDelete: Cascade)
+
+  @@map("child_devices")
+}
+
+// ─── Baseline Assessment ──────────────────────────────────────────────────────
+
+/// Stores the complete responses from the 10-minute baseline assessment.
+/// The AI analyzes these to generate the child's first Growth Plan and Baseline Report.
+model BaselineAssessment {
+  id          String   @id @default(uuid())
+  childId     String   @unique
+  answers     Json     // Array of {questionId, answer} objects
+  scores      Json     // {reading: 3, math: 2, physical: 4, ...} — 8 dimensions
+  report      Json     // Full Baseline Report generated by AI
+  completedAt DateTime @default(now())
+
+  @@map("baseline_assessments")
+}
+
+// ─── Habits & Missions ────────────────────────────────────────────────────────
+
+/// Recurring habits — the backbone of daily child engagement.
+/// Habits generate daily missions automatically based on schedule.
+model Habit {
+  id       String          @id @default(uuid())
+  childId  String
+  parentId String
+  title    String
+  category MissionCategory
+  description String?
+  iconEmoji   String?
+
+  // Points awarded on completion
+  pointsValue Int @default(10)
+  xpValue     Int @default(15)
+
+  // Schedule: which days this habit should appear
+  scheduleDays String[] // ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN']
+
+  // Proof requirements
+  proofRequired    Boolean   @default(false)
+  autoApprove      Boolean   @default(true)
+  proofDescription String?   // "Take a photo of your homework"
+
+  // Streak tracking
+  currentStreak Int @default(0)
+  longestStreak Int @default(0)
+  lastCompletedAt DateTime?
+
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  child       ChildProfile      @relation(fields: [childId], references: [id], onDelete: Cascade)
+  completions HabitCompletion[]
+
+  @@map("habits")
+}
+
+/// Individual habit completion record — one per day per habit.
+model HabitCompletion {
+  id          String    @id @default(uuid())
+  habitId     String
+  childId     String
+  completedAt DateTime  @default(now())
+  proofType   ProofType @default(MANUAL)
+  proofUrl    String?   // Cloudinary URL for photo/voice proof
+  voiceTranscript String? // Whisper API transcription
+  confidenceScore Float? // 0-1: < 0.6 requires parent approval
+  autoApproved    Boolean   @default(false)
+  parentApprovedAt DateTime?
+  parentApprovedBy String?
+
+  habit Habit        @relation(fields: [habitId], references: [id], onDelete: Cascade)
+  child ChildProfile @relation(fields: [childId], references: [id], onDelete: Cascade)
+
+  @@unique([habitId, completedAt])
+  @@map("habit_completions")
+}
+
+/// Daily mission list — generated by AI each morning for each child.
+/// Contains all missions for one specific day.
+model DailyMission {
+  id            String   @id @default(uuid())
+  childId       String
+  date          String   // YYYY-MM-DD — key lookup field
+  missionsJson  Json     // Array of mission objects
+  totalPoints   Int      @default(0)
+  completionPct Float    @default(0)
+  generatedByAi Boolean  @default(false)
+  isLocked      Boolean  @default(false) // Locked until previous habit streaks maintained
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  child ChildProfile @relation(fields: [childId], references: [id], onDelete: Cascade)
+
+  @@unique([childId, date])
+  @@map("daily_missions")
+}
+
+/// Mood check-in — 2-second daily check (morning + evening).
+/// AI tracks trends and alerts parent to concerning patterns.
+model MoodLog {
+  id        String   @id @default(uuid())
+  childId   String
+  moodScore Int      // 1-5: 5=Very Happy, 1=Very Sad
+  note      String?  // Optional child's note about why they feel this way
+  source    String   @default("CHILD") // 'CHILD' | 'INFERRED' (from sensor data)
+  loggedAt  DateTime @default(now())
+
+  child ChildProfile @relation(fields: [childId], references: [id], onDelete: Cascade)
+
+  @@map("mood_logs")
+}
+
+/// Skill assessment scores — tracked over time to show growth.
+/// Assessed by AI (from mission data), tutors, or parents.
+model SkillAssessment {
+  id         String   @id @default(uuid())
+  childId    String
+  skillType  String   // 'reading' | 'math' | 'physical' | 'emotional' | 'habit' | 'social' | 'sleep' | 'islamic'
+  score      Float    // Normalized 0-100
+  percentile Float?   // Compared to app user base
+  note       String?
+  assessedAt DateTime @default(now())
+  assessedBy String   // 'AI' | 'TUTOR' | 'PARENT'
+
+  child ChildProfile @relation(fields: [childId], references: [id], onDelete: Cascade)
+
+  @@map("skill_assessments")
+}
+
+// ─── Rewards & Gamification ───────────────────────────────────────────────────
+
+/// Parent-set reward contracts — the emotional lock that keeps parents subscribed.
+/// "Score 80%+ on math exam → I'll buy you that bicycle."
+model Reward {
+  id               String       @id @default(uuid())
+  childId          String
+  parentId         String
+  title            String
+  conditionType    String       // 'EXAM_SCORE' | 'STREAK' | 'MISSIONS_COUNT' | 'CUSTOM'
+  conditionDescription String
+  conditionValue   Float        // Target value (80 for 80%)
+  currentProgress  Float        @default(0)
+  rewardDescription String      // "New bicycle"
+  status           RewardStatus @default(PENDING)
+  targetDate       DateTime?
+  achievedAt       DateTime?
+  redeemedAt       DateTime?
+  createdAt        DateTime     @default(now())
+
+  child ChildProfile @relation(fields: [childId], references: [id], onDelete: Cascade)
+
+  @@map("rewards")
+}
+
+/// Points ledger — immutable audit trail of all points earned and spent.
+/// Every mission completion, badge, level-up, or coin spend creates a ledger entry.
+model PointsLedgerEntry {
+  id         String   @id @default(uuid())
+  childId    String
+  points     Int      // Positive = earned, Negative = spent
+  coins      Int      @default(0) // Spendable coins delta
+  xp         Int      @default(0) // XP delta
+  reason     String   // Human-readable reason: "Completed math mission"
+  sourceType String   // 'MISSION' | 'HABIT' | 'STREAK' | 'BADGE' | 'LEVEL_UP' | 'SPENT'
+  sourceId   String?  // ID of the source record (mission ID, badge ID, etc.)
+  createdAt  DateTime @default(now())
+
+  child ChildProfile @relation(fields: [childId], references: [id], onDelete: Cascade)
+
+  @@map("points_ledger")
+}
+
+/// Achievement badges — 75+ across Bronze to Royal tiers.
+model Badge {
+  id        String    @id @default(uuid())
+  childId   String
+  badgeType String    // Unique identifier e.g. 'FIRST_MISSION', '7_DAY_STREAK', etc.
+  tier      BadgeTier
+  title     String
+  description String
+  iconUrl   String?   // Cloudinary URL for badge image
+  earnedAt  DateTime  @default(now())
+  isShared  Boolean   @default(false) // Parent shared to social media
+
+  child ChildProfile @relation(fields: [childId], references: [id], onDelete: Cascade)
+
+  @@unique([childId, badgeType]) // A child can only earn each badge type once
+  @@map("badges")
+}
+
+/// Child wish requests — builds emotional connection between parent and child.
+/// Child asks → parent responds with YES/NO/conditional goal.
+model WishRequest {
+  id           String     @id @default(uuid())
+  childId      String
+  itemName     String
+  description  String
+  voiceUrl     String?    // Cloudinary URL if child used voice input
+  status       WishStatus @default(PENDING)
+  parentResponse String?
+  goalCondition  String?  // If APPROVED_WITH_GOAL: the condition description
+  goalValue      Float?
+  targetDate     DateTime?
+  respondedAt    DateTime?
+  createdAt      DateTime @default(now())
+
+  child ChildProfile @relation(fields: [childId], references: [id], onDelete: Cascade)
+
+  @@map("wish_requests")
+}
+
+// ─── Safety & Protection ─────────────────────────────────────────────────────
+
+/// Real-time GPS location events for child safety.
+model LocationEvent {
+  id        String            @id @default(uuid())
+  childId   String
+  lat       Float
+  lon       Float
+  accuracy  Float
+  eventType LocationEventType
+  address   String?           // Reverse geocoded address for display
+  timestamp DateTime          @default(now())
+
+  child ChildProfile @relation(fields: [childId], references: [id], onDelete: Cascade)
+
+  @@index([childId, timestamp])
+  @@map("location_events")
+}
+
+/// Named safe zones for a child — alerts when child enters or leaves.
+model Geofence {
+  id           String       @id @default(uuid())
+  childId      String
+  name         String
+  type         GeofenceType
+  centerLat    Float
+  centerLon    Float
+  radiusMeters Float
+  address      String?
+  isActive     Boolean      @default(true)
+  createdAt    DateTime     @default(now())
+
+  child ChildProfile @relation(fields: [childId], references: [id], onDelete: Cascade)
+
+  @@map("geofences")
+}
+
+/// Screen usage log — synced from child device periodically.
+model ScreenUsageLog {
+  id              String   @id @default(uuid())
+  childId         String
+  appName         String
+  appCategory     String   // 'SOCIAL_MEDIA' | 'GAMING' | 'EDUCATION' | 'ENTERTAINMENT' etc.
+  durationSeconds Int
+  loggedAt        DateTime @default(now())
+  date            String   // YYYY-MM-DD for daily aggregation
+
+  child ChildProfile @relation(fields: [childId], references: [id], onDelete: Cascade)
+
+  @@index([childId, date])
+  @@map("screen_usage_logs")
+}
+
+/// Screen time control rules — parent sets these, enforced on child device.
+model ScreenTimeControls {
+  id                     String  @id @default(uuid())
+  childId                String  @unique
+  dailyLimitMinutes      Int     @default(120)
+  socialMediaLimitMinutes Int    @default(30)
+  gamingLimitMinutes     Int     @default(45)
+  youtubeLimitMinutes    Int     @default(60)
+  youtubeRestrictedMode  Boolean @default(true)
+  safeSearchEnabled      Boolean @default(true)
+  bedtimeStart           String  @default("21:00") // HH:MM
+  bedtimeEnd             String  @default("07:00")
+  morningUnlockTime      String  @default("07:00")
+  focusTimeStart         String?
+  focusTimeEnd           String?
+  drivingModeEnabled     Boolean @default(true)
+  isPaused               Boolean @default(false) // Emergency "pause internet"
+  blockedApps            String[]
+  blockedWebsiteCategories String[]
+  blockedWebsites        String[]
+  appDownloadApproval    Boolean @default(true) // Require parent approval for new apps
+  updatedAt              DateTime @updatedAt
+
+  @@map("screen_time_controls")
+}
+
+/// Blocked website/content filter events — logged when child tries to access blocked content.
+model ContentFilterEvent {
+  id          String   @id @default(uuid())
+  childId     String
+  blockedUrl  String
+  reason      String   // 'ADULT_CONTENT' | 'VIOLENCE' | 'GAMBLING' | etc.
+  timestamp   DateTime @default(now())
+
+  child ChildProfile @relation(fields: [childId], references: [id], onDelete: Cascade)
+
+  @@map("content_filter_events")
+}
+
+/// AI-generated safety alerts — the most important notification type.
+/// CRITICAL severity = immediate push notification to all parents + emergency contacts.
+model SafetyAlert {
+  id              String        @id @default(uuid())
+  childId         String
+  category        AlertCategory
+  severity        AlertSeverity
+  title           String
+  description     String
+  evidenceSnippet String?       // Anonymized content snippet (not full conversation)
+  platform        String?       // 'WHATSAPP' | 'INSTAGRAM' | 'TIKTOK' etc.
+  isRead          Boolean       @default(false)
+  actionTaken     String?       // Parent's note on what they did
+  createdAt       DateTime      @default(now())
+
+  child ChildProfile @relation(fields: [childId], references: [id], onDelete: Cascade)
+
+  @@index([childId, isRead])
+  @@map("safety_alerts")
+}
+
+// ─── Nutrition & Health ───────────────────────────────────────────────────────
+
+model MealLog {
+  id         String   @id @default(uuid())
+  childId    String
+  mealType   MealType
+  foodsJson  Json     // Array of FoodItem objects
+  macrosJson Json?    // {calories, protein, carbs, fat}
+  vitaminsJson Json?  // {iron: 5, calcium: 200, ...} in mg
+  loggedAt   DateTime @default(now())
+  date       String   // YYYY-MM-DD
+
+  child ChildProfile @relation(fields: [childId], references: [id], onDelete: Cascade)
+
+  @@map("meal_logs")
+}
+
+model HealthRecord {
+  id          String           @id @default(uuid())
+  childId     String
+  recordType  HealthRecordType
+  value       Float
+  unit        String           // 'cm', 'kg', 'hours', 'minutes'
+  note        String?
+  recordedAt  DateTime         @default(now())
+
+  child ChildProfile @relation(fields: [childId], references: [id], onDelete: Cascade)
+
+  @@map("health_records")
+}
+
+model MedicationReminder {
+  id           String   @id @default(uuid())
+  childId      String
+  medicationName String
+  dosage       String   // "1 tablet" | "5ml"
+  scheduleTimes String[] // ["08:00", "20:00"]
+  startDate    DateTime
+  endDate      DateTime?
+  isActive     Boolean  @default(true)
+  note         String?
+  createdAt    DateTime @default(now())
+
+  child ChildProfile @relation(fields: [childId], references: [id], onDelete: Cascade)
+
+  @@map("medication_reminders")
+}
+
+/// Vaccination tracker — parent logs completed vaccines and gets reminders for upcoming ones.
+model VaccinationRecord {
+  id           String   @id @default(uuid())
+  childId      String
+  vaccineName  String
+  doseNumber   Int      @default(1)
+  givenAt      DateTime
+  nextDueAt    DateTime?
+  givenBy      String?  // Doctor/clinic name
+  note         String?
+  createdAt    DateTime @default(now())
+
+  @@map("vaccination_records")
+}
+
+// ─── AI & Growth Plans ────────────────────────────────────────────────────────
+
+/// Weekly AI growth plan — generated every Monday for each child.
+model AiGrowthPlan {
+  id                    String   @id @default(uuid())
+  childId               String
+  weekStart             String   // YYYY-MM-DD of Monday
+  focusAreasJson        Json     // Array of GrowthPlanFocusArea objects
+  predictedImprovements Json     // {reading: 15, math: 10, ...} % improvement predictions
+  confidence            Float    // 0-1 AI confidence in the plan
+  parentApproved        Boolean  @default(false)
+  parentModified        Boolean  @default(false)
+  generatedAt           DateTime @default(now())
+
+  child ChildProfile @relation(fields: [childId], references: [id], onDelete: Cascade)
+
+  @@unique([childId, weekStart])
+  @@map("ai_growth_plans")
+}
+
+/// AI recommendations — personalized tips, alerts, and action items for parents.
+model AiRecommendation {
+  id              String   @id @default(uuid())
+  childId         String
+  parentId        String
+  category        String   // 'growth' | 'behavior' | 'nutrition' | 'safety' | 'islamic'
+  recommendationText String
+  actionStepsJson Json?    // Array of specific action steps
+  isRead          Boolean  @default(false)
+  isDismissed     Boolean  @default(false)
+  createdAt       DateTime @default(now())
+
+  child ChildProfile @relation(fields: [childId], references: [id], onDelete: Cascade)
+
+  @@map("ai_recommendations")
+}
+
+/// AI behavioral coach sessions — parent asks "how do I handle this?" → AI responds.
+model AiCoachSession {
+  id              String   @id @default(uuid())
+  parentId        String
+  childId         String
+  situation       String   // Parent's description
+  category        String   // 'REFUSAL' | 'MELTDOWN' | 'LYING' | 'SCREEN_ADDICTION' etc.
+  immediateScript String   // Exact words to say
+  immediateSteps  Json     // Array of 3 steps
+  doNotSay        Json?    // What NOT to say
+  longerTermStrategy String
+  isHelpful       Boolean? // Parent feedback
+  createdAt       DateTime @default(now())
+
+  @@map("ai_coach_sessions")
+}
+
+// ─── Tutor Integration ────────────────────────────────────────────────────────
+
+/// Tutor invite — parent sends this to a teacher or private tutor.
+/// Tutor receives email with a link to a web form (no app download required).
+model TutorInvite {
+  id           String   @id @default(uuid())
+  childId      String
+  parentId     String
+  tutorEmail   String
+  tutorName    String?
+  tutorUserId  String?  // Set if tutor creates a ParentingMyKid account
+
+  // Scope: what data the tutor can see and respond about
+  scopeAcademic Boolean @default(true)
+  scopeBehavior Boolean @default(true)
+  scopeMood     Boolean @default(false)
+
+  // Web form access
+  token          String   @unique // Short-lived JWT for the public web form
+  tokenExpiresAt DateTime
+  status         String   @default("PENDING") // 'PENDING' | 'RESPONDED' | 'EXPIRED'
+
+  // Question pack generated by AI
+  questionsJson  Json?    // Array of TutorQuestion objects
+  responsesJson  Json?    // Array of TutorResponse objects
+  respondedAt    DateTime?
+  aiSummary      String?  // AI summary of tutor responses for parent
+
+  sentAt    DateTime @default(now())
+  createdAt DateTime @default(now())
+
+  child  ChildProfile @relation(fields: [childId], references: [id], onDelete: Cascade)
+  parent User         @relation("ParentTutorInvites", fields: [parentId], references: [id])
+
+  @@map("tutor_invites")
+}
+
+// ─── Islamic Module ───────────────────────────────────────────────────────────
+
+/// Daily Salah (prayer) completion log.
+model SalahLog {
+  id       String    @id @default(uuid())
+  childId  String
+  date     String    // YYYY-MM-DD
+  salah    SalahName
+  loggedAt DateTime  @default(now())
+  onTime   Boolean   @default(true) // Whether it was prayed on time
+
+  child ChildProfile @relation(fields: [childId], references: [id], onDelete: Cascade)
+
+  @@unique([childId, date, salah])
+  @@map("salah_logs")
+}
+
+/// Quran reading tracker.
+model QuranLog {
+  id          String   @id @default(uuid())
+  childId     String
+  date        String   // YYYY-MM-DD
+  pagesRead   Float    @default(0)
+  surahName   String?
+  fromAyah    Int?
+  toAyah      Int?
+  photoUrl    String?  // Optional photo proof of the page
+  loggedAt    DateTime @default(now())
+
+  child ChildProfile @relation(fields: [childId], references: [id], onDelete: Cascade)
+
+  @@map("quran_logs")
+}
+
+/// Islamic stories library — 100+ stories for bedtime reading missions.
+model IslamicStory {
+  id          String   @id @default(uuid())
+  title       String
+  content     String
+  minAge      Int      @default(4)
+  maxAge      Int      @default(15)
+  category    String   // 'PROPHET' | 'COMPANION' | 'MORAL' | 'HISTORICAL'
+  imageUrl    String?  // Cloudinary URL for story illustration
+  audioUrl    String?  // Optional audio narration
+  readCount   Int      @default(0)
+  isPublished Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  @@map("islamic_stories")
+}
+
+/// Zakat calculator records for parents.
+model ZakatRecord {
+  id           String   @id @default(uuid())
+  parentId     String
+  year         Int
+  savingsAmount Float
+  goldValue     Float   @default(0)
+  silverValue   Float   @default(0)
+  investmentValue Float @default(0)
+  otherAssets   Float   @default(0)
+  nisabThreshold Float  // Current gold nisab value at time of calculation
+  zakatDue      Float   // Calculated 2.5% of zakatable wealth
+  zakatPaid     Float   @default(0)
+  currency      String  @default("BDT")
+  calculatedAt  DateTime @default(now())
+
+  @@map("zakat_records")
+}
+
+// ─── Memory & Calendar ────────────────────────────────────────────────────────
+
+model Memory {
+  id        String     @id @default(uuid())
+  familyId  String
+  childId   String?
+  type      MemoryType
+  mediaUrl  String?    // Cloudinary URL
+  caption   String?
+  milestone String?    // For MILESTONE type: "First day at new school"
+  taggedAt  DateTime   @default(now())
+  createdAt DateTime   @default(now())
+
+  family FamilyGroup  @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  child  ChildProfile? @relation(fields: [childId], references: [id])
+
+  @@map("memories")
+}
+
+model FamilyCalendarEvent {
+  id          String    @id @default(uuid())
+  familyId    String
+  childId     String?
+  title       String
+  type        String    // 'EXAM' | 'APPOINTMENT' | 'BIRTHDAY' | 'TRIP' | 'SCHOOL' | 'SPORTS' | 'TUITION' | 'EID' | 'CUSTOM'
+  description String?
+  startAt     DateTime
+  endAt       DateTime?
+  reminderDays Int?     // Reminder sent X days before
+  createdBy   String    // User ID
+  createdAt   DateTime  @default(now())
+
+  family FamilyGroup @relation(fields: [familyId], references: [id], onDelete: Cascade)
+
+  @@map("family_calendar_events")
+}
+
+// ─── Gaming Zone ─────────────────────────────────────────────────────────────
+
+model Game {
+  id          String      @id @default(uuid())
+  name        String
+  category    GameCategory
+  minAge      Int
+  maxAge      Int
+  description String
+  iconUrl     String?
+  isActive    Boolean     @default(true)
+  createdAt   DateTime    @default(now())
+
+  sessions     GameSession[]
+  achievements GameAchievement[]
+
+  @@map("games")
+}
+
+model GameSession {
+  id          String   @id @default(uuid())
+  childId     String
+  gameId      String
+  score       Int      @default(0)
+  durationSeconds Int  @default(0)
+  isPersonalBest Boolean @default(false)
+  startedAt   DateTime @default(now())
+  endedAt     DateTime?
+
+  child ChildProfile @relation(fields: [childId], references: [id], onDelete: Cascade)
+  game  Game         @relation(fields: [gameId], references: [id])
+
+  @@map("game_sessions")
+}
+
+model GameAchievement {
+  id              String   @id @default(uuid())
+  childId         String
+  gameId          String
+  achievementType String   // 'FIRST_WIN' | 'HIGH_SCORE' | 'GAME_MASTER' etc.
+  earnedAt        DateTime @default(now())
+
+  child ChildProfile @relation(fields: [childId], references: [id], onDelete: Cascade)
+  game  Game         @relation(fields: [gameId], references: [id])
+
+  @@unique([childId, gameId, achievementType])
+  @@map("game_achievements")
+}
+
+/// Family quiz battles — parent vs child or sibling vs sibling.
+model FamilyQuizBattle {
+  id              String @id @default(uuid())
+  familyId        String
+  initiatorChildId String
+  opponentId      String // Can be child ID or parent user ID
+  opponentType    String // 'CHILD' | 'PARENT'
+  subject         String
+  questionsJson   Json   // Array of QuizQuestion objects
+  resultsJson     Json?  // QuizResults object
+  status          String @default("PENDING") // 'PENDING' | 'ACTIVE' | 'COMPLETED'
+  startedAt       DateTime @default(now())
+  completedAt     DateTime?
+
+  initiator ChildProfile @relation("QuizInitiator", fields: [initiatorChildId], references: [id])
+
+  @@map("family_quiz_battles")
+}
+
+// ─── Study Companion ──────────────────────────────────────────────────────────
+
+model StudySession {
+  id              String          @id @default(uuid())
+  childId         String
+  subject         String
+  durationMinutes Int
+  sessionType     StudySessionType
+  aiPrompts       Int             @default(0) // Number of AI questions asked
+  startedAt       DateTime        @default(now())
+  endedAt         DateTime?
+
+  child ChildProfile @relation(fields: [childId], references: [id], onDelete: Cascade)
+
+  @@map("study_sessions")
+}
+
+model PracticeQuestion {
+  id             String   @id @default(uuid())
+  childId        String
+  subject        String
+  difficulty     String   // 'EASY' | 'MEDIUM' | 'HARD'
+  questionText   String
+  questionType   String   @default("MCQ") // 'MCQ' | 'SHORT_ANSWER'
+  optionsJson    Json?    // For MCQ: ["option1", "option2", ...]
+  correctAnswer  String
+  childAnswer    String?
+  isCorrect      Boolean?
+  explanation    String?
+  attemptedAt    DateTime?
+  createdAt      DateTime @default(now())
+
+  child ChildProfile @relation(fields: [childId], references: [id], onDelete: Cascade)
+
+  @@map("practice_questions")
+}
+
+model ReadingLog {
+  id         String   @id @default(uuid())
+  childId    String
+  bookTitle  String
+  author     String?
+  pagesRead  Int
+  totalPages Int?
+  notes      String?
+  loggedAt   DateTime @default(now())
+
+  child ChildProfile @relation(fields: [childId], references: [id], onDelete: Cascade)
+
+  @@map("reading_logs")
+}
+
+model FlashcardSet {
+  id           String   @id @default(uuid())
+  childId      String
+  topic        String
+  cardsJson    Json     // Array of {front, back, nextReviewAt, interval}
+  nextReviewAt DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  child ChildProfile @relation(fields: [childId], references: [id], onDelete: Cascade)
+
+  @@map("flashcard_sets")
+}
+
+// ─── Subscriptions (RevenueCat) ───────────────────────────────────────────────
+
+/// Family subscription — managed by RevenueCat, synced via webhook.
+model Subscription {
+  id                      String             @id @default(uuid())
+  familyId                String             @unique
+  plan                    SubscriptionPlan   @default(FREE)
+  status                  SubscriptionStatus @default(TRIAL)
+  revenuecatCustomerId    String?            // RevenueCat customer ID
+  entitlementIdentifier   String?            // RevenueCat entitlement key
+  platform                String?            // 'ios' | 'android'
+  expiresAt               DateTime?
+  trialEndsAt             DateTime?
+  cancelledAt             DateTime?
+  createdAt               DateTime           @default(now())
+  updatedAt               DateTime           @updatedAt
+
+  family FamilyGroup @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  events SubscriptionEvent[]
+
+  @@map("subscriptions")
+}
+
+/// Immutable audit log of all subscription lifecycle events from RevenueCat webhooks.
+model SubscriptionEvent {
+  id             String                @id @default(uuid())
+  subscriptionId String
+  eventType      SubscriptionEventType
+  plan           SubscriptionPlan
+  platform       String?
+  rawWebhookJson Json?                 // Store full RevenueCat webhook payload for debugging
+  createdAt      DateTime              @default(now())
+
+  subscription Subscription @relation(fields: [subscriptionId], references: [id])
+
+  @@map("subscription_events")
+}
+
+// ─── Family Finance ───────────────────────────────────────────────────────────
+
+model FamilyFinanceEntry {
+  id       String           @id @default(uuid())
+  familyId String
+  childId  String?          // Linked child if education/health expense
+  category FinanceCategory
+  amount   Float
+  currency String           @default("BDT")
+  type     FinanceEntryType
+  date     DateTime
+  note     String?
+  paymentMethod String?     // 'CASH' | 'BKASH' | 'BANK' | 'CARD'
+  createdAt DateTime        @default(now())
+
+  family FamilyGroup @relation(fields: [familyId], references: [id], onDelete: Cascade)
+
+  @@map("family_finance_entries")
+}
+
+model SavingsGoal {
+  id            String   @id @default(uuid())
+  familyId      String
+  title         String
+  targetAmount  Float
+  currentAmount Float    @default(0)
+  currency      String   @default("BDT")
+  targetDate    DateTime
+  isAchieved    Boolean  @default(false)
+  achievedAt    DateTime?
+  note          String?
+  createdAt     DateTime @default(now())
+
+  family FamilyGroup @relation(fields: [familyId], references: [id], onDelete: Cascade)
+
+  @@map("savings_goals")
+}
+
+model ChildAllowance {
+  id             String   @id @default(uuid())
+  childId        String   @unique
+  weeklyAmount   Float
+  savingsGoal    Float    @default(0)
+  savingsBalance Float    @default(0)
+  currency       String   @default("BDT")
+  updatedAt      DateTime @updatedAt
+
+  child ChildProfile @relation(fields: [childId], references: [id], onDelete: Cascade)
+
+  @@map("child_allowances")
+}
+
+model TuitionRecord {
+  id              String   @id @default(uuid())
+  familyId        String
+  childId         String
+  institutionName String
+  amount          Float
+  currency        String   @default("BDT")
+  dueDate         DateTime
+  paidAt          DateTime?
+  paymentMethod   String?
+  note            String?
+  createdAt       DateTime @default(now())
+
+  child ChildProfile @relation(fields: [childId], references: [id], onDelete: Cascade)
+
+  @@map("tuition_records")
+}
+
+// ─── Community & Support ─────────────────────────────────────────────────────
+
+model ParentingTip {
+  id           String   @id @default(uuid())
+  title        String
+  content      String
+  category     String   // 'DISCIPLINE' | 'SCREEN_TIME' | 'STUDY_HABITS' | 'EMOTIONAL' | 'ISLAMIC' | 'NUTRITION' | 'SLEEP' | 'SOCIAL' | 'DIVORCE'
+  ageGroupMin  Int      @default(4)
+  ageGroupMax  Int      @default(15)
+  readMinutes  Int      @default(3)
+  isPublished  Boolean  @default(true)
+  publishedAt  DateTime?
+  readCount    Int      @default(0)
+  createdAt    DateTime @default(now())
+
+  @@map("parenting_tips")
+}
+
+model CommunityGroup {
+  id           String   @id @default(uuid())
+  name         String
+  description  String?
+  ageRangeMin  Int
+  ageRangeMax  Int
+  memberCount  Int      @default(0)
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+
+  families FamilyGroup[] @relation("FamilyGroups")
+  posts    CommunityPost[]
+
+  @@map("community_groups")
+}
+
+model CommunityPost {
+  id          String   @id @default(uuid())
+  parentId    String
+  groupId     String
+  content     String
+  isAnonymous Boolean  @default(false)
+  likesCount  Int      @default(0)
+  isModerated Boolean  @default(false)
+  moderatedAt DateTime?
+  createdAt   DateTime @default(now())
+
+  parent User           @relation(fields: [parentId], references: [id], onDelete: Cascade)
+  group  CommunityGroup @relation(fields: [groupId], references: [id])
+
+  @@map("community_posts")
+}
+
+model ParentMoodLog {
+  id        String   @id @default(uuid())
+  parentId  String
+  moodScore Int      // 1-5
+  note      String?
+  loggedAt  DateTime @default(now())
+
+  parent User @relation(fields: [parentId], references: [id], onDelete: Cascade)
+
+  @@map("parent_mood_logs")
+}
+
+/// AI-generated crisis scripts for parents — always available on free plan.
+model CrisisScript {
+  id               String   @id @default(uuid())
+  situation        String   // 'MELTDOWN' | 'REFUSING_SCHOOL' | 'LYING' | etc.
+  childAgeMin      Int
+  childAgeMax      Int
+  immediateScript  String
+  immediateSteps   Json
+  doNotSay         Json
+  longerTermStrategy String
+  psychologyBasis  String   // Brief citation of the research behind it
+  isPublished      Boolean  @default(true)
+  createdAt        DateTime @default(now())
+
+  @@map("crisis_scripts")
+}

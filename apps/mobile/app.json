@@ -1,0 +1,75 @@
+{
+  "expo": {
+    "name": "ParentingMyKid",
+    "slug": "parentingmykid",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icons/app-icon.png",
+    "scheme": "parentingmykid",
+    "userInterfaceStyle": "automatic",
+    "splash": {
+      "image": "./assets/icons/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#6366F1"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.parentingmykid.app",
+      "buildNumber": "1",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "ParentingMyKid uses your child's location to keep them safe and alert you when they arrive at or leave safe zones.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "ParentingMyKid monitors your child's location in the background for safety alerts.",
+        "NSCameraUsageDescription": "ParentingMyKid allows your child to take photo proof of completed missions.",
+        "NSMicrophoneUsageDescription": "ParentingMyKid allows your child to use voice check-ins for missions.",
+        "NSPhotoLibraryUsageDescription": "ParentingMyKid allows adding photos to the family memory gallery."
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/icons/adaptive-icon.png",
+        "backgroundColor": "#6366F1"
+      },
+      "package": "com.parentingmykid.app",
+      "versionCode": 1,
+      "permissions": [
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_BACKGROUND_LOCATION",
+        "CAMERA",
+        "RECORD_AUDIO",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE",
+        "RECEIVE_BOOT_COMPLETED",
+        "VIBRATE"
+      ]
+    },
+    "plugins": [
+      "expo-router",
+      "expo-font",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icons/notification-icon.png",
+          "color": "#6366F1",
+          "sounds": ["./assets/sounds/notification.wav"]
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "ParentingMyKid needs background location access to monitor your child's safety.",
+          "isAndroidBackgroundLocationEnabled": true
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow ParentingMyKid to access your camera for mission photo proof."
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}
