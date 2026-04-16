@@ -1,31 +1,13 @@
 'use client';
 
-import { useSyncExternalStore } from 'react';
-
 import { motion, useReducedMotion } from 'framer-motion';
+
+import { useCoarsePointer } from '@/lib/use-coarse-pointer';
 
 type Props = {
   /** Which pillar card (0–5) — picks star colors */
   variant: number;
 };
-
-/**
- * Coarse pointer = touch-primary device (mobile/tablet).
- * On these devices we skip per-star framer-motion animations (48 WAAPI
- * compositor layers across 6 cards is excessive on mobile GPUs) and render
- * static stars instead — same look, no ongoing layer pressure.
- */
-function useCoarsePointer(): boolean {
-  return useSyncExternalStore(
-    (onChange) => {
-      const mq = window.matchMedia('(pointer: coarse)');
-      mq.addEventListener('change', onChange);
-      return () => mq.removeEventListener('change', onChange);
-    },
-    () => window.matchMedia('(pointer: coarse)').matches,
-    () => false,
-  );
-}
 
 const PALETTES = [
   ['#FBBF24', '#F472B6', '#22D3EE', '#A78BFA'],

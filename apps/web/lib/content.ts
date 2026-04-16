@@ -145,7 +145,7 @@ export const bnContent: LandingContent = {
       body: 'খাবার, পানি ও ঘুম শিশুর শরীর ও মনের জ্বালানি—আজকের ছোট যত্নই কালকের মনোযোগ ও শান্তি বাড়ায়।',
       tag: 'দৈনন্দিন যত্ন',
       gradientClass:
-        'bg-gradient-to-br from-teal-100/95 via-emerald-50/90 to-cyan-100/85 border border-teal-200/55 shadow-[0_22px_56px_-20px_rgba(13,148,136,0.28)] ring-1 ring-white/70 backdrop-blur-[2px]',
+        'bg-gradient-to-br from-teal-100/95 via-emerald-50/90 to-cyan-100/85 border border-teal-200/55 shadow-[0_22px_56px_-20px_rgba(13,148,136,0.28)] ring-1 ring-white/70 backdrop-blur-none sm:backdrop-blur-[2px]',
     },
     {
       emoji: '📚',
@@ -153,7 +153,7 @@ export const bnContent: LandingContent = {
       body: 'জিজ্ঞাসা ও ভাবনাকে স্বাগত জানালে শেখা টিকে—আজকের প্রশ্নই আগামীর আত্মবিশ্বাস গড়ে।',
       tag: 'চিন্তা ও শেখা',
       gradientClass:
-        'bg-gradient-to-br from-violet-100/95 via-purple-50/90 to-fuchsia-100/80 border border-violet-200/50 shadow-[0_22px_56px_-20px_rgba(124,58,237,0.22)] ring-1 ring-white/70 backdrop-blur-[2px]',
+        'bg-gradient-to-br from-violet-100/95 via-purple-50/90 to-fuchsia-100/80 border border-violet-200/50 shadow-[0_22px_56px_-20px_rgba(124,58,237,0.22)] ring-1 ring-white/70 backdrop-blur-none sm:backdrop-blur-[2px]',
     },
     {
       emoji: '🧠',
@@ -161,7 +161,7 @@ export const bnContent: LandingContent = {
       body: 'চাপ বা রাগের নাম ধরে বললে ভেতরের শান্তি শেখে—আজকের ছোট সাহস, কালকের মানসিক শক্তি।',
       tag: 'মনের শক্তি',
       gradientClass:
-        'bg-gradient-to-br from-sky-100/95 via-blue-50/90 to-indigo-100/82 border border-sky-200/50 shadow-[0_22px_56px_-20px_rgba(14,165,233,0.22)] ring-1 ring-white/70 backdrop-blur-[2px]',
+        'bg-gradient-to-br from-sky-100/95 via-blue-50/90 to-indigo-100/82 border border-sky-200/50 shadow-[0_22px_56px_-20px_rgba(14,165,233,0.22)] ring-1 ring-white/70 backdrop-blur-none sm:backdrop-blur-[2px]',
     },
     {
       emoji: '❤️',
@@ -169,7 +169,7 @@ export const bnContent: LandingContent = {
       body: 'আপনার মনোযোগ ও স্নেহ শিশুকে শেখায়—অনুভূতি নিরাপদ, নিজেকে ভালোবাসা ও সম্পর্কে বিশ্বাস গড়ে।',
       tag: 'ভালোবাসা ও নিরাপত্তা',
       gradientClass:
-        'bg-gradient-to-br from-orange-100/95 via-amber-50/90 to-rose-100/80 border border-orange-200/50 shadow-[0_22px_56px_-20px_rgba(234,88,12,0.18)] ring-1 ring-white/70 backdrop-blur-[2px]',
+        'bg-gradient-to-br from-orange-100/95 via-amber-50/90 to-rose-100/80 border border-orange-200/50 shadow-[0_22px_56px_-20px_rgba(234,88,12,0.18)] ring-1 ring-white/70 backdrop-blur-none sm:backdrop-blur-[2px]',
     },
     {
       emoji: '💪',
@@ -177,7 +177,7 @@ export const bnContent: LandingContent = {
       body: 'নড়াচড়া ও বাইরের সময় শরীর ও মেজাজ দুটোই সতেজ রাখে—সম্পূর্ণ বিকাশের অংশ।',
       tag: 'নড়াচড়া ও শক্তি',
       gradientClass:
-        'bg-gradient-to-br from-emerald-100/95 via-green-50/90 to-lime-100/78 border border-emerald-200/50 shadow-[0_22px_56px_-20px_rgba(5,150,105,0.24)] ring-1 ring-white/70 backdrop-blur-[2px]',
+        'bg-gradient-to-br from-emerald-100/95 via-green-50/90 to-lime-100/78 border border-emerald-200/50 shadow-[0_22px_56px_-20px_rgba(5,150,105,0.24)] ring-1 ring-white/70 backdrop-blur-none sm:backdrop-blur-[2px]',
     },
     {
       emoji: '🎮',
@@ -185,7 +185,7 @@ export const bnContent: LandingContent = {
       body: 'বন্ধুদের সঙ্গে খেলায় নিয়ম, ভাগ করা ও সহানুভূতি শেখে—স্কুল ও জীবনের সামাজিক দক্ষতা।',
       tag: 'সামাজিক শেখা',
       gradientClass:
-        'bg-gradient-to-br from-fuchsia-100/95 via-pink-50/90 to-purple-100/82 border border-fuchsia-200/45 shadow-[0_22px_56px_-20px_rgba(192,38,211,0.2)] ring-1 ring-white/70 backdrop-blur-[2px]',
+        'bg-gradient-to-br from-fuchsia-100/95 via-pink-50/90 to-purple-100/82 border border-fuchsia-200/45 shadow-[0_22px_56px_-20px_rgba(192,38,211,0.2)] ring-1 ring-white/70 backdrop-blur-none sm:backdrop-blur-[2px]',
     },
   ],
   quote: {

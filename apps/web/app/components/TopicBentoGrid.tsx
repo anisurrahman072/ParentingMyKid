@@ -1,8 +1,10 @@
 'use client';
 
 import { motion, useReducedMotion } from 'framer-motion';
+import { useMemo } from 'react';
 
 import type { LandingContent } from '@/lib/content';
+import { useCoarsePointer } from '@/lib/use-coarse-pointer';
 
 import { HappyKidPillarMascot } from './HappyKidPillarMascot';
 import { PillarCardStarBorder } from './PillarCardStarBorder';
@@ -10,19 +12,6 @@ import { ScrollReveal } from './ScrollReveal';
 
 type Props = {
   content: LandingContent;
-};
-
-const container = {
-  hidden: { opacity: 0 },
-  show: {
-    opacity: 1,
-    transition: { staggerChildren: 0.1 },
-  },
-};
-
-const item = {
-  hidden: { opacity: 0, y: 28 },
-  show: { opacity: 1, y: 0, transition: { duration: 0.5, ease: [0.22, 1, 0.36, 1] } },
 };
 
 /** Degrees — mix of “top-right lean” vs “bottom-left” for an organic bento */
@@ -41,6 +30,33 @@ const PILLAR_TITLE_GRADIENT = [
 export function TopicBentoGrid({ content }: Props): React.ReactElement {
   const isBn = content.locale === 'bn';
   const reduceMotion = useReducedMotion();
+  const isCoarse = useCoarsePointer();
+
+  const containerVariants = useMemo(
+    () => ({
+      hidden: { opacity: 0 },
+      show: {
+        opacity: 1,
+        transition: { staggerChildren: isCoarse ? 0 : 0.1 },
+      },
+    }),
+    [isCoarse],
+  );
+
+  const itemVariants = useMemo(
+    () => ({
+      hidden: { opacity: 0, y: isCoarse ? 12 : 28 },
+      show: {
+        opacity: 1,
+        y: 0,
+        transition: {
+          duration: isCoarse ? 0.22 : 0.5,
+          ease: [0.22, 1, 0.36, 1] as const,
+        },
+      },
+    }),
+    [isCoarse],
+  );
 
   return (
     <section className="relative overflow-x-clip bg-gradient-to-b from-emerald-50/50 via-bg-soft to-violet-50/40 px-4 pb-8 pt-20 md:pb-10">
@@ -76,10 +92,10 @@ export function TopicBentoGrid({ content }: Props): React.ReactElement {
         <div className="relative mt-10 md:mt-12">
           <motion.div
             className="relative z-10 grid grid-cols-1 gap-6 overflow-visible pb-4 pt-4 md:grid-cols-12 md:gap-7 md:pb-5 md:pt-6"
-            variants={container}
+            variants={containerVariants}
             initial="hidden"
             whileInView="show"
-            viewport={{ once: true, margin: '-80px' }}
+            viewport={{ once: true, margin: '-80px', amount: 0.12 }}
           >
             {content.topics.map((topic, index) => {
               const span =
@@ -91,7 +107,8 @@ export function TopicBentoGrid({ content }: Props): React.ReactElement {
                       ? 'md:col-span-12 md:max-w-3xl md:justify-self-center'
                       : 'md:col-span-4';
 
-              const tilt = reduceMotion ? 0 : CARD_TILTS[index % CARD_TILTS.length];
+              const tilt =
+                reduceMotion || isCoarse ? 0 : CARD_TILTS[index % CARD_TILTS.length];
 
               return (
                 <div
@@ -104,17 +121,19 @@ export function TopicBentoGrid({ content }: Props): React.ReactElement {
                 >
                   <PillarCardStarBorder variant={index} />
                   <motion.article
-                    variants={item}
+                    variants={itemVariants}
                     className={`group relative z-10 flex h-full flex-col overflow-hidden rounded-[2rem] p-8 ${topic.gradientClass}`}
                     whileHover={
-                      reduceMotion
-                        ? { scale: 1.01 }
-                        : {
-                            scale: 1.04,
-                            rotateX: 4,
-                            rotateY: -3,
-                            transition: { type: 'spring', stiffness: 280, damping: 20 },
-                          }
+                      isCoarse
+                        ? undefined
+                        : reduceMotion
+                          ? { scale: 1.01 }
+                          : {
+                              scale: 1.04,
+                              rotateX: 4,
+                              rotateY: -3,
+                              transition: { type: 'spring', stiffness: 280, damping: 20 },
+                            }
                     }
                   >
                     <div className="pointer-events-none absolute inset-0 rounded-[inherit] bg-[linear-gradient(135deg,rgba(255,255,255,0.55)_0%,transparent_48%,rgba(255,255,255,0.2)_100%)] opacity-70" aria-hidden />
@@ -123,19 +142,35 @@ export function TopicBentoGrid({ content }: Props): React.ReactElement {
                       className="pointer-events-none absolute bottom-3 right-3 z-[5] sm:bottom-4 sm:right-4"
                       aria-hidden
                     >
-                      <div className={`relative h-10 w-10 opacity-[0.32] ${reduceMotion ? '' : 'animate-corner-spin'}`}>
-                        <span className="absolute left-1/2 top-0 -translate-x-1/2 text-[11px] text-amber-400/90 drop-shadow-[0_0_8px_rgba(251,191,36,0.35)]">
+                      <div
+                        className={`relative h-10 w-10 opacity-[0.32] ${
+                          reduceMotion || isCoarse ? '' : 'animate-corner-spin'
+                        }`}
+                      >
+                        <span
+                          className={`absolute left-1/2 top-0 -translate-x-1/2 text-[11px] text-amber-400/90 ${
+                            isCoarse ? '' : 'drop-shadow-[0_0_8px_rgba(251,191,36,0.35)]'
+                          }`}
+                        >
                           ✦
                         </span>
-                        <span className="absolute bottom-0 right-0 text-[9px] text-violet-400/85 drop-shadow-[0_0_6px_rgba(167,139,250,0.35)]">
+                        <span
+                          className={`absolute bottom-0 right-0 text-[9px] text-violet-400/85 ${
+                            isCoarse ? '' : 'drop-shadow-[0_0_6px_rgba(167,139,250,0.35)]'
+                          }`}
+                        >
                           ✦
                         </span>
-                        <span className="absolute bottom-1 left-0 text-[8px] text-teal-400/75 drop-shadow-[0_0_6px_rgba(45,212,191,0.3)]">
+                        <span
+                          className={`absolute bottom-1 left-0 text-[8px] text-teal-400/75 ${
+                            isCoarse ? '' : 'drop-shadow-[0_0_6px_rgba(45,212,191,0.3)]'
+                          }`}
+                        >
                           ✦
                         </span>
                       </div>
                     </div>
-                    <div className="relative text-5xl transition duration-300 group-hover:scale-105 group-hover:drop-shadow-md sm:text-6xl">
+                    <div className="relative text-5xl transition duration-300 sm:text-6xl sm:group-hover:scale-105 sm:group-hover:drop-shadow-md">
                       {topic.emoji}
                     </div>
                     <h3
