@@ -277,10 +277,10 @@ function CommunityPillar({
         <p className="stats-text-display text-2xl font-black leading-tight tracking-tight sm:text-3xl">
           {headline}
         </p>
-        <p className="stats-text-body mt-3 max-w-[21rem] text-sm font-medium leading-relaxed sm:text-base">
+        <p className="stats-text-body mt-3 max-w-[21rem] text-sm font-semibold leading-relaxed sm:text-base">
           {supporting}
         </p>
-        <p className="stats-text-quiet mt-3 max-w-[20rem] text-xs leading-relaxed sm:text-[0.8125rem]">
+        <p className="stats-text-quiet mt-3 max-w-[20rem] text-xs font-semibold leading-relaxed sm:text-[0.8125rem]">
           {honestLine}
         </p>
       </div>
@@ -329,8 +329,8 @@ function StatBlock({
           displayBn
         )}
       </p>
-      <p className="stats-text-body max-w-[19rem] text-base font-semibold leading-snug sm:text-lg">{label}</p>
-      <p className="stats-text-quiet mt-1 max-w-[20rem] text-xs leading-relaxed sm:text-sm">{supporting}</p>
+      <p className="stats-text-body max-w-[19rem] text-base font-bold leading-snug sm:text-lg">{label}</p>
+      <p className="stats-text-quiet mt-1 max-w-[20rem] text-xs font-semibold leading-relaxed sm:text-sm">{supporting}</p>
     </div>
   );
 }
@@ -347,8 +347,8 @@ function StatBlockText({
   return (
     <div className="flex flex-col items-center gap-2">
       <p className="stats-text-display text-4xl font-black sm:text-5xl">{value}</p>
-      <p className="stats-text-body max-w-[19rem] text-base font-semibold leading-snug sm:text-lg">{label}</p>
-      <p className="stats-text-quiet mt-1 max-w-[20rem] text-xs leading-relaxed sm:text-sm">{supporting}</p>
+      <p className="stats-text-body max-w-[19rem] text-base font-bold leading-snug sm:text-lg">{label}</p>
+      <p className="stats-text-quiet mt-1 max-w-[20rem] text-xs font-semibold leading-relaxed sm:text-sm">{supporting}</p>
     </div>
   );
 }
