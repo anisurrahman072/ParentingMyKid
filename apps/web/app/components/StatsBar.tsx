@@ -1,7 +1,6 @@
 'use client';
 
-import { motion, useInView, useReducedMotion } from 'framer-motion';
-import { useRef } from 'react';
+import { useEffect, useState } from 'react';
 
 import { FacebookMarkIcon } from '@/app/components/FacebookFollowButton';
 import { FACEBOOK_PAGE_URL } from '@/lib/constants';
@@ -25,7 +24,7 @@ const COMMUNITY_DOTS: { bg: string }[] = [
 const ARC_MB = [0, 5, 9, 11, 9, 5, 0];
 
 /** Six “stepping stones” on a path — different motif from the community dots */
-function AreasJourneyDecoration(): React.ReactElement {
+function AreasJourneyDecoration({ isMobile }: { isMobile: boolean }): React.ReactElement {
   const nodes: [number, number][] = [
     [12, 36],
     [44, 24],
@@ -56,26 +55,30 @@ function AreasJourneyDecoration(): React.ReactElement {
         opacity={0.88}
       />
       {nodes.map(([cx, cy], i) => (
-        <motion.g key={i} style={{ transformOrigin: `${cx}px ${cy}px` }}>
-          <motion.rect
-            x={cx - 5}
-            y={cy - 5}
-            width={10}
-            height={10}
-            rx={2.5}
-            fill="rgba(255,255,255,0.95)"
-            stroke="rgba(255,255,255,0.55)"
-            strokeWidth={1}
-            transform={`rotate(38 ${cx} ${cy})`}
-            animate={{ opacity: [0.65, 1, 0.65] }}
-            transition={{
-              duration: 2.6,
-              repeat: Infinity,
-              ease: 'easeInOut',
-              delay: i * 0.12,
-            }}
-          />
-        </motion.g>
+        <rect
+          key={i}
+          x={cx - 5}
+          y={cy - 5}
+          width={10}
+          height={10}
+          rx={2.5}
+          fill="rgba(255,255,255,0.95)"
+          stroke="rgba(255,255,255,0.55)"
+          strokeWidth={1}
+          transform={`rotate(38 ${cx} ${cy})`}
+          opacity={isMobile ? 0.85 : undefined}
+          style={
+            isMobile
+              ? undefined
+              : {
+                  animationName: 'statRectPulse',
+                  animationDuration: '2.6s',
+                  animationDelay: `${i * 0.12}s`,
+                  animationTimingFunction: 'ease-in-out',
+                  animationIterationCount: 'infinite',
+                }
+          }
+        />
       ))}
     </svg>
   );
@@ -83,39 +86,22 @@ function AreasJourneyDecoration(): React.ReactElement {
 
 /** Soft waves = daily rhythm — distinct from dots and path nodes */
 /** Bottom-center Facebook mark — rhythm pillar only; premium disc + gentle shake. */
-function RhythmFacebookBadge(): React.ReactElement {
-  const reduceMotion = useReducedMotion();
-
+function RhythmFacebookBadge({ isMobile }: { isMobile: boolean }): React.ReactElement {
   return (
-    <motion.a
+    <a
       href={FACEBOOK_PAGE_URL}
       target="_blank"
       rel="noopener noreferrer"
       style={{ transformOrigin: '50% 0%' }}
-      className="mt-6 inline-flex h-[3.35rem] w-[3.35rem] shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-brand-teal via-teal-600 to-brand-purple text-white shadow-[0_10px_28px_-6px_rgba(0,0,0,0.42),0_2px_10px_rgba(0,0,0,0.18)] ring-2 ring-white/35 ring-offset-2 ring-offset-transparent transition hover:brightness-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/80"
+      className={`mt-6 inline-flex h-[3.35rem] w-[3.35rem] shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-brand-teal via-teal-600 to-brand-purple text-white shadow-[0_10px_28px_-6px_rgba(0,0,0,0.42),0_2px_10px_rgba(0,0,0,0.18)] ring-2 ring-white/35 ring-offset-2 ring-offset-transparent transition hover:brightness-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/80${isMobile ? '' : ' facebook-badge-swing'}`}
       aria-label="Facebook page"
-      initial={false}
-      animate={
-        reduceMotion
-          ? {}
-          : {
-              /* Pivot at top: bottom of the circle swings side-to-side */
-              rotate: [-5.5, 5.5],
-            }
-      }
-      transition={{
-        duration: 2.15,
-        repeat: Infinity,
-        repeatType: 'reverse',
-        ease: 'easeInOut',
-      }}
     >
       <FacebookMarkIcon className="h-[1.65rem] w-[1.65rem] sm:h-[1.8rem] sm:w-[1.8rem]" />
-    </motion.a>
+    </a>
   );
 }
 
-function RhythmWavesDecoration(): React.ReactElement {
+function RhythmWavesDecoration({ isMobile }: { isMobile: boolean }): React.ReactElement {
   const waves = [
     'M 4 30 Q 52 14 100 30 T 196 28',
     'M 4 36 Q 56 48 104 36 T 196 34',
@@ -135,42 +121,63 @@ function RhythmWavesDecoration(): React.ReactElement {
         </linearGradient>
       </defs>
       {waves.map((d, i) => (
-        <motion.path
+        <path
           key={i}
           d={d}
           fill="none"
           stroke="url(#stats-rhythm-w)"
           strokeLinecap="round"
           strokeWidth={i === 1 ? 2 : 1.6}
-          opacity={0.75 + i * 0.06}
-          animate={{ opacity: [0.35 + i * 0.08, 0.85, 0.35 + i * 0.08] }}
-          transition={{
-            duration: 2.8 + i * 0.25,
-            repeat: Infinity,
-            ease: 'easeInOut',
-            delay: i * 0.15,
-          }}
+          opacity={isMobile ? 0.62 + i * 0.07 : undefined}
+          style={
+            isMobile
+              ? undefined
+              : {
+                  ['--wave-op-from' as string]: String(0.35 + i * 0.08),
+                  animationName: 'statWavePulse',
+                  animationDuration: `${2.8 + i * 0.25}s`,
+                  animationDelay: `${i * 0.15}s`,
+                  animationTimingFunction: 'ease-in-out',
+                  animationIterationCount: 'infinite',
+                }
+          }
         />
       ))}
-      <motion.circle
+      <circle
         cx={100}
         cy={26}
         r={3.2}
-        fill="rgba(255,255,255,0.95)"
-        animate={{ scale: [1, 1.25, 1], opacity: [0.7, 1, 0.7] }}
-        transition={{ duration: 2.2, repeat: Infinity, ease: 'easeInOut' }}
+        fill={isMobile ? 'rgba(255,255,255,0.92)' : 'rgba(255,255,255,0.95)'}
+        style={
+          isMobile
+            ? undefined
+            : {
+                animationName: 'statCirclePulse',
+                animationDuration: '2.2s',
+                animationTimingFunction: 'ease-in-out',
+                animationIterationCount: 'infinite',
+              }
+        }
       />
     </svg>
   );
 }
 
 export function StatsBar({ content }: Props): React.ReactElement {
-  const ref = useRef(null);
-  const isInView = useInView(ref, { once: true, margin: '-20%' });
   const isBn = content.locale === 'bn';
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const mobileMedia = window.matchMedia('(max-width: 639px)');
+    const syncMobileFlag = () => setIsMobile(mobileMedia.matches);
+
+    syncMobileFlag();
+    mobileMedia.addEventListener('change', syncMobileFlag);
+    return () => mobileMedia.removeEventListener('change', syncMobileFlag);
+  }, []);
 
   return (
-    <section ref={ref} className="px-4 py-5 sm:px-6 sm:py-7 md:px-10 lg:px-12">
+    <section className="px-4 py-5 sm:px-6 sm:py-7 md:px-10 lg:px-12">
       <div
         className="relative overflow-hidden rounded-[2rem_2.65rem_2.35rem_2.5rem] bg-gradient-to-r from-brand-teal via-emerald-500 to-brand-purple px-4 py-12 text-white shadow-[0_22px_56px_-14px_rgba(15,23,42,0.28),inset_0_1px_0_rgba(255,255,255,0.14)] ring-1 ring-inset ring-white/20 sm:rounded-[2.15rem_2.85rem_2.5rem_2.65rem] sm:py-14 md:rounded-[2.35rem_3rem_2.65rem_2.85rem]"
       >
@@ -180,7 +187,7 @@ export function StatsBar({ content }: Props): React.ReactElement {
 
         <div className="relative mx-auto grid max-w-5xl grid-cols-1 gap-6 text-center sm:grid-cols-3 sm:gap-5">
           <CommunityPillar
-            isInView={isInView}
+            disableAnimation={isMobile}
             isBn={isBn}
             headline={content.stats.community.headline}
             supporting={content.stats.community.supporting}
@@ -189,8 +196,7 @@ export function StatsBar({ content }: Props): React.ReactElement {
           <StatPillar
             curveClass="rounded-[1.35rem_2.85rem_1.45rem_2.1rem] sm:rounded-[1.35rem_2.85rem_1.45rem_2.1rem]"
             decor="areas"
-            isInView={isInView}
-            delay={0.06}
+            disableAnimation={isMobile}
             isBn={isBn}
           >
             <AreasStatBlock
@@ -202,8 +208,7 @@ export function StatsBar({ content }: Props): React.ReactElement {
           <StatPillar
             curveClass="rounded-[2.45rem_1.35rem_2.2rem_1.55rem] sm:rounded-[2.45rem_1.35rem_2.2rem_1.55rem]"
             decor="rhythm"
-            isInView={isInView}
-            delay={0.12}
+            disableAnimation={isMobile}
             isBn={isBn}
           >
             <div className="flex w-full flex-col items-center">
@@ -212,7 +217,7 @@ export function StatsBar({ content }: Props): React.ReactElement {
                 label={content.stats.rhythm.label}
                 supporting={content.stats.rhythm.supporting}
               />
-              <RhythmFacebookBadge />
+              <RhythmFacebookBadge isMobile={isMobile} />
             </div>
           </StatPillar>
         </div>
@@ -225,55 +230,51 @@ function StatPillar({
   children,
   curveClass,
   decor,
-  isInView,
-  delay,
+  disableAnimation,
   isBn,
 }: {
   children: React.ReactNode;
   curveClass: string;
   decor?: 'areas' | 'rhythm';
-  isInView: boolean;
-  delay: number;
+  disableAnimation: boolean;
   isBn: boolean;
 }): React.ReactElement {
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 18 }}
-      animate={isInView ? { opacity: 1, y: 0 } : {}}
-      transition={{ duration: 0.55, delay }}
-      className={`stats-glass-panel relative border p-7 transition-transform duration-300 hover:-translate-y-1 ${curveClass} ${
+    <div
+      className={`stats-glass-panel relative border p-7 ${
+        disableAnimation ? '' : 'transition-transform duration-300 hover:-translate-y-1'
+      } ${curveClass} ${
         isBn ? 'font-bengali' : ''
       }`}
     >
       <div className="pointer-events-none absolute inset-x-4 top-3 h-px bg-gradient-to-r from-transparent via-white/35 to-transparent" />
       <div className="relative z-10 flex min-h-[11rem] flex-col items-center sm:min-h-[12rem]">
-        {decor === 'areas' ? <AreasJourneyDecoration /> : null}
-        {decor === 'rhythm' ? <RhythmWavesDecoration /> : null}
+        {decor === 'areas' ? <AreasJourneyDecoration isMobile={disableAnimation} /> : null}
+        {decor === 'rhythm' ? <RhythmWavesDecoration isMobile={disableAnimation} /> : null}
         {children}
       </div>
-    </motion.div>
+    </div>
   );
 }
 
 function CommunityPillar({
-  isInView,
+  disableAnimation,
   isBn,
   headline,
   supporting,
   honestLine,
 }: {
-  isInView: boolean;
+  disableAnimation: boolean;
   isBn: boolean;
   headline: string;
   supporting: string;
   honestLine: string;
 }): React.ReactElement {
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 18 }}
-      animate={isInView ? { opacity: 1, y: 0 } : {}}
-      transition={{ duration: 0.55 }}
-      className={`stats-glass-panel relative border p-7 transition-transform duration-300 hover:-translate-y-1 rounded-[2.15rem_2.65rem_1.65rem_2.35rem] sm:rounded-[2.15rem_2.65rem_1.65rem_2.35rem] ${
+    <div
+      className={`stats-glass-panel relative border p-7 ${
+        disableAnimation ? '' : 'transition-transform duration-300 hover:-translate-y-1'
+      } rounded-[2.15rem_2.65rem_1.65rem_2.35rem] sm:rounded-[2.15rem_2.65rem_1.65rem_2.35rem] ${
         isBn ? 'font-bengali' : ''
       }`}
     >
@@ -287,21 +288,23 @@ function CommunityPillar({
           aria-hidden
         >
           {COMMUNITY_DOTS.map((d, i) => (
-            <motion.span
+            <span
               key={i}
-              className="inline-block h-3 w-3 rounded-full border border-white/45 shadow-[0_2px_8px_rgba(0,0,0,0.12)] sm:h-3.5 sm:w-3.5"
-              style={{
-                background: d.bg,
-                marginBottom: ARC_MB[i],
-              }}
-              animate={{ y: [0, -4 - (i % 3), 0] }}
-              transition={{
-                duration: 2.8 + i * 0.12,
-                repeat: Infinity,
-                ease: 'easeInOut',
-                delay: i * 0.08,
-              }}
-              whileHover={{ scale: 1.2, y: -6 }}
+              className={`inline-block h-3 w-3 rounded-full border border-white/45 shadow-[0_2px_8px_rgba(0,0,0,0.12)] sm:h-3.5 sm:w-3.5${disableAnimation ? '' : ' community-dot'}`}
+              style={
+                disableAnimation
+                  ? { background: d.bg, marginBottom: ARC_MB[i] }
+                  : {
+                      background: d.bg,
+                      marginBottom: ARC_MB[i],
+                      ['--dot-bounce' as string]: `-${4 + (i % 3)}px`,
+                      animationName: 'communityDotBounce',
+                      animationDuration: `${2.8 + i * 0.12}s`,
+                      animationDelay: `${i * 0.08}s`,
+                      animationTimingFunction: 'ease-in-out',
+                      animationIterationCount: 'infinite',
+                    }
+              }
             />
           ))}
         </div>
@@ -316,7 +319,7 @@ function CommunityPillar({
           {honestLine}
         </p>
       </div>
-    </motion.div>
+    </div>
   );
 }
 

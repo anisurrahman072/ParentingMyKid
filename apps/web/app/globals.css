@@ -18,27 +18,29 @@
 
   .mesh-hero {
     background-color: #f7fafc;
+    /*
+     * Static radial orbs stay on this element — no animation, no repaint.
+     * The animated linear-gradient is lifted to a ::before pseudo-element
+     * so only that single cheap layer repaints each frame instead of all 6.
+     */
     background-image:
       radial-gradient(ellipse 120% 80% at 50% -30%, rgba(224, 255, 244, 0.95), transparent 55%),
       radial-gradient(ellipse 90% 70% at 100% 15%, rgba(243, 232, 255, 0.85), transparent 50%),
       radial-gradient(ellipse 80% 60% at 0% 85%, rgba(232, 248, 255, 0.9), transparent 52%),
       radial-gradient(circle at 30% 40%, rgba(0, 168, 120, 0.07) 0%, transparent 42%),
-      radial-gradient(circle at 75% 55%, rgba(160, 32, 216, 0.06) 0%, transparent 45%),
-      linear-gradient(-45deg, #dff8f0, #eee6ff, #ffeef6, #e4f4ff);
-    background-size:
-      auto,
-      auto,
-      auto,
-      auto,
-      auto,
-      400% 400%;
-    background-position:
-      center,
-      center,
-      center,
-      center,
-      center,
-      0% 50%;
+      radial-gradient(circle at 75% 55%, rgba(160, 32, 216, 0.06) 0%, transparent 45%);
+    background-position: center;
+  }
+
+  .mesh-hero::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    background: linear-gradient(-45deg, #dff8f0, #eee6ff, #ffeef6, #e4f4ff);
+    background-size: 400% 400%;
+    background-position: 0% 50%;
     animation: meshHeroShift 14s ease infinite;
   }
 
@@ -105,6 +107,23 @@
   .animate-problem-shell {
     animation: problem-shimmer 11s ease-in-out infinite;
   }
+
+  /* Facebook badge swing (replaces framer-motion motion.a) */
+  .facebook-badge-swing {
+    animation: facebookSwing 4.3s ease-in-out infinite;
+  }
+
+  /* Community dot hover — stops bounce and lifts+scales the dot.
+   * Using animation:none rather than paused because active animations
+   * win over the cascade for the properties they animate, so we must
+   * fully remove the animation before the hover transform can take effect. */
+  .community-dot {
+    transition: transform 0.15s ease;
+  }
+  .community-dot:hover {
+    animation: none !important;
+    transform: translateY(-6px) scale(1.2);
+  }
 }
 
 @keyframes gradientShift {
@@ -117,14 +136,14 @@
   }
 }
 
-/** Hero mesh: only the bottom linear layer shifts; soft orbs stay fixed. */
+/** Hero mesh: ::before holds only the animated linear-gradient layer. */
 @keyframes meshHeroShift {
   0%,
   100% {
-    background-position: center, center, center, center, center, 0% 50%;
+    background-position: 0% 50%;
   }
   50% {
-    background-position: center, center, center, center, center, 100% 50%;
+    background-position: 100% 50%;
   }
 }
 
@@ -263,6 +282,36 @@
   animation: cornerSpin 32s linear infinite;
 }
 
+/*
+ * StatsBar pillar animations — all converted from framer-motion JS loops to
+ * CSS so they run on the compositor thread with zero JS-RAF overhead.
+ */
+@keyframes communityDotBounce {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(var(--dot-bounce, -4px)); }
+}
+
+@keyframes statRectPulse {
+  0%, 100% { opacity: 0.65; }
+  50% { opacity: 1; }
+}
+
+@keyframes statWavePulse {
+  0%, 100% { opacity: var(--wave-op-from, 0.4); }
+  50% { opacity: 0.85; }
+}
+
+@keyframes statCirclePulse {
+  0%, 100% { transform: scale(1); opacity: 0.7; }
+  50% { transform: scale(1.25); opacity: 1; }
+}
+
+/* repeatType:'reverse' at 2.15s each side = 4.3s full cycle */
+@keyframes facebookSwing {
+  0%, 100% { transform: rotate(-5.5deg); }
+  50% { transform: rotate(5.5deg); }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .hero-falling-stars {
     display: none;
@@ -278,6 +327,14 @@
 
   .animate-corner-spin {
     animation: none;
+  }
+
+  .facebook-badge-swing {
+    animation: none;
+  }
+
+  .community-dot {
+    animation: none !important;
   }
 }
 
