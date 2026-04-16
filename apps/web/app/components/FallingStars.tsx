@@ -35,7 +35,7 @@ export function FallingStars(): React.ReactElement {
       {STARS.map((s, i) => (
         <span
           key={`${s.left}-${i}`}
-          className={`absolute top-0 select-none will-change-transform ${
+          className={`absolute top-0 select-none ${
             s.hideOnNarrow ? 'hidden sm:inline' : ''
           }`}
           style={{

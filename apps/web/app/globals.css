@@ -236,8 +236,15 @@
   }
 }
 
-html {
-  scroll-behavior: smooth;
+/*
+ * Smooth scrolling for anchor/history navigation on pointer-first devices.
+ * Coarse touch scrolling stays on the browser default so momentum scrolling
+ * is not competing with CSS smooth-scroll (notably on mobile Safari/Chrome).
+ */
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+  html {
+    scroll-behavior: smooth;
+  }
 }
 
 body {

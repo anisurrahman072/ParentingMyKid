@@ -47,6 +47,8 @@ export function ScrollCompanion({ content }: Props): React.ReactElement {
     const nodes = Array.from(document.querySelectorAll(CHAPTER_SELECTOR));
     if (nodes.length === 0) return undefined;
 
+    let rafId = 0;
+
     const pickActive = (): void => {
       const vh = window.innerHeight;
       const mid = vh * 0.42;
@@ -67,20 +69,29 @@ export function ScrollCompanion({ content }: Props): React.ReactElement {
           bestIdx = idx;
         }
       });
-      setActive(bestIdx);
+      setActive((prev) => (prev === bestIdx ? prev : bestIdx));
     };
 
-    const observer = new IntersectionObserver(
-      () => {
+    const schedulePick = (): void => {
+      if (rafId !== 0) return;
+      rafId = window.requestAnimationFrame(() => {
+        rafId = 0;
         pickActive();
-      },
-      { threshold: [0, 0.05, 0.1, 0.2, 0.35, 0.5, 0.65, 0.8, 1], rootMargin: '-8% 0px -12% 0px' }
-    );
+      });
+    };
+
+    const observer = new IntersectionObserver(schedulePick, {
+      threshold: [0, 0.25, 0.5, 0.75, 1],
+      rootMargin: '-8% 0px -12% 0px',
+    });
 
     nodes.forEach((n) => observer.observe(n));
     pickActive();
 
-    return () => observer.disconnect();
+    return () => {
+      if (rafId !== 0) window.cancelAnimationFrame(rafId);
+      observer.disconnect();
+    };
   }, [lines]);
 
   useEffect(() => {
@@ -112,7 +123,7 @@ export function ScrollCompanion({ content }: Props): React.ReactElement {
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={reduceMotion ? undefined : { opacity: 0, y: -6 }}
               transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
-              className="relative rounded-2xl border border-white/90 bg-white/95 px-3.5 py-2.5 text-left text-sm leading-snug text-text-main shadow-[0_16px_40px_-12px_rgba(15,23,42,0.35)] ring-1 ring-slate-900/5 backdrop-blur-md sm:px-4 sm:text-[0.9375rem]"
+              className="relative rounded-2xl border border-white/90 bg-white/95 px-3.5 py-2.5 text-left text-sm leading-snug text-text-main shadow-[0_16px_40px_-12px_rgba(15,23,42,0.35)] ring-1 ring-slate-900/5 backdrop-blur-none sm:px-4 sm:backdrop-blur-md sm:text-[0.9375rem]"
             >
               <span className="absolute -bottom-2 right-10 h-3 w-3 rotate-45 border-b border-r border-white/90 bg-white/95" />
               <p className="relative pr-7">{line}</p>

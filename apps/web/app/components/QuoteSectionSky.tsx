@@ -1,9 +1,24 @@
 'use client';
 
+import { useMemo, useSyncExternalStore } from 'react';
+
 /**
  * Falling stars + soft snow on the light outer background behind the quote card.
  * Mirrors the hero’s jewel-tone stars with extra density; snow uses a gentler drift.
  */
+
+/** Narrow viewports: fewer particles + lighter effects (same look, far less GPU work). */
+function useIsNarrowSky(): boolean {
+  return useSyncExternalStore(
+    (onStoreChange) => {
+      const mq = window.matchMedia('(max-width: 639px)');
+      mq.addEventListener('change', onStoreChange);
+      return () => mq.removeEventListener('change', onStoreChange);
+    },
+    () => window.matchMedia('(max-width: 639px)').matches,
+    () => false,
+  );
+}
 
 type StarSpec = {
   left: string;
@@ -147,17 +162,28 @@ const SNOW: SnowSpec[] = [
 ];
 
 export function QuoteSectionSky(): React.ReactElement {
+  const isNarrow = useIsNarrowSky();
+  const stars = useMemo(
+    () => (isNarrow ? STARS.filter((_, i) => i % 4 === 0) : STARS),
+    [isNarrow],
+  );
+  const snow = useMemo(
+    () => (isNarrow ? SNOW.filter((_, i) => i % 3 === 0) : SNOW),
+    [isNarrow],
+  );
+
   return (
     <div
       className="quote-section-sky pointer-events-none absolute inset-x-0 top-0 z-0 min-h-[32rem] overflow-hidden motion-reduce:hidden md:min-h-[40rem]"
+      style={{ contain: 'layout style' }}
       aria-hidden
     >
-      {STARS.map((s, i) => {
+      {stars.map((s, i) => {
         const boosted = Math.min(0.94, s.peak * 1.28);
         return (
           <span
-            key={`qs-star-${i}`}
-            className={`absolute top-0 select-none will-change-transform ${
+            key={`qs-star-${s.left}-${i}`}
+            className={`absolute top-0 select-none ${
               s.hideOnNarrow ? 'hidden sm:inline' : ''
             }`}
             style={{
@@ -166,9 +192,10 @@ export function QuoteSectionSky(): React.ReactElement {
               ['--star-o' as string]: String(boosted),
               fontSize: `${s.sizePx + 1}px`,
               color: s.color,
-              textShadow:
-                '0 0 14px rgba(255,255,255,0.85), 0 0 26px rgba(255,255,255,0.45), 0 0 3px rgba(255,255,255,0.95)',
-              filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.08))',
+              textShadow: isNarrow
+                ? '0 0 8px rgba(255,255,255,0.65), 0 0 2px rgba(255,255,255,0.9)'
+                : '0 0 14px rgba(255,255,255,0.85), 0 0 26px rgba(255,255,255,0.45), 0 0 3px rgba(255,255,255,0.95)',
+              filter: isNarrow ? undefined : 'drop-shadow(0 1px 2px rgba(0,0,0,0.08))',
               animationName: 'quoteStarFall',
               animationDuration: `${s.duration}s`,
               animationDelay: `${s.delay}s`,
@@ -180,16 +207,18 @@ export function QuoteSectionSky(): React.ReactElement {
           </span>
         );
       })}
-      {SNOW.map((s, i) => (
+      {snow.map((s, i) => (
         <span
-          key={`qs-snow-${i}`}
-          className="absolute top-0 select-none rounded-full will-change-transform"
+          key={`qs-snow-${s.left}-${i}`}
+          className="absolute top-0 select-none rounded-full"
           style={{
             left: s.left,
             width: `${s.sizePx}px`,
             height: `${s.sizePx}px`,
             backgroundColor: `rgba(248, 250, 252, ${s.opacity})`,
-            boxShadow: '0 0 6px rgba(255,255,255,0.35)',
+            boxShadow: isNarrow
+              ? '0 0 4px rgba(255,255,255,0.3)'
+              : '0 0 6px rgba(255,255,255,0.35)',
             ['--snow-drift' as string]: s.drift,
             ['--snow-o' as string]: String(s.opacity),
             animationName: 'quoteSnowFall',
