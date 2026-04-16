@@ -17,7 +17,7 @@ const FIELDS_FULL = [
   'created_time',
   'permalink_url',
   'full_picture',
-  'attachments{media{type,image{src}},subattachments{media{type,image{src}}}}',
+  'attachments{media{image{src}},subattachments{media{image{src}}}}',
   'reactions.limit(0).summary(true)',
   'comments.limit(0).summary(true)',
   'shares',
@@ -30,7 +30,7 @@ const FIELDS_LITE = [
   'created_time',
   'permalink_url',
   'full_picture',
-  'attachments{media{type,image{src}},subattachments{media{type,image{src}}}}',
+  'attachments{media{image{src}},subattachments{media{image{src}}}}',
 ].join(',');
 
 type GraphSummary = { summary?: { total_count?: number } };

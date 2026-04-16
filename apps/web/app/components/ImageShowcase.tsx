@@ -16,7 +16,14 @@ type Props = {
   content: LandingContent;
 };
 
-function TwoCardStack(): React.ReactElement {
+function TwoCardStack({ isBn }: { isBn: boolean }): React.ReactElement {
+  const banner1Alt = isBn
+    ? 'শিশু ও পরিবার — উষ্ণ, বোধগম্য প্যারেন্টিং চিত্র'
+    : 'Parenting illustration — warm moments with children and family connection';
+  const banner2Alt = isBn
+    ? 'খেলা, শেখা ও আবেগ — ইতিবাচক শৈশবের চিত্র'
+    : 'Play, learning, and emotions — positive childhood moments illustration';
+
   return (
     <div className="relative flex min-h-[280px] flex-col items-center justify-center gap-8 md:min-h-[360px] md:flex-row md:gap-4">
       <motion.div
@@ -28,7 +35,7 @@ function TwoCardStack(): React.ReactElement {
       >
         <Image
           src="/banner-1.png"
-          alt=""
+          alt={banner1Alt}
           width={900}
           height={500}
           className="rounded-3xl border-4 border-white object-cover"
@@ -43,7 +50,7 @@ function TwoCardStack(): React.ReactElement {
       >
         <Image
           src="/banner-2.png"
-          alt=""
+          alt={banner2Alt}
           width={900}
           height={500}
           className="rounded-3xl border-4 border-white object-cover"
@@ -213,7 +220,7 @@ function FacebookPostCard({
           {page?.pictureUrl ? (
             <Image
               src={page.pictureUrl}
-              alt=""
+              alt={`${pageName} profile picture`}
               width={80}
               height={80}
               className="size-full object-cover"
@@ -261,7 +268,13 @@ function FacebookPostCard({
           <div className="relative aspect-[1.91/1] w-full bg-[#F0F2F5] sm:aspect-[9/5]">
             <Image
               src={post.imageUrl}
-              alt=""
+              alt={
+                post.text.trim().length > 0
+                  ? post.text.trim().slice(0, 125) + (post.text.trim().length > 125 ? '…' : '')
+                  : isBn
+                    ? 'ফেসবুক পোস্টের ছবি'
+                    : 'Facebook post image'
+              }
               fill
               sizes="(max-width: 768px) 100vw, 33vw"
               className="object-cover transition duration-300 group-hover:brightness-[0.98]"
@@ -404,7 +417,7 @@ export function ImageShowcase({ content }: Props): React.ReactElement {
     main = useBnGallery ? (
       <BnGalleryGrid items={gallery!} />
     ) : (
-      <TwoCardStack />
+      <TwoCardStack isBn={isBn} />
     );
   }
 

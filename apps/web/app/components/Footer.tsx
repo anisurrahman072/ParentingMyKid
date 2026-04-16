@@ -16,7 +16,7 @@ export function Footer({ content }: Props): React.ReactElement {
       <div className="mx-auto flex max-w-4xl flex-col items-center text-center">
         <Image
           src="/logo.png"
-          alt=""
+          alt={isBn ? 'ParentingMyKid লোগো' : 'ParentingMyKid logo'}
           width={64}
           height={64}
           className="h-16 w-16 rounded-2xl object-contain"

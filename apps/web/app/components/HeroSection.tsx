@@ -23,7 +23,7 @@ export function HeroSection({ headline, subheadline, cta, isBengali }: Props): R
       <div className="relative z-10 mx-auto flex max-w-4xl flex-col items-center text-center">
         <Image
           src="/logo.png"
-          alt=""
+          alt={isBengali ? 'ParentingMyKid লোগো' : 'ParentingMyKid logo'}
           width={120}
           height={120}
           className="mb-6 h-28 w-28 rounded-3xl object-contain drop-shadow-xl sm:h-32 sm:w-32"
