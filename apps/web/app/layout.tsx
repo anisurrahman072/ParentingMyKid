@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from 'next';
-import { Fraunces, Nunito, Noto_Sans_Bengali } from 'next/font/google';
+import { Fraunces, Nunito, Noto_Sans_Bengali, Outfit } from 'next/font/google';
 import { headers } from 'next/headers';
 
 import { JsonLd } from '@/app/components/JsonLd';
@@ -24,6 +24,13 @@ const notoBengali = Noto_Sans_Bengali({
   subsets: ['bengali'],
   variable: '--font-bengali',
   display: 'swap',
+});
+
+const outfit = Outfit({
+  subsets: ['latin'],
+  variable: '--font-outfit',
+  display: 'swap',
+  weight: ['700', '800'],
 });
 
 export const viewport: Viewport = {
@@ -142,7 +149,7 @@ export default async function RootLayout({
   return (
     <html
       lang={lang}
-      className={`${nunito.variable} ${fraunces.variable} ${notoBengali.variable}`}
+      className={`${nunito.variable} ${fraunces.variable} ${notoBengali.variable} ${outfit.variable}`}
       suppressHydrationWarning
     >
       <body className="min-h-screen overflow-x-hidden font-sans" suppressHydrationWarning>

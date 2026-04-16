@@ -121,20 +121,17 @@ export const bnContent: LandingContent = {
       {
         emoji: '📵',
         title: 'অতিরিক্ত স্ক্রিন',
-        body:
-          'যখন আমরা বাবা-মা ফোন বা ট্যাবে বেশি মগ্ন থাকি, শিশুর সঙ্গে গল্প, খেলা ও মনোযোগের সময় কমে যায়। শিশু নিজেও স্ক্রিনে বেশি সময় দিলে গভীর খেলা ও কথার জায়গা আরও ছোট হয়ে আসে।',
+        body: 'যখন আমরা বাবা-মা ফোন বা ট্যাবে বেশি মগ্ন থাকি, শিশুর সঙ্গে গল্প, খেলা ও মনোযোগের সময় কমে যায়। শিশু নিজেও স্ক্রিনে বেশি সময় দিলে গভীর খেলা ও কথার জায়গা আরও ছোট হয়ে আসে।',
       },
       {
         emoji: '😟',
         title: 'আবেগীয় দূরত্ব',
-        body:
-          'কাজ ও ব্যস্ততায় যখন শিশুর অনুভূতি বোঝার ছোট মুহূর্তগুলো মিস হয়ে যায়, শিশু ভাবতে পারে সে যথেষ্ট গুরুত্ব পাচ্ছে না—যদিও আমরা ঘরেই আছি।',
+        body: 'কাজ ও ব্যস্ততায় যখন শিশুর অনুভূতি বোঝার ছোট মুহূর্তগুলো মিস হয়ে যায়, শিশু ভাবতে পারে সে যথেষ্ট গুরুত্ব পাচ্ছে না—যদিও আমরা ঘরেই আছি।',
       },
       {
         emoji: '🏃',
         title: 'খেলার অভাব',
-        body:
-          'বাবা-মার সঙ্গে মানসম্মত খেলা ও নিরবচ্ছিন্ন একসাথে সময় শিশুর মানসিক বিকাশ ও নিরাপত্তাবোধ গড়ে—এটা শুধু স্ক্রিন বা একা খেলার বিকল্প নয়।',
+        body: 'বাবা-মার সঙ্গে মানসম্মত খেলা ও নিরবচ্ছিন্ন একসাথে সময় শিশুর মানসিক বিকাশ ও নিরাপত্তাবোধ গড়ে—এটা শুধু স্ক্রিন বা একা খেলার বিকল্প নয়।',
       },
     ],
   },
@@ -311,20 +308,17 @@ export const enContent: LandingContent = {
       {
         emoji: '📵',
         title: 'Too much screen time',
-        body:
-          'When parents stay glued to phones and tablets, there is less real talk, play, and attention for the child. When the child is over-screened too, deep play and conversation get squeezed.',
+        body: 'When parents stay glued to phones and tablets, there is less real talk, play, and attention for the child. When the child is over-screened too, deep play and conversation get squeezed.',
       },
       {
         emoji: '😟',
         title: 'Emotional distance',
-        body:
-          'Under work pressure or a packed day, we can miss small moments to read a child’s feelings—and they may feel unimportant even when we are in the same home.',
+        body: 'Under work pressure or a packed day, we can miss small moments to read a child’s feelings—and they may feel unimportant even when we are in the same home.',
       },
       {
         emoji: '🏃',
         title: 'Little time for play',
-        body:
-          'Quality play and uninterrupted time with you builds a child’s mind and sense of safety—it is not something screens or solo play fully replace.',
+        body: 'Quality play and uninterrupted time with you builds a child’s mind and sense of safety—it is not something screens or solo play fully replace.',
       },
     ],
   },

@@ -60,7 +60,10 @@ export function TopicBentoGrid({ content }: Props): React.ReactElement {
 
   return (
     <section className="relative overflow-x-clip bg-gradient-to-b from-emerald-50/50 via-bg-soft to-violet-50/40 px-4 pb-8 pt-20 md:pb-10">
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_80%_50%_at_50%_-10%,rgba(167,139,250,0.12),transparent)]" aria-hidden />
+      <div
+        className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_80%_50%_at_50%_-10%,rgba(167,139,250,0.12),transparent)]"
+        aria-hidden
+      />
       <div className="relative z-[1] mx-auto max-w-6xl">
         {/* Mascot: absolutely positioned in the open area to the right of the headline; does not consume layout space */}
         <div className="relative">
@@ -107,8 +110,7 @@ export function TopicBentoGrid({ content }: Props): React.ReactElement {
                       ? 'md:col-span-12 md:max-w-3xl md:justify-self-center'
                       : 'md:col-span-4';
 
-              const tilt =
-                reduceMotion || isCoarse ? 0 : CARD_TILTS[index % CARD_TILTS.length];
+              const tilt = reduceMotion || isCoarse ? 0 : CARD_TILTS[index % CARD_TILTS.length];
 
               return (
                 <div
@@ -136,7 +138,10 @@ export function TopicBentoGrid({ content }: Props): React.ReactElement {
                             }
                     }
                   >
-                    <div className="pointer-events-none absolute inset-0 rounded-[inherit] bg-[linear-gradient(135deg,rgba(255,255,255,0.55)_0%,transparent_48%,rgba(255,255,255,0.2)_100%)] opacity-70" aria-hidden />
+                    <div
+                      className="pointer-events-none absolute inset-0 rounded-[inherit] bg-[linear-gradient(135deg,rgba(255,255,255,0.55)_0%,transparent_48%,rgba(255,255,255,0.2)_100%)] opacity-70"
+                      aria-hidden
+                    />
                     {/* Subtle corner sparkles — CSS-driven slow orbit (no JS animation layer) */}
                     <div
                       className="pointer-events-none absolute bottom-3 right-3 z-[5] sm:bottom-4 sm:right-4"

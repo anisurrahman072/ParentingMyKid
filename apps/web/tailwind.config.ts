@@ -26,6 +26,8 @@ const config: Config = {
         sans: ['var(--font-nunito)', 'Noto Sans Bengali', 'system-ui', 'sans-serif'],
         /** Editorial display for pull quotes (Latin) */
         quote: ['var(--font-fraunces)', 'Georgia', 'serif'],
+        /** Sticky bar / wordmark: rounded, premium geometric sans */
+        wordmark: ['var(--font-outfit)', 'var(--font-nunito)', 'system-ui', 'sans-serif'],
         bengali: [
           'var(--font-bengali)',
           'Noto Sans Bengali',
