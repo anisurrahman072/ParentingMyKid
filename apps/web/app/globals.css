@@ -222,6 +222,16 @@
   }
 }
 
+/* Slow orbit for per-card corner sparkles in TopicBentoGrid.
+ * Using a CSS animation (not framer-motion) keeps this on the compositor
+ * thread without a JS-managed animation instance per card. */
+@keyframes cornerSpin {
+  to { transform: rotate(360deg); }
+}
+.animate-corner-spin {
+  animation: cornerSpin 32s linear infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .hero-falling-stars {
     display: none;
@@ -232,6 +242,10 @@
   }
 
   .animate-problem-shell {
+    animation: none;
+  }
+
+  .animate-corner-spin {
     animation: none;
   }
 }

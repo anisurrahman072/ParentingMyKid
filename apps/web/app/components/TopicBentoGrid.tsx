@@ -118,16 +118,12 @@ export function TopicBentoGrid({ content }: Props): React.ReactElement {
                     }
                   >
                     <div className="pointer-events-none absolute inset-0 rounded-[inherit] bg-[linear-gradient(135deg,rgba(255,255,255,0.55)_0%,transparent_48%,rgba(255,255,255,0.2)_100%)] opacity-70" aria-hidden />
-                    {/* Subtle corner sparkles — slow orbit, low contrast */}
+                    {/* Subtle corner sparkles — CSS-driven slow orbit (no JS animation layer) */}
                     <div
                       className="pointer-events-none absolute bottom-3 right-3 z-[5] sm:bottom-4 sm:right-4"
                       aria-hidden
                     >
-                      <motion.div
-                        className="relative h-10 w-10 opacity-[0.32]"
-                        animate={reduceMotion ? undefined : { rotate: 360 }}
-                        transition={{ duration: 32, repeat: Infinity, ease: 'linear' }}
-                      >
+                      <div className={`relative h-10 w-10 opacity-[0.32] ${reduceMotion ? '' : 'animate-corner-spin'}`}>
                         <span className="absolute left-1/2 top-0 -translate-x-1/2 text-[11px] text-amber-400/90 drop-shadow-[0_0_8px_rgba(251,191,36,0.35)]">
                           ✦
                         </span>
@@ -137,7 +133,7 @@ export function TopicBentoGrid({ content }: Props): React.ReactElement {
                         <span className="absolute bottom-1 left-0 text-[8px] text-teal-400/75 drop-shadow-[0_0_6px_rgba(45,212,191,0.3)]">
                           ✦
                         </span>
-                      </motion.div>
+                      </div>
                     </div>
                     <div className="relative text-5xl transition duration-300 group-hover:scale-105 group-hover:drop-shadow-md sm:text-6xl">
                       {topic.emoji}

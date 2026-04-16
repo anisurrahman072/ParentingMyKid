@@ -1,11 +1,31 @@
 'use client';
 
+import { useSyncExternalStore } from 'react';
+
 import { motion, useReducedMotion } from 'framer-motion';
 
 type Props = {
   /** Which pillar card (0–5) — picks star colors */
   variant: number;
 };
+
+/**
+ * Coarse pointer = touch-primary device (mobile/tablet).
+ * On these devices we skip per-star framer-motion animations (48 WAAPI
+ * compositor layers across 6 cards is excessive on mobile GPUs) and render
+ * static stars instead — same look, no ongoing layer pressure.
+ */
+function useCoarsePointer(): boolean {
+  return useSyncExternalStore(
+    (onChange) => {
+      const mq = window.matchMedia('(pointer: coarse)');
+      mq.addEventListener('change', onChange);
+      return () => mq.removeEventListener('change', onChange);
+    },
+    () => window.matchMedia('(pointer: coarse)').matches,
+    () => false,
+  );
+}
 
 const PALETTES = [
   ['#FBBF24', '#F472B6', '#22D3EE', '#A78BFA'],
@@ -41,25 +61,23 @@ function StarGlyph({ color }: { color: string }): React.ReactElement {
 
 export function PillarCardStarBorder({ variant }: Props): React.ReactElement {
   const reduceMotion = useReducedMotion() ?? false;
+  const isCoarse = useCoarsePointer();
   const colors = PALETTES[variant % PALETTES.length];
+  const animate = !reduceMotion && !isCoarse;
 
   return (
     <div className="pointer-events-none absolute inset-[-8px] z-30 overflow-visible" aria-hidden>
       {POSITIONS.map((pos, i) => {
         const color = colors[i % colors.length];
-        return (
+        return animate ? (
           <motion.span
             key={i}
             className={`absolute ${pos.className}`}
             initial={false}
-            animate={
-              reduceMotion
-                ? { opacity: 0.75 }
-                : {
-                    opacity: [0.35, 1, 0.45, 0.95, 0.35],
-                    scale: [0.75, 1.12, 0.9, 1.05, 0.75],
-                  }
-            }
+            animate={{
+              opacity: [0.35, 1, 0.45, 0.95, 0.35],
+              scale: [0.75, 1.12, 0.9, 1.05, 0.75],
+            }}
             transition={{
               duration: 2.4 + (i % 4) * 0.35,
               repeat: Infinity,
@@ -69,6 +87,10 @@ export function PillarCardStarBorder({ variant }: Props): React.ReactElement {
           >
             <StarGlyph color={color} />
           </motion.span>
+        ) : (
+          <span key={i} className={`absolute opacity-70 ${pos.className}`}>
+            <StarGlyph color={color} />
+          </span>
         );
       })}
     </div>

@@ -7,11 +7,11 @@ import type { LandingContent } from '@/lib/content';
 import { ProblemKidMascot } from './ProblemKidMascot';
 import { ScrollReveal } from './ScrollReveal';
 
+const cardSpring = { type: 'spring' as const, stiffness: 380, damping: 28, mass: 0.85 };
+
 type Props = {
   content: LandingContent;
 };
-
-const cardSpring = { type: 'spring' as const, stiffness: 380, damping: 28, mass: 0.85 };
 
 const cardStyles = [
   {
@@ -53,31 +53,14 @@ export function ProblemSection({ content }: Props): React.ReactElement {
         className="absolute inset-0 -skew-y-2 overflow-hidden bg-gradient-to-br from-amber-50/90 via-white to-rose-50/80"
         aria-hidden
       />
-      <motion.div
-        className="pointer-events-none absolute -left-32 top-24 h-72 w-72 rounded-full bg-brand-teal/10 blur-3xl"
+      {/* Static decorative blobs — no animation so blur-3xl never forces a repaint */}
+      <div
+        className="pointer-events-none absolute -left-32 top-24 h-72 w-72 rounded-full bg-brand-teal/10 opacity-50 blur-3xl"
         aria-hidden
-        animate={
-          reduceMotion
-            ? undefined
-            : {
-                scale: [1, 1.08, 1],
-                opacity: [0.45, 0.65, 0.45],
-              }
-        }
-        transition={{ duration: 10, repeat: Infinity, ease: 'easeInOut' }}
       />
-      <motion.div
-        className="pointer-events-none absolute -right-24 bottom-32 h-80 w-80 rounded-full bg-brand-purple/10 blur-3xl"
+      <div
+        className="pointer-events-none absolute -right-24 bottom-32 h-80 w-80 rounded-full bg-brand-purple/10 opacity-45 blur-3xl"
         aria-hidden
-        animate={
-          reduceMotion
-            ? undefined
-            : {
-                scale: [1.05, 1, 1.05],
-                opacity: [0.4, 0.58, 0.4],
-              }
-        }
-        transition={{ duration: 12, repeat: Infinity, ease: 'easeInOut', delay: 1.5 }}
       />
 
       <div className="relative z-10 mx-auto max-w-5xl">
@@ -103,14 +86,15 @@ export function ProblemSection({ content }: Props): React.ReactElement {
           </div>
 
           <motion.div
-            className="relative z-[1] overflow-hidden rounded-[1.75rem] border border-white/80 bg-white/55 p-5 shadow-[0_24px_60px_-24px_rgba(15,23,42,0.14)] ring-1 ring-slate-900/[0.04] backdrop-blur-md sm:rounded-[2.25rem] sm:p-7 md:rounded-[2.5rem] md:p-9"
+            className="relative z-[1] overflow-hidden rounded-[1.75rem] border border-white/80 bg-white/92 p-5 shadow-[0_24px_60px_-24px_rgba(15,23,42,0.14)] ring-1 ring-slate-900/[0.04] sm:bg-white/55 sm:backdrop-blur-md sm:rounded-[2.25rem] sm:p-7 md:rounded-[2.5rem] md:p-9"
             initial={reduceMotion ? false : { opacity: 0, y: 20 }}
             whileInView={reduceMotion ? undefined : { opacity: 1, y: 0 }}
             viewport={{ once: true, margin: '-40px' }}
             transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1], delay: 0.05 }}
           >
+            {/* background-position animation is not compositor-safe; enable only on sm+ */}
             <div
-              className={`pointer-events-none absolute inset-0 overflow-hidden rounded-[inherit] bg-[linear-gradient(120deg,transparent_40%,rgba(255,255,255,0.5)_50%,transparent_60%)] bg-[length:220%_100%] opacity-40 ${reduceMotion ? '' : 'animate-problem-shell'}`}
+              className={`pointer-events-none absolute inset-0 overflow-hidden rounded-[inherit] bg-[linear-gradient(120deg,transparent_40%,rgba(255,255,255,0.5)_50%,transparent_60%)] bg-[length:220%_100%] opacity-40 ${reduceMotion ? '' : 'sm:animate-problem-shell'}`}
               aria-hidden
             />
             <div className="relative grid gap-5 sm:grid-cols-3 sm:gap-6">
@@ -136,7 +120,7 @@ export function ProblemSection({ content }: Props): React.ReactElement {
                         }
                   }
                   whileTap={reduceMotion ? undefined : { scale: 0.99 }}
-                  className={`group relative overflow-hidden rounded-3xl border p-6 text-center backdrop-blur-xl transition-[box-shadow,border-color,transform] duration-300 sm:p-7 ${palette.shell} ${palette.hoverGlow}`}
+                  className={`group relative overflow-hidden rounded-3xl border p-6 text-center transition-[box-shadow,border-color,transform] duration-300 sm:p-7 sm:backdrop-blur-xl ${palette.shell} ${palette.hoverGlow}`}
                 >
                   <div
                     className={`pointer-events-none absolute inset-x-0 top-0 z-[1] h-[3px] bg-gradient-to-r opacity-95 ${palette.bar}`}

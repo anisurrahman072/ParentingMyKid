@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 
@@ -16,6 +16,10 @@ type Props = {
 /**
  * Cartoon kid (vector SVG) — upset / sulky, not crying (no tears).
  * Thought bubble animates in from above the head; idle sway on the figure.
+ *
+ * Typewriter effect uses a DOM ref to update textContent directly so React
+ * never re-renders during the 42 ms interval — eliminating 24 setState calls
+ * per second on the main thread.
  */
 export function ProblemKidMascot({
   bubbleText,
@@ -28,18 +32,14 @@ export function ProblemKidMascot({
     () => [bubbleText, bubbleFollowupText].filter(Boolean) as string[],
     [bubbleText, bubbleFollowupText]
   );
-  const [displayText, setDisplayText] = useState(reduceMotion ? bubbleLines[0] ?? bubbleText : '');
-  const [activeMessageIndex, setActiveMessageIndex] = useState(0);
+  // Direct DOM ref — text is written via textContent, bypassing React's render cycle
+  const textRef = useRef<HTMLParagraphElement>(null);
 
   useEffect(() => {
-    if (bubbleLines.length === 0) {
-      setDisplayText('');
-      return;
-    }
+    if (bubbleLines.length === 0) return;
 
     if (reduceMotion) {
-      setActiveMessageIndex(0);
-      setDisplayText(bubbleLines[0] ?? bubbleText);
+      if (textRef.current) textRef.current.textContent = bubbleLines[0] ?? bubbleText;
       return;
     }
 
@@ -48,21 +48,17 @@ export function ProblemKidMascot({
 
     const typeLine = (line: string, next: () => void): void => {
       let index = 0;
-      setDisplayText('');
+      if (textRef.current) textRef.current.textContent = '';
 
       const intervalId = window.setInterval(() => {
-        if (isCancelled) {
-          return;
-        }
+        if (isCancelled) return;
         index += 1;
-        setDisplayText(line.slice(0, index));
+        if (textRef.current) textRef.current.textContent = line.slice(0, index);
 
         if (index >= line.length) {
           window.clearInterval(intervalId);
           const holdId = window.setTimeout(() => {
-            if (!isCancelled) {
-              next();
-            }
+            if (!isCancelled) next();
           }, 2300);
           timers.push(holdId);
         }
@@ -74,12 +70,9 @@ export function ProblemKidMascot({
     const runSequence = (lineIndex: number): void => {
       const line = bubbleLines[lineIndex];
       if (!line) {
-        setActiveMessageIndex(0);
-        setDisplayText('');
+        if (textRef.current) textRef.current.textContent = '';
         return;
       }
-
-      setActiveMessageIndex(lineIndex);
       typeLine(line, () => {
         const hasNext = lineIndex + 1 < bubbleLines.length;
         if (hasNext) {
@@ -87,9 +80,7 @@ export function ProblemKidMascot({
           return;
         }
         const restartId = window.setTimeout(() => {
-          if (!isCancelled) {
-            runSequence(0);
-          }
+          if (!isCancelled) runSequence(0);
         }, 1400);
         timers.push(restartId);
       });
@@ -106,10 +97,9 @@ export function ProblemKidMascot({
     };
   }, [reduceMotion, bubbleLines, bubbleText]);
 
-  const activeBubbleText = displayText || bubbleLines[activeMessageIndex] || bubbleText;
-
   return (
     <div className={`relative ${className}`}>
+      {/* Accessible full text for screen readers */}
       <p className="sr-only">{bubbleLines.join(' ')}</p>
 
       <AnimatePresence>
@@ -151,13 +141,17 @@ export function ProblemKidMascot({
                 <span className="absolute left-6 -top-4 h-10 w-10 rounded-full border border-amber-200/85 bg-gradient-to-br from-white via-amber-50/95 to-amber-100/90" />
                 <span className="absolute right-10 -top-3 h-8 w-8 rounded-full border border-amber-200/85 bg-gradient-to-br from-white via-amber-50/95 to-amber-100/90" />
 
+                {/*
+                  * textContent is written directly via textRef — no React children here
+                  * so React never reconciles this element's content on re-renders.
+                  */}
                 <p
+                  ref={textRef}
+                  aria-hidden
                   className={`relative z-[3] min-h-[2.6rem] text-[0.74rem] font-semibold leading-snug text-slate-700 sm:min-h-[2.8rem] sm:text-sm ${
                     isBn ? 'font-bengali' : ''
                   }`}
-                >
-                  {activeBubbleText}
-                </p>
+                />
               </div>
 
               {/* Thought dots: from LEFT side of head up to cloud */}
