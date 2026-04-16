@@ -8,6 +8,7 @@ dist/
 build/
 .turbo/
 .next/
+*.tsbuildinfo
 
 # Expo / React Native
 .expo/
