@@ -14,6 +14,26 @@ type Props = {
   content: LandingContent;
 };
 
+/** Bangla health pillar — phrase to emphasize (must match `content.ts`). */
+const BN_HEALTH_SLEEP_HABIT_PHRASE = 'নিয়মিত ঘুমের অভ্যাস';
+
+/** Bangla education pillar — trailing line gets a soft solid accent (not gradient). */
+const BN_EDUCATION_BODY_ACCENT =
+  'পড়ার জন্য চাপ না দিয়ে তাকে উৎসাহ দিন নিজের মতো করে জানতে, ভাবতে আর শিখতে।';
+
+/** Bangla mental-stability example quote — must match `content.ts` exactly (curly quotes). */
+const BN_MENTAL_QUOTE_ACCENT = '“তুমি কি একটু বিরক্ত বোধ করছো?”';
+
+/** Bangla emotional-balance pillar — phrase to emphasize (must match `content.ts`). */
+const BN_EMOTIONAL_LOVE_PHRASE = 'তার বাবা-মাকে ভালোবাসতে শেখে';
+
+/** Bangla physical pillar — sun / vitamin D clause (must match `content.ts`). */
+const BN_PHYSICAL_SUN_VITAMIN_PHRASE =
+  'রোদে থাকার মাধ্যমে সে ভিটামিন ডি পায় যা হাড়কে মজবুত করে';
+
+/** Bangla play & friendship pillar — phrase to emphasize (must match `content.ts`). */
+const BN_PLAY_SOCIAL_CONFIDENCE_PHRASE = 'সামাজিকভাবে দক্ষ ও আত্মবিশ্বাসী';
+
 /** Degrees — mix of “top-right lean” vs “bottom-left” for an organic bento */
 const CARD_TILTS = [2.4, -2.8, 2.6, -2.1, 2.2, -2.5] as const;
 
@@ -26,6 +46,39 @@ const PILLAR_TITLE_GRADIENT = [
   'bg-gradient-to-br from-emerald-900 via-teal-800 to-green-900',
   'bg-gradient-to-br from-fuchsia-900 via-pink-800 to-purple-900',
 ] as const;
+
+type TopicBodyAccent = { phrase: string; className: string };
+
+function applyTopicBodyAccents(text: string, accents: TopicBodyAccent[]): React.ReactNode {
+  if (accents.length === 0) {
+    return text;
+  }
+  const [head, ...tail] = accents;
+  const i = text.indexOf(head.phrase);
+  if (i === -1) {
+    return tail.length > 0 ? applyTopicBodyAccents(text, tail) : text;
+  }
+  return (
+    <>
+      {text.slice(0, i)}
+      <span className={head.className}>{head.phrase}</span>
+      {applyTopicBodyAccents(text.slice(i + head.phrase.length), tail)}
+    </>
+  );
+}
+
+function TopicBodyParagraph({
+  body,
+  accents,
+}: {
+  body: string;
+  accents: TopicBodyAccent[] | null;
+}): React.ReactNode {
+  if (!accents?.length) {
+    return body;
+  }
+  return applyTopicBodyAccents(body, accents);
+}
 
 export function TopicBentoGrid({ content }: Props): React.ReactElement {
   const isBn = content.locale === 'bn';
@@ -190,7 +243,54 @@ export function TopicBentoGrid({ content }: Props): React.ReactElement {
                         isBn ? 'font-bengali' : ''
                       }`}
                     >
-                      {topic.body}
+                      <TopicBodyParagraph
+                        body={topic.body}
+                        accents={
+                          isBn && index === 0
+                            ? [
+                                {
+                                  phrase: BN_HEALTH_SLEEP_HABIT_PHRASE,
+                                  className: 'font-semibold text-teal-900',
+                                },
+                              ]
+                            : isBn && index === 1
+                              ? [
+                                  {
+                                    phrase: BN_EDUCATION_BODY_ACCENT,
+                                    className: 'font-semibold text-violet-900',
+                                  },
+                                ]
+                              : isBn && index === 2
+                                ? [
+                                    {
+                                      phrase: BN_MENTAL_QUOTE_ACCENT,
+                                      className: 'font-semibold text-sky-800',
+                                    },
+                                  ]
+                                : isBn && index === 3
+                                ? [
+                                    {
+                                      phrase: BN_EMOTIONAL_LOVE_PHRASE,
+                                      className: 'font-semibold text-rose-800',
+                                    },
+                                  ]
+                                : isBn && index === 4
+                                  ? [
+                                      {
+                                        phrase: BN_PHYSICAL_SUN_VITAMIN_PHRASE,
+                                        className: 'font-semibold text-emerald-800',
+                                      },
+                                    ]
+                                  : isBn && index === 5
+                                    ? [
+                                        {
+                                          phrase: BN_PLAY_SOCIAL_CONFIDENCE_PHRASE,
+                                          className: 'font-semibold text-fuchsia-800',
+                                        },
+                                      ]
+                                    : null
+                        }
+                      />
                     </p>
                     <span className="relative mt-6 inline-block w-fit rounded-full bg-white/90 px-4 py-1.5 text-sm font-bold text-brand-teal shadow-[0_4px_14px_rgba(0,168,120,0.2)] ring-1 ring-white/80">
                       {topic.tag}

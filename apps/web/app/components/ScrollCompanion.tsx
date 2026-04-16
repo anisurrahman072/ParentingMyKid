@@ -16,32 +16,8 @@ export function ScrollCompanion({ content }: Props): React.ReactElement {
   const isBn = content.locale === 'bn';
   const reduceMotion = useReducedMotion();
   const [active, setActive] = useState(0);
-  const [engaged, setEngaged] = useState(false);
-  const [hidden, setHidden] = useState(false);
-
-  useEffect(() => {
-    try {
-      if (sessionStorage.getItem('pmk-companion-dismiss') === '1') setHidden(true);
-    } catch {
-      /* ignore */
-    }
-  }, []);
-
-  useEffect(() => {
-    const reveal = (): void => {
-      setEngaged(true);
-    };
-    const onScroll = (): void => {
-      if (window.scrollY > 36) reveal();
-    };
-    onScroll();
-    const t = window.setTimeout(reveal, 900);
-    window.addEventListener('scroll', onScroll, { passive: true });
-    return () => {
-      window.clearTimeout(t);
-      window.removeEventListener('scroll', onScroll);
-    };
-  }, []);
+  /** Closed only after ×; always starts open on each mount so the dialog shows immediately. */
+  const [bubbleOpen, setBubbleOpen] = useState(true);
 
   const bindObserver = useCallback(() => {
     const nodes = Array.from(document.querySelectorAll(CHAPTER_SELECTOR));
@@ -101,7 +77,13 @@ export function ScrollCompanion({ content }: Props): React.ReactElement {
 
   const line = lines[Math.min(active, lines.length - 1)] ?? '';
 
-  if (hidden) return <></>;
+  const closeBubble = (): void => {
+    setBubbleOpen(false);
+  };
+
+  const openBubble = (): void => {
+    setBubbleOpen(true);
+  };
 
   return (
     <div
@@ -109,44 +91,75 @@ export function ScrollCompanion({ content }: Props): React.ReactElement {
       aria-live="polite"
     >
       <AnimatePresence mode="wait">
-        {engaged ? (
-          <motion.div
-            key="companion"
-            initial={reduceMotion ? false : { x: 120, opacity: 0 }}
-            animate={{ x: 0, opacity: 1 }}
-            transition={{ type: 'spring', stiffness: 260, damping: 28 }}
-            className="pointer-events-auto flex flex-col items-end gap-2"
+        <motion.div
+          key="companion"
+          initial={false}
+          animate={{ x: 0, opacity: 1 }}
+          className="pointer-events-auto flex flex-col items-end gap-2"
+        >
+          <AnimatePresence initial={false}>
+            {bubbleOpen ? (
+              <motion.div
+                key="bubble"
+                initial={false}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={
+                  reduceMotion
+                    ? { opacity: 0 }
+                    : { opacity: 0, y: 8, scale: 0.98, transition: { duration: 0.22 } }
+                }
+                transition={{ type: 'spring', stiffness: 380, damping: 32 }}
+                className="relative w-full max-w-[min(20rem,calc(100vw-1.5rem))]"
+              >
+                <motion.div
+                  key={active}
+                  initial={reduceMotion ? false : { opacity: 0, y: 10, scale: 0.96 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={reduceMotion ? undefined : { opacity: 0, y: -6 }}
+                  transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+                  className="relative rounded-2xl border border-white/90 bg-white/95 px-3.5 py-2.5 text-left text-sm leading-snug text-text-main shadow-[0_16px_40px_-12px_rgba(15,23,42,0.35)] ring-1 ring-slate-900/5 backdrop-blur-none sm:px-4 sm:backdrop-blur-md sm:text-[0.9375rem]"
+                >
+                  <span className="absolute -bottom-2 right-10 h-3 w-3 rotate-45 border-b border-r border-white/90 bg-white/95" />
+                  <p className="relative pr-7">{line}</p>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      closeBubble();
+                    }}
+                    className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-full text-lg leading-none text-text-soft transition hover:bg-slate-100 hover:text-text-main"
+                    aria-label={isBn ? 'বার্তা বন্ধ করুন' : 'Close message'}
+                  >
+                    ×
+                  </button>
+                </motion.div>
+              </motion.div>
+            ) : null}
+          </AnimatePresence>
+
+          <button
+            type="button"
+            onClick={() => {
+              if (!bubbleOpen) openBubble();
+            }}
+            aria-label={
+              bubbleOpen
+                ? isBn
+                  ? 'স্ক্রল সহকারী'
+                  : 'Scroll companion'
+                : isBn
+                  ? 'বার্তা খুলুন'
+                  : 'Open message'
+            }
+            aria-expanded={bubbleOpen}
+            className={`mr-2 flex h-[5.5rem] w-[4.5rem] items-end justify-center rounded-2xl border-0 bg-transparent p-0 outline-none transition sm:h-[6.25rem] sm:w-[5rem] ${
+              !bubbleOpen
+                ? 'cursor-pointer hover:opacity-95 focus-visible:ring-2 focus-visible:ring-brand-teal/50 focus-visible:ring-offset-2'
+                : 'cursor-default'
+            }`}
           >
             <motion.div
-              key={active}
-              initial={reduceMotion ? false : { opacity: 0, y: 10, scale: 0.96 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={reduceMotion ? undefined : { opacity: 0, y: -6 }}
-              transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
-              className="relative rounded-2xl border border-white/90 bg-white/95 px-3.5 py-2.5 text-left text-sm leading-snug text-text-main shadow-[0_16px_40px_-12px_rgba(15,23,42,0.35)] ring-1 ring-slate-900/5 backdrop-blur-none sm:px-4 sm:backdrop-blur-md sm:text-[0.9375rem]"
-            >
-              <span className="absolute -bottom-2 right-10 h-3 w-3 rotate-45 border-b border-r border-white/90 bg-white/95" />
-              <p className="relative pr-7">{line}</p>
-              <button
-                type="button"
-                onClick={() => {
-                  try {
-                    sessionStorage.setItem('pmk-companion-dismiss', '1');
-                  } catch {
-                    /* ignore */
-                  }
-                  setHidden(true);
-                }}
-                className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-full text-lg leading-none text-text-soft transition hover:bg-slate-100 hover:text-text-main"
-                aria-label={isBn ? 'গাইড লুকান' : 'Hide guide'}
-              >
-                ×
-              </button>
-            </motion.div>
-
-            <motion.div
-              aria-hidden
-              className="mr-2 flex h-[5.5rem] w-[4.5rem] items-end justify-center sm:h-[6.25rem] sm:w-[5rem]"
+              className="flex h-full w-full items-end justify-center"
               animate={
                 reduceMotion
                   ? undefined
@@ -158,8 +171,8 @@ export function ScrollCompanion({ content }: Props): React.ReactElement {
             >
               <KidSvg reduceMotion={!!reduceMotion} />
             </motion.div>
-          </motion.div>
-        ) : null}
+          </button>
+        </motion.div>
       </AnimatePresence>
     </div>
   );

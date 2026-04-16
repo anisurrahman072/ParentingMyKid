@@ -9,9 +9,9 @@ import { SITE_URL } from '@/lib/site';
 const canonical = `${SITE_URL}/en`;
 
 export const metadata: Metadata = {
-  title: 'Parenting My Kid — For every parent',
+  title: 'Parenting My Kid — For parents',
   description:
-    'Practical, warm guidance on health, learning, emotions, play, and raising confident kids.',
+    'Your child’s health, learning, emotional steadiness, and play—one warm, easy-to-follow path for parents.',
   alternates: {
     canonical,
     languages: {
@@ -21,9 +21,9 @@ export const metadata: Metadata = {
     },
   },
   openGraph: {
-    title: 'Parenting My Kid — For every parent',
+    title: 'Parenting My Kid — For parents',
     description:
-      'Practical, warm guidance on health, learning, emotions, play, and raising confident kids.',
+      'Your child’s health, learning, emotional steadiness, and play—one warm, easy-to-follow path for parents.',
     url: canonical,
     siteName: 'ParentingMyKid',
     locale: 'en_US',
@@ -32,9 +32,9 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Parenting My Kid — For every parent',
+    title: 'Parenting My Kid — For parents',
     description:
-      'Practical, warm guidance on health, learning, emotions, play, and raising confident kids.',
+      'Your child’s health, learning, emotional steadiness, and play—one warm, easy-to-follow path for parents.',
   },
 };
 
@@ -43,9 +43,9 @@ const webPageJsonLd = {
   '@type': 'WebPage',
   '@id': `${canonical}#webpage`,
   url: canonical,
-  name: 'Parenting My Kid — For every parent',
+  name: 'Parenting My Kid — For parents',
   description:
-    'Practical, warm guidance on health, learning, emotions, play, and raising confident kids.',
+    'Your child’s health, learning, emotional steadiness, and play—one warm, easy-to-follow path for parents.',
   inLanguage: 'en',
   isPartOf: { '@id': `${SITE_URL}/#website` },
   publisher: { '@id': `${SITE_URL}/#organization` },

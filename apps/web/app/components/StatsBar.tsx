@@ -1,9 +1,10 @@
 'use client';
 
-import { animate } from 'framer-motion';
-import { motion, useInView } from 'framer-motion';
-import { useEffect, useRef, useState } from 'react';
+import { motion, useInView, useReducedMotion } from 'framer-motion';
+import { useRef } from 'react';
 
+import { FacebookMarkIcon } from '@/app/components/FacebookFollowButton';
+import { FACEBOOK_PAGE_URL } from '@/lib/constants';
 import type { LandingContent } from '@/lib/content';
 
 type Props = {
@@ -81,6 +82,39 @@ function AreasJourneyDecoration(): React.ReactElement {
 }
 
 /** Soft waves = daily rhythm — distinct from dots and path nodes */
+/** Bottom-center Facebook mark — rhythm pillar only; premium disc + gentle shake. */
+function RhythmFacebookBadge(): React.ReactElement {
+  const reduceMotion = useReducedMotion();
+
+  return (
+    <motion.a
+      href={FACEBOOK_PAGE_URL}
+      target="_blank"
+      rel="noopener noreferrer"
+      style={{ transformOrigin: '50% 0%' }}
+      className="mt-6 inline-flex h-[3.35rem] w-[3.35rem] shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-brand-teal via-teal-600 to-brand-purple text-white shadow-[0_10px_28px_-6px_rgba(0,0,0,0.42),0_2px_10px_rgba(0,0,0,0.18)] ring-2 ring-white/35 ring-offset-2 ring-offset-transparent transition hover:brightness-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/80"
+      aria-label="Facebook page"
+      initial={false}
+      animate={
+        reduceMotion
+          ? {}
+          : {
+              /* Pivot at top: bottom of the circle swings side-to-side */
+              rotate: [-5.5, 5.5],
+            }
+      }
+      transition={{
+        duration: 2.15,
+        repeat: Infinity,
+        repeatType: 'reverse',
+        ease: 'easeInOut',
+      }}
+    >
+      <FacebookMarkIcon className="h-[1.65rem] w-[1.65rem] sm:h-[1.8rem] sm:w-[1.8rem]" />
+    </motion.a>
+  );
+}
+
 function RhythmWavesDecoration(): React.ReactElement {
   const waves = [
     'M 4 30 Q 52 14 100 30 T 196 28',
@@ -133,7 +167,6 @@ function RhythmWavesDecoration(): React.ReactElement {
 export function StatsBar({ content }: Props): React.ReactElement {
   const ref = useRef(null);
   const isInView = useInView(ref, { once: true, margin: '-20%' });
-  const isEn = content.locale === 'en';
   const isBn = content.locale === 'bn';
 
   return (
@@ -160,12 +193,8 @@ export function StatsBar({ content }: Props): React.ReactElement {
             delay={0.06}
             isBn={isBn}
           >
-            <StatBlock
-              isInView={isInView}
-              isEn={isEn}
-              valueEn={6}
-              suffixEn=""
-              displayBn={content.stats.areas.value}
+            <AreasStatBlock
+              primary={content.stats.areas.value}
               label={content.stats.areas.label}
               supporting={content.stats.areas.supporting}
             />
@@ -177,11 +206,14 @@ export function StatsBar({ content }: Props): React.ReactElement {
             delay={0.12}
             isBn={isBn}
           >
-            <StatBlockText
-              value={content.stats.rhythm.value}
-              label={content.stats.rhythm.label}
-              supporting={content.stats.rhythm.supporting}
-            />
+            <div className="flex w-full flex-col items-center">
+              <StatBlockText
+                value={content.stats.rhythm.value}
+                label={content.stats.rhythm.label}
+                supporting={content.stats.rhythm.supporting}
+              />
+              <RhythmFacebookBadge />
+            </div>
           </StatPillar>
         </div>
       </div>
@@ -288,49 +320,29 @@ function CommunityPillar({
   );
 }
 
-function StatBlock({
-  isInView,
-  isEn,
-  valueEn,
-  suffixEn,
-  displayBn,
+/** Middle pillar — same field layout as Bangla: headline line + main paragraph (+ optional extra). */
+function AreasStatBlock({
+  primary,
   label,
   supporting,
 }: {
-  isInView: boolean;
-  isEn: boolean;
-  valueEn: number;
-  suffixEn: string;
-  displayBn: string;
+  primary: string;
   label: string;
   supporting: string;
 }): React.ReactElement {
-  const [n, setN] = useState(0);
-
-  useEffect(() => {
-    if (!isInView || !isEn) return;
-    const controls = animate(0, valueEn, {
-      duration: 2.1,
-      ease: [0.22, 1, 0.36, 1],
-      onUpdate: (v) => setN(v),
-    });
-    return () => controls.stop();
-  }, [isInView, isEn, valueEn]);
-
   return (
-    <div className="flex flex-col items-center gap-2">
-      <p className="stats-text-display text-4xl font-black tabular-nums sm:text-5xl">
-        {isEn ? (
-          <>
-            {valueEn >= 1000 ? Math.round(n).toLocaleString('en-US') : Math.round(n)}
-            {suffixEn}
-          </>
-        ) : (
-          displayBn
-        )}
+    <div className="flex flex-col items-center">
+      <p className="stats-text-display max-w-[21rem] text-center text-2xl font-black leading-tight tracking-tight sm:text-3xl">
+        {primary}
       </p>
-      <p className="stats-text-body max-w-[19rem] text-base font-bold leading-snug sm:text-lg">{label}</p>
-      <p className="stats-text-quiet mt-1 max-w-[20rem] text-xs font-semibold leading-relaxed sm:text-sm">{supporting}</p>
+      <p className="stats-text-body mt-3 max-w-[21rem] text-sm font-semibold leading-relaxed sm:text-base">
+        {label}
+      </p>
+      {supporting ? (
+        <p className="stats-text-quiet mt-3 max-w-[20rem] text-xs font-semibold leading-relaxed sm:text-[0.8125rem]">
+          {supporting}
+        </p>
+      ) : null}
     </div>
   );
 }
@@ -345,10 +357,12 @@ function StatBlockText({
   supporting: string;
 }): React.ReactElement {
   return (
-    <div className="flex flex-col items-center gap-2">
-      <p className="stats-text-display text-4xl font-black sm:text-5xl">{value}</p>
-      <p className="stats-text-body max-w-[19rem] text-base font-bold leading-snug sm:text-lg">{label}</p>
-      <p className="stats-text-quiet mt-1 max-w-[20rem] text-xs font-semibold leading-relaxed sm:text-sm">{supporting}</p>
+    <div className="flex flex-col items-center">
+      <p className="stats-text-display text-4xl font-black leading-tight sm:text-5xl">{value}</p>
+      <p className="stats-text-body mt-2 max-w-[21rem] text-base font-bold leading-snug sm:text-lg">{label}</p>
+      <p className="stats-text-body mt-3 max-w-[21rem] text-sm font-semibold leading-relaxed sm:text-base">
+        {supporting}
+      </p>
     </div>
   );
 }

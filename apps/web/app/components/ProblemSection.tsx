@@ -1,5 +1,7 @@
 'use client';
 
+import { Fragment } from 'react';
+
 import { motion, useReducedMotion } from 'framer-motion';
 
 import type { LandingContent } from '@/lib/content';
@@ -8,6 +10,30 @@ import { ProblemKidMascot } from './ProblemKidMascot';
 import { ScrollReveal } from './ScrollReveal';
 
 const cardSpring = { type: 'spring' as const, stiffness: 380, damping: 28, mass: 0.85 };
+
+/** Matches copy in content; wrapped in the problem cards for emphasis. */
+const BRAND_WORDMARK = 'Parenting My Kid';
+
+function ProblemCardBodyRich({ text }: { text: string }): React.ReactNode {
+  if (!text.includes(BRAND_WORDMARK)) {
+    return text;
+  }
+  const parts = text.split(BRAND_WORDMARK);
+  return (
+    <>
+      {parts.map((part, i) => (
+        <Fragment key={i}>
+          {part}
+          {i < parts.length - 1 ? (
+            <span className="font-extrabold text-transparent bg-gradient-to-r from-brand-teal via-teal-500 to-brand-purple bg-clip-text">
+              {BRAND_WORDMARK}
+            </span>
+          ) : null}
+        </Fragment>
+      ))}
+    </>
+  );
+}
 
 type Props = {
   content: LandingContent;
@@ -162,7 +188,7 @@ export function ProblemSection({ content }: Props): React.ReactElement {
                           isBn ? 'font-bengali' : ''
                         }`}
                       >
-                        {card.body}
+                        <ProblemCardBodyRich text={card.body} />
                       </p>
                     </div>
                   </motion.article>

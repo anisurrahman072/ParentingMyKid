@@ -5,6 +5,15 @@ import Image from 'next/image';
 import type { HeroSubheadline } from '@/lib/content';
 
 import { FacebookFollowButton } from './FacebookFollowButton';
+
+/** English hero: one color per topic word (teal → emerald → purple → fuchsia → pink). */
+const HERO_TOPIC_WORD_CLASSES = [
+  'text-brand-teal',
+  'text-emerald-600',
+  'text-brand-purple',
+  'text-fuchsia-600',
+  'text-brand-pink',
+] as const;
 import { FallingStars } from './FallingStars';
 import { FloatingEmojis } from './FloatingEmojis';
 
@@ -39,29 +48,54 @@ export function HeroSection({ headline, subheadline, cta, isBengali }: Props): R
           </span>
         </h1>
         <div
-          className={`mt-6 max-w-2xl space-y-1 text-center ${
-            isBengali ? 'font-bengali' : ''
-          }`}
+          className={`mt-6 max-w-2xl text-center ${isBengali ? 'font-bengali' : ''}`}
         >
-          <p className="text-[0.95rem] leading-snug text-text-main sm:text-lg sm:leading-snug">
-            <span className="inline-flex items-center gap-1.5 align-middle">
-              <span className="rounded-full border border-white/70 bg-white/55 px-2.5 py-0.5 text-xs font-semibold tracking-tight text-brand-teal shadow-sm shadow-brand-teal/10 backdrop-blur-sm sm:px-3 sm:text-[0.8125rem]">
-                {subheadline.brand}
+          {isBengali ? (
+            <p className="text-[0.95rem] leading-snug text-text-main sm:text-lg sm:leading-snug">
+              <HeroBrandBadge>{subheadline.brand}</HeroBrandBadge>
+              <span className="text-text-soft/80"> — </span>
+              <span className="text-text-soft">
+                {subheadline.intro}{' '}
+                {subheadline.scopeHighlight != null &&
+                subheadline.scopeLead != null &&
+                subheadline.scopeTrail != null ? (
+                  <>
+                    {subheadline.scopeLead}
+                    <span className="bg-gradient-to-r from-brand-teal via-brand-purple to-brand-pink bg-clip-text font-semibold text-transparent">
+                      {subheadline.scopeHighlight}
+                    </span>
+                    {subheadline.scopeTrail}
+                  </>
+                ) : (
+                  subheadline.scope
+                )}
               </span>
-            </span>
-            <span className="text-text-soft/80"> — </span>
-            <span className="text-text-soft">{subheadline.intro}</span>
-          </p>
-          <p className="text-[0.9rem] font-medium leading-snug tracking-tight text-text-main/90 sm:text-base">
-            {subheadline.scope}
-          </p>
-          <p className="text-[0.95rem] leading-snug text-text-soft sm:text-lg sm:leading-snug">
-            {subheadline.payoffLead}
-            <span className="bg-gradient-to-r from-brand-teal via-brand-purple to-brand-pink bg-clip-text font-semibold text-transparent">
-              {subheadline.payoffAccent}
-            </span>
-            {subheadline.payoffTrail}
-          </p>
+            </p>
+          ) : (
+            <p className="text-[0.95rem] leading-snug text-text-main sm:text-lg sm:leading-snug">
+              <HeroBrandBadge>{subheadline.brand}</HeroBrandBadge>
+              <span className="text-text-soft/80"> — </span>
+              <span className="text-text-soft">
+                {[subheadline.intro, subheadline.scope, subheadline.payoffLead]
+                  .filter((s) => s.length > 0)
+                  .join(' ')}
+                {subheadline.topicWords != null && subheadline.topicWords.length > 0 ? (
+                  <>
+                    <HeroEnglishTopicWords words={subheadline.topicWords} />
+                    {subheadline.topicTrail ?? ''}
+                  </>
+                ) : (
+                  <>
+                    {' '}
+                    <span className="bg-gradient-to-r from-brand-teal via-brand-purple to-brand-pink bg-clip-text font-semibold text-transparent">
+                      {subheadline.payoffAccent}
+                    </span>
+                    {subheadline.payoffTrail}
+                  </>
+                )}
+              </span>
+            </p>
+          )}
         </div>
         <div className="mt-10">
           <FacebookFollowButton label={cta} size="lg" />
@@ -69,6 +103,39 @@ export function HeroSection({ headline, subheadline, cta, isBengali }: Props): R
       </div>
       <WaveDivider className="mt-16 text-bg-base" />
     </section>
+  );
+}
+
+function HeroEnglishTopicWords({ words }: { words: string[] }): React.ReactElement {
+  const n = words.length;
+  return (
+    <>
+      {words.map((word, i) => {
+        const colorClass = HERO_TOPIC_WORD_CLASSES[i % HERO_TOPIC_WORD_CLASSES.length];
+        const sep =
+          i < n - 1 ? (i === n - 2 ? ', and ' : ', ') : '';
+        return (
+          <span key={`${word}-${i}`}>
+            <span className={`font-semibold ${colorClass}`}>{word}</span>
+            {sep}
+          </span>
+        );
+      })}
+    </>
+  );
+}
+
+function HeroBrandBadge({ children }: { children: React.ReactNode }): React.ReactElement {
+  return (
+    <span className="inline-flex items-center gap-1.5 align-middle">
+      <span
+        className="rounded-full border border-white/50 bg-gradient-to-br from-white via-teal-50/40 to-violet-50/35 px-2.5 py-0.5 font-wordmark text-xs font-extrabold tracking-tight shadow-[0_4px_18px_-4px_rgba(0,168,120,0.22),0_8px_28px_-12px_rgba(160,32,216,0.12),inset_0_1px_0_rgba(255,255,255,0.95),inset_0_-1px_0_rgba(0,168,120,0.05)] ring-1 ring-brand-teal/15 backdrop-blur-xl sm:px-3 sm:text-[0.8125rem]"
+      >
+        <span className="bg-gradient-to-r from-brand-teal via-emerald-600 to-teal-600 bg-clip-text text-transparent">
+          {children}
+        </span>
+      </span>
+    </span>
   );
 }
 

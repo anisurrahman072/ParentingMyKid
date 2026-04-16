@@ -17,9 +17,29 @@
   }
 
   .mesh-hero {
-    background: linear-gradient(-45deg, #e0fff4, #f3e8ff, #fff0f8, #e8f8ff);
-    background-size: 400% 400%;
-    animation: gradientShift 14s ease infinite;
+    background-color: #f7fafc;
+    background-image:
+      radial-gradient(ellipse 120% 80% at 50% -30%, rgba(224, 255, 244, 0.95), transparent 55%),
+      radial-gradient(ellipse 90% 70% at 100% 15%, rgba(243, 232, 255, 0.85), transparent 50%),
+      radial-gradient(ellipse 80% 60% at 0% 85%, rgba(232, 248, 255, 0.9), transparent 52%),
+      radial-gradient(circle at 30% 40%, rgba(0, 168, 120, 0.07) 0%, transparent 42%),
+      radial-gradient(circle at 75% 55%, rgba(160, 32, 216, 0.06) 0%, transparent 45%),
+      linear-gradient(-45deg, #dff8f0, #eee6ff, #ffeef6, #e4f4ff);
+    background-size:
+      auto,
+      auto,
+      auto,
+      auto,
+      auto,
+      400% 400%;
+    background-position:
+      center,
+      center,
+      center,
+      center,
+      center,
+      0% 50%;
+    animation: meshHeroShift 14s ease infinite;
   }
 
   .mesh-cta {
@@ -94,6 +114,17 @@
   }
   50% {
     background-position: 100% 50%;
+  }
+}
+
+/** Hero mesh: only the bottom linear layer shifts; soft orbs stay fixed. */
+@keyframes meshHeroShift {
+  0%,
+  100% {
+    background-position: center, center, center, center, center, 0% 50%;
+  }
+  50% {
+    background-position: center, center, center, center, center, 100% 50%;
   }
 }
 

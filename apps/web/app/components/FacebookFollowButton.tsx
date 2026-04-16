@@ -10,10 +10,15 @@ type Props = {
   className?: string;
 };
 
-function FacebookMarkIcon(): React.ReactElement {
+/** White Facebook “f” mark — shared with stats rhythm badge and icon buttons. */
+export function FacebookMarkIcon({
+  className = 'h-[1.35rem] w-[1.35rem]',
+}: {
+  className?: string;
+} = {}): React.ReactElement {
   return (
     <svg
-      className="h-[1.35rem] w-[1.35rem]"
+      className={className}
       viewBox="0 0 24 24"
       fill="currentColor"
       aria-hidden
