@@ -24,6 +24,8 @@ const config: Config = {
       },
       fontFamily: {
         sans: ['var(--font-nunito)', 'Noto Sans Bengali', 'system-ui', 'sans-serif'],
+        /** Editorial display for pull quotes (Latin) */
+        quote: ['var(--font-fraunces)', 'Georgia', 'serif'],
         bengali: [
           'var(--font-bengali)',
           'Noto Sans Bengali',

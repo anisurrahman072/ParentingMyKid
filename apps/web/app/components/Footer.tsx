@@ -1,4 +1,5 @@
 import Image from 'next/image';
+import Link from 'next/link';
 
 import { FACEBOOK_PAGE_URL } from '@/lib/constants';
 import type { LandingContent } from '@/lib/content';
@@ -30,14 +31,22 @@ export function Footer({ content }: Props): React.ReactElement {
         <p className="mt-2 text-lg font-semibold text-brand-teal">
           www.parentingmykid.com
         </p>
-        <a
-          href={FACEBOOK_PAGE_URL}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="mt-6 text-sm font-semibold text-brand-purple hover:underline"
-        >
-          Facebook
-        </a>
+        <div className="mt-6 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-sm font-semibold">
+          <a
+            href={FACEBOOK_PAGE_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-brand-purple hover:underline"
+          >
+            Facebook
+          </a>
+          <Link
+            href="/privacy-policy"
+            className="text-brand-teal hover:underline"
+          >
+            {content.footer.privacyLabel}
+          </Link>
+        </div>
         <p
           className={`mt-8 text-sm text-text-soft ${
             isBn ? 'font-bengali' : ''

@@ -8,6 +8,8 @@ import { HeroSection } from './HeroSection';
 import { ImageShowcase } from './ImageShowcase';
 import { ProblemSection } from './ProblemSection';
 import { QuoteSection } from './QuoteSection';
+import { ScrollCompanion } from './ScrollCompanion';
+import { StarSectionDivider } from './StarSectionDivider';
 import { StatsBar } from './StatsBar';
 import { StickyTopBar } from './StickyTopBar';
 import { TopicBentoGrid } from './TopicBentoGrid';
@@ -22,21 +24,39 @@ export function Landing({ content }: Props): React.ReactElement {
   return (
     <div className="min-h-screen bg-bg-base">
       <StickyTopBar followLabel={content.hero.cta} />
+      <ScrollCompanion content={content} />
       <main>
-        <HeroSection
-          headline={content.hero.headline}
-          subheadline={content.hero.subheadline}
-          cta={content.hero.cta}
-          isBengali={isBn}
-        />
-        <StatsBar content={content} />
-        <ProblemSection content={content} />
-        <TopicBentoGrid content={content} />
-        <QuoteSection content={content} />
-        <ImageShowcase content={content} />
-        <FacebookCTA content={content} />
+        <div data-scroll-chapter="0">
+          <HeroSection
+            headline={content.hero.headline}
+            subheadline={content.hero.subheadline}
+            cta={content.hero.cta}
+            isBengali={isBn}
+          />
+        </div>
+        <div data-scroll-chapter="1">
+          <StatsBar content={content} />
+        </div>
+        <div data-scroll-chapter="2">
+          <ProblemSection content={content} />
+        </div>
+        <div data-scroll-chapter="3">
+          <TopicBentoGrid content={content} />
+        </div>
+        <StarSectionDivider />
+        <div data-scroll-chapter="4">
+          <QuoteSection content={content} />
+        </div>
+        <div data-scroll-chapter="5">
+          <ImageShowcase content={content} />
+        </div>
+        <div data-scroll-chapter="6">
+          <FacebookCTA content={content} />
+        </div>
       </main>
-      <Footer content={content} />
+      <div data-scroll-chapter="7">
+        <Footer content={content} />
+      </div>
     </div>
   );
 }

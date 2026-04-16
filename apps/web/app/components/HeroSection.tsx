@@ -2,24 +2,23 @@
 
 import Image from 'next/image';
 
+import type { HeroSubheadline } from '@/lib/content';
+
 import { FacebookFollowButton } from './FacebookFollowButton';
+import { FallingStars } from './FallingStars';
 import { FloatingEmojis } from './FloatingEmojis';
 
 type Props = {
   headline: string;
-  subheadline: string;
+  subheadline: HeroSubheadline;
   cta: string;
   isBengali: boolean;
 };
 
-export function HeroSection({
-  headline,
-  subheadline,
-  cta,
-  isBengali,
-}: Props): React.ReactElement {
+export function HeroSection({ headline, subheadline, cta, isBengali }: Props): React.ReactElement {
   return (
     <section className="relative overflow-hidden mesh-hero px-4 pb-0 pt-10 sm:pt-14">
+      <FallingStars />
       <FloatingEmojis />
       <div className="relative z-10 mx-auto flex max-w-4xl flex-col items-center text-center">
         <Image
@@ -39,13 +38,31 @@ export function HeroSection({
             {headline}
           </span>
         </h1>
-        <p
-          className={`mt-6 max-w-2xl text-lg leading-relaxed text-text-soft sm:text-xl ${
+        <div
+          className={`mt-6 max-w-2xl space-y-1 text-center ${
             isBengali ? 'font-bengali' : ''
           }`}
         >
-          {subheadline}
-        </p>
+          <p className="text-[0.95rem] leading-snug text-text-main sm:text-lg sm:leading-snug">
+            <span className="inline-flex items-center gap-1.5 align-middle">
+              <span className="rounded-full border border-white/70 bg-white/55 px-2.5 py-0.5 text-xs font-semibold tracking-tight text-brand-teal shadow-sm shadow-brand-teal/10 backdrop-blur-sm sm:px-3 sm:text-[0.8125rem]">
+                {subheadline.brand}
+              </span>
+            </span>
+            <span className="text-text-soft/80"> — </span>
+            <span className="text-text-soft">{subheadline.intro}</span>
+          </p>
+          <p className="text-[0.9rem] font-medium leading-snug tracking-tight text-text-main/90 sm:text-base">
+            {subheadline.scope}
+          </p>
+          <p className="text-[0.95rem] leading-snug text-text-soft sm:text-lg sm:leading-snug">
+            {subheadline.payoffLead}
+            <span className="bg-gradient-to-r from-brand-teal via-brand-purple to-brand-pink bg-clip-text font-semibold text-transparent">
+              {subheadline.payoffAccent}
+            </span>
+            {subheadline.payoffTrail}
+          </p>
+        </div>
         <div className="mt-10">
           <FacebookFollowButton label={cta} size="lg" />
         </div>

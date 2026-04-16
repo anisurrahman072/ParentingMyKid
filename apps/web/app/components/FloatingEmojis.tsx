@@ -16,7 +16,7 @@ const ITEMS: { emoji: string; className: string; delay: string }[] = [
 export function FloatingEmojis(): React.ReactElement {
   return (
     <div
-      className="pointer-events-none absolute inset-0 overflow-hidden"
+      className="pointer-events-none absolute inset-0 z-[2] overflow-hidden"
       aria-hidden
     >
       {ITEMS.map((item) => (

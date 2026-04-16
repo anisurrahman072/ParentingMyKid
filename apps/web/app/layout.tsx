@@ -1,11 +1,17 @@
 import type { Metadata } from 'next';
-import { Nunito, Noto_Sans_Bengali } from 'next/font/google';
+import { Fraunces, Nunito, Noto_Sans_Bengali } from 'next/font/google';
 
 import './globals.css';
 
 const nunito = Nunito({
   subsets: ['latin'],
   variable: '--font-nunito',
+  display: 'swap',
+});
+
+const fraunces = Fraunces({
+  subsets: ['latin'],
+  variable: '--font-fraunces',
   display: 'swap',
 });
 
@@ -33,10 +39,10 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${nunito.variable} ${notoBengali.variable}`}
+      className={`${nunito.variable} ${fraunces.variable} ${notoBengali.variable}`}
       suppressHydrationWarning
     >
-      <body className="min-h-screen font-sans" suppressHydrationWarning>
+      <body className="min-h-screen overflow-x-hidden font-sans" suppressHydrationWarning>
         {children}
       </body>
     </html>
