@@ -47,9 +47,7 @@ export function HeroSection({ headline, subheadline, cta, isBengali }: Props): R
             {headline}
           </span>
         </h1>
-        <div
-          className={`mt-6 max-w-2xl text-center ${isBengali ? 'font-bengali' : ''}`}
-        >
+        <div className={`mt-6 max-w-2xl text-center ${isBengali ? 'font-bengali' : ''}`}>
           {isBengali ? (
             <p className="text-[0.95rem] leading-snug text-text-main sm:text-lg sm:leading-snug">
               <HeroBrandBadge>{subheadline.brand}</HeroBrandBadge>
@@ -112,8 +110,7 @@ function HeroEnglishTopicWords({ words }: { words: string[] }): React.ReactEleme
     <>
       {words.map((word, i) => {
         const colorClass = HERO_TOPIC_WORD_CLASSES[i % HERO_TOPIC_WORD_CLASSES.length];
-        const sep =
-          i < n - 1 ? (i === n - 2 ? ', and ' : ', ') : '';
+        const sep = i < n - 1 ? (i === n - 2 ? ', and ' : ', ') : '';
         return (
           <span key={`${word}-${i}`}>
             <span className={`font-semibold ${colorClass}`}>{word}</span>
@@ -128,9 +125,7 @@ function HeroEnglishTopicWords({ words }: { words: string[] }): React.ReactEleme
 function HeroBrandBadge({ children }: { children: React.ReactNode }): React.ReactElement {
   return (
     <span className="inline-flex items-center gap-1.5 align-middle">
-      <span
-        className="rounded-full border border-white/50 bg-gradient-to-br from-white via-teal-50/40 to-violet-50/35 px-2.5 py-0.5 font-wordmark text-xs font-extrabold tracking-tight shadow-[0_4px_18px_-4px_rgba(0,168,120,0.22),0_8px_28px_-12px_rgba(160,32,216,0.12),inset_0_1px_0_rgba(255,255,255,0.95),inset_0_-1px_0_rgba(0,168,120,0.05)] ring-1 ring-brand-teal/15 backdrop-blur-xl sm:px-3 sm:text-[0.8125rem]"
-      >
+      <span className="rounded-full border border-white/50 bg-gradient-to-br from-white via-teal-50/40 to-violet-50/35 px-2.5 py-0.5 font-wordmark text-xs font-extrabold tracking-tight shadow-[0_4px_18px_-4px_rgba(0,168,120,0.22),0_8px_28px_-12px_rgba(160,32,216,0.12),inset_0_1px_0_rgba(255,255,255,0.95),inset_0_-1px_0_rgba(0,168,120,0.05)] ring-1 ring-brand-teal/15 backdrop-blur-xl sm:px-3 sm:text-[0.8125rem]">
         <span className="bg-gradient-to-r from-brand-teal via-emerald-600 to-teal-600 bg-clip-text text-transparent">
           {children}
         </span>
