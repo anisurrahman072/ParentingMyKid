@@ -34,6 +34,23 @@ const BN_PHYSICAL_SUN_VITAMIN_PHRASE =
 /** Bangla play & friendship pillar — phrase to emphasize (must match `content.ts`). */
 const BN_PLAY_SOCIAL_CONFIDENCE_PHRASE = 'সামাজিকভাবে দক্ষ ও আত্মবিশ্বাসী';
 
+/** English pillar accents — substrings of `enContent.topics[].body` (must match exactly). */
+const EN_HEALTH_SLEEP_HABIT_PHRASE = 'steady sleep habits';
+
+const EN_EDUCATION_BODY_ACCENT =
+  'Encourage them to learn in their own way, without pressure to perform.';
+
+/** Must match `enContent` body — typographic quotes around the example question. */
+const EN_MENTAL_QUOTE_ACCENT = '\u201CAre you feeling a little frustrated?\u201D';
+
+const EN_EMOTIONAL_LOVE_PHRASE = 'learn to love themselves and you';
+
+const EN_PHYSICAL_SUN_VITAMIN_PHRASE =
+  'sunlight helps vitamin D for strong bones and growing confidence';
+
+/** Em dash before “and”, same as in `content.ts`. */
+const EN_PLAY_SOCIAL_OUTCOME_PHRASE = 'Those habits help at school\u2014and in life.';
+
 /** Degrees — mix of “top-right lean” vs “bottom-left” for an organic bento */
 const CARD_TILTS = [2.4, -2.8, 2.6, -2.1, 2.2, -2.5] as const;
 
@@ -249,49 +266,53 @@ export function TopicBentoGrid({ content }: Props): React.ReactElement {
                       <TopicBodyParagraph
                         body={topic.body}
                         accents={
-                          isBn && index === 0
+                          index === 0
                             ? [
                                 {
-                                  phrase: BN_HEALTH_SLEEP_HABIT_PHRASE,
+                                  phrase: isBn ? BN_HEALTH_SLEEP_HABIT_PHRASE : EN_HEALTH_SLEEP_HABIT_PHRASE,
                                   className: 'font-semibold text-teal-900',
                                 },
                               ]
-                            : isBn && index === 1
+                            : index === 1
                               ? [
                                   {
-                                    phrase: BN_EDUCATION_BODY_ACCENT,
+                                    phrase: isBn ? BN_EDUCATION_BODY_ACCENT : EN_EDUCATION_BODY_ACCENT,
                                     className: 'font-semibold text-violet-900',
                                   },
                                 ]
-                              : isBn && index === 2
+                              : index === 2
                                 ? [
                                     {
-                                      phrase: BN_MENTAL_QUOTE_ACCENT,
+                                      phrase: isBn ? BN_MENTAL_QUOTE_ACCENT : EN_MENTAL_QUOTE_ACCENT,
                                       className: 'font-semibold text-sky-800',
                                     },
                                   ]
-                                : isBn && index === 3
-                                ? [
-                                    {
-                                      phrase: BN_EMOTIONAL_LOVE_PHRASE,
-                                      className: 'font-semibold text-rose-800',
-                                    },
-                                  ]
-                                : isBn && index === 4
+                                : index === 3
                                   ? [
                                       {
-                                        phrase: BN_PHYSICAL_SUN_VITAMIN_PHRASE,
-                                        className: 'font-semibold text-emerald-800',
+                                        phrase: isBn ? BN_EMOTIONAL_LOVE_PHRASE : EN_EMOTIONAL_LOVE_PHRASE,
+                                        className: 'font-semibold text-rose-800',
                                       },
                                     ]
-                                  : isBn && index === 5
+                                  : index === 4
                                     ? [
                                         {
-                                          phrase: BN_PLAY_SOCIAL_CONFIDENCE_PHRASE,
-                                          className: 'font-semibold text-fuchsia-800',
+                                          phrase: isBn
+                                            ? BN_PHYSICAL_SUN_VITAMIN_PHRASE
+                                            : EN_PHYSICAL_SUN_VITAMIN_PHRASE,
+                                          className: 'font-semibold text-emerald-800',
                                         },
                                       ]
-                                    : null
+                                    : index === 5
+                                      ? [
+                                          {
+                                            phrase: isBn
+                                              ? BN_PLAY_SOCIAL_CONFIDENCE_PHRASE
+                                              : EN_PLAY_SOCIAL_OUTCOME_PHRASE,
+                                            className: 'font-semibold text-fuchsia-800',
+                                          },
+                                        ]
+                                      : null
                         }
                       />
                     </p>

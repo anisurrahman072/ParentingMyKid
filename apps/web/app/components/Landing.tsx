@@ -66,6 +66,13 @@ function IslamicSectionWaveDivider(): React.ReactElement {
 
 export function Landing({ content }: Props): React.ReactElement {
   const isBn = content.locale === 'bn';
+  /** BN inserts the Deeni section as its own scroll chapter; EN skips it, so later indices shift. */
+  const ch = {
+    quote: isBn ? 5 : 4,
+    showcase: isBn ? 6 : 5,
+    facebook: isBn ? 7 : 6,
+    footer: isBn ? 8 : 7,
+  };
 
   return (
     <div className="min-h-screen bg-bg-base">
@@ -90,23 +97,23 @@ export function Landing({ content }: Props): React.ReactElement {
           <TopicBentoGrid content={content} />
         </div>
         {isBn ? (
-          <>
+          <div data-scroll-chapter="4">
             <IslamicSectionWaveDivider />
             <DeeniLearningSection />
-          </>
+          </div>
         ) : null}
         <StarSectionDivider />
-        <div data-scroll-chapter="4">
+        <div data-scroll-chapter={String(ch.quote)}>
           <QuoteSection content={content} />
         </div>
-        <div data-scroll-chapter="5">
+        <div data-scroll-chapter={String(ch.showcase)}>
           <ImageShowcase content={content} />
         </div>
-        <div data-scroll-chapter="6">
+        <div data-scroll-chapter={String(ch.facebook)}>
           <FacebookCTA content={content} />
         </div>
       </main>
-      <div data-scroll-chapter="7">
+      <div data-scroll-chapter={String(ch.footer)}>
         <Footer content={content} />
       </div>
     </div>
