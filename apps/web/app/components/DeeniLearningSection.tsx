@@ -45,7 +45,7 @@ function MasjidMinaretHeader({ animate }: { animate: boolean }): React.ReactElem
       className="relative mx-auto flex w-full max-w-5xl flex-col items-center px-1 sm:px-2"
       aria-hidden
     >
-      <p className="font-bengali mb-3 w-full text-center text-[10px] font-semibold leading-none text-amber-100/85 whitespace-nowrap min-[380px]:text-[11px] sm:text-xs md:text-sm md:leading-snug">
+      <p className="font-bengali mx-auto mb-3 w-full max-w-[min(100%,22rem)] px-2 text-center text-[10px] font-semibold leading-snug text-amber-100/85 text-balance sm:max-w-none sm:px-0 sm:leading-none sm:whitespace-nowrap sm:text-xs md:text-sm md:leading-snug">
         নৈতিক শিক্ষা ও আদব—শিশুর ভবিষ্যৎকে শান্তি ও আদর্শের পথে নিয়ে যায়।
       </p>
 
