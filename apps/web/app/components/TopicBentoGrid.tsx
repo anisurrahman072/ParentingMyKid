@@ -151,7 +151,10 @@ export function TopicBentoGrid({ content }: Props): React.ReactElement {
             variants={containerVariants}
             initial="hidden"
             whileInView="show"
-            viewport={{ once: true, margin: '-80px', amount: 0.12 }}
+            // Tall stacked column: `amount: 0.12` required 12% of the whole grid to intersect before
+            // the container left `opacity: 0`, which on narrow viewports often meant a large blank gap
+            // under the headings. `some` + no negative rootMargin triggers as soon as the grid enters.
+            viewport={{ once: true, amount: 'some' }}
           >
             {content.topics.map((topic, index) => {
               const span =
