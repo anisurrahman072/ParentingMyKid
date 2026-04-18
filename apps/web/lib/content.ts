@@ -84,6 +84,47 @@ export type LandingContent = {
   };
   community: { title: string; body: string; cta: string };
   footer: { tagline: string; rights: string; privacyLabel: string };
+  /** Newsletter signup copy */
+  leadCapture: {
+    title: string;
+    subtitle: string;
+    nameLabel: string;
+    emailLabel: string;
+    countryLabel: string;
+    countryHint: string;
+    submit: string;
+    success: string;
+    duplicate: string;
+    error: string;
+    configError: string;
+    /** Scroll-triggered subscription dialog */
+    modalTitle: string;
+    modalSubtitle: string;
+    closeLabel: string;
+    /** Bottom section when already subscribed (localStorage) */
+    subscribedTitle: string;
+    subscribedBody: string;
+    /** Modal actions (scroll popup) */
+    remindLater: string;
+    notForNow: string;
+    /** User is already on the list — hide modal permanently (localStorage) */
+    alreadySubscribed: string;
+    quietGoodbyeTitle: string;
+    quietGoodbyeBody: string;
+    quietGoodbyeCta: string;
+  };
+  /** Visitor feedback copy */
+  feedback: {
+    title: string;
+    subtitle: string;
+    nameLabel: string;
+    emailLabel: string;
+    messageLabel: string;
+    submit: string;
+    success: string;
+    error: string;
+    configError: string;
+  };
   /** Scroll-linked kid companion: one line per `[data-scroll-chapter]` block in order. */
   scrollCompanion: string[];
 };
@@ -267,6 +308,44 @@ export const bnContent: LandingContent = {
     rights: '© ParentingMyKid। সর্বস্বত্ব সংরক্ষিত।',
     privacyLabel: 'গোপনীয়তা নীতি',
   },
+  leadCapture: {
+    title: 'আপডেট পেতে যুক্ত হোন',
+    subtitle: 'ইমেইল দিন—নতুন টিপস ও আপডেট সোজা আপনার ইনবক্সে পৌঁছাবে।',
+    nameLabel: 'নাম (ঐচ্ছিক)',
+    emailLabel: 'ইমেইল',
+    countryLabel: 'দেশ (ঐচ্ছিক)',
+    countryHint: 'যেমন: BD, US',
+    submit: 'সাবস্ক্রাইব করুন',
+    success: 'ধন্যবাদ! আমরা শীঘ্রই যোগাযোগ করব।',
+    duplicate: 'এই ইমেইলটি ইতিমধ্যে তালিকায় আছে।',
+    error: 'কিছু একটা সমস্যা হয়েছে। একটু পরে আবার চেষ্টা করুন।',
+    configError: 'সার্ভার ঠিকানা সেট করা নেই। ডেভেলপারকে জানান।',
+    modalTitle: 'আপডেট পেতে যুক্ত হবেন?',
+    modalSubtitle:
+      'নিচে স্ক্রল করার জন্য ধন্যবাদ। ইমেইল দিন—আমরা টিপস ও আপডেট পাঠাব, যখন প্রস্তুত হব।',
+    closeLabel: 'বন্ধ করুন',
+    subscribedTitle: 'আপনি আমাদের সাথে আছেন 💚',
+    subscribedBody:
+      'সাবস্ক্রিপশনের জন্য ধন্যবাদ। আপনি ইতিমধ্যে আমাদের তালিকায় আছেন—নতুন টিপস ও আপডেট আপনার ইনবক্সে পৌঁছাবে।',
+    remindLater: 'পরে মনে করিয়ে দিন',
+    notForNow: 'এখন না',
+    alreadySubscribed: 'ইতিমধ্যে সাবস্ক্রাইব করেছি',
+    quietGoodbyeTitle: 'আপনাকে মিস করব 💛',
+    quietGoodbyeBody:
+      'ঠিক আছে—এই ভিজিটে আর জিজ্ঞাসা করব না। নিচে পেজের শেষে আপনি যেকোনো সময় সাবস্ক্রাইব করতে পারবেন।',
+    quietGoodbyeCta: 'বুঝেছি',
+  },
+  feedback: {
+    title: 'মতামত শেয়ার করুন',
+    subtitle: 'আপনার পরামর্শ বা প্রশ্ন লিখুন—আমরা প্রতিটি বার্তা পড়ি।',
+    nameLabel: 'নাম (ঐচ্ছিক)',
+    emailLabel: 'ইমেইল',
+    messageLabel: 'আপনার বার্তা',
+    submit: 'পাঠান',
+    success: 'ধন্যবাদ! আপনার বার্তা পেয়েছি।',
+    error: 'পাঠাতে পারিনি। একটু পরে আবার চেষ্টা করুন।',
+    configError: 'সার্ভার ঠিকানা সেট করা নেই। ডেভেলপারকে জানান।',
+  },
   scrollCompanion: [
     '“হাই! একসাথে পড়ুন—আমি পাশে আছি। নিচে স্ক্রল করুন, আমি আপনার সাথে এগিয়ে যাব। 💛”',
     '“আপনি একা নন—এই যাত্রায় আরও অনেক বাবা-মা আপনার মতো শিখছেন।”',
@@ -276,6 +355,7 @@ export const bnContent: LandingContent = {
     '“শিশুদের নিয়ে এই ভাবনা আমাদের দায়িত্ব মনে করিয়ে দেয়।”',
     '“প্রতিদিনের টিপস, আপনার হাতের নাগালে।”',
     'কমিউনিটিতে সবাইকে হাই বলা যায়? প্লিজ?',
+    'একটি ইমেইল—আর আমরা আপনার সাথে যোগাযোগ রাখব। 💌',
     'আজ পাশে থাকার জন্য ধন্যবাদ। তোমাকে ভালোবাসি। 🤗',
   ],
 };
@@ -421,6 +501,44 @@ export const enContent: LandingContent = {
     rights: '© ParentingMyKid. All rights reserved.',
     privacyLabel: 'Privacy Policy',
   },
+  leadCapture: {
+    title: 'Stay in the loop',
+    subtitle: 'Get parenting tips and updates—right in your inbox.',
+    nameLabel: 'Name (optional)',
+    emailLabel: 'Email',
+    countryLabel: 'Country (optional)',
+    countryHint: 'e.g. BD, US',
+    submit: 'Subscribe',
+    success: "Thanks! You're on the list.",
+    duplicate: 'This email is already subscribed.',
+    error: 'Something went wrong. Please try again in a moment.',
+    configError: 'Server URL is not configured. Ask the site admin.',
+    modalTitle: 'Stay in the loop?',
+    modalSubtitle:
+      'Thanks for reading. Add your email and we’ll send gentle parenting tips—only when it helps.',
+    closeLabel: 'Close',
+    subscribedTitle: 'You’re on the list 💚',
+    subscribedBody:
+      'Thanks for subscribing—you’ll get tips and updates in your inbox. We’re glad you’re here.',
+    remindLater: 'Remind me later',
+    notForNow: 'Not for now',
+    alreadySubscribed: 'I’m already subscribed',
+    quietGoodbyeTitle: 'We’ll miss you 💛',
+    quietGoodbyeBody:
+      'No problem—we won’t ask again this visit. You can still subscribe anytime in the section at the bottom of the page.',
+    quietGoodbyeCta: 'Got it',
+  },
+  feedback: {
+    title: 'Send us feedback',
+    subtitle: 'Share a suggestion or question—we read every message.',
+    nameLabel: 'Name (optional)',
+    emailLabel: 'Email',
+    messageLabel: 'Your message',
+    submit: 'Send message',
+    success: 'Thanks! We received your message.',
+    error: 'Could not send. Please try again shortly.',
+    configError: 'Server URL is not configured. Ask the site admin.',
+  },
   scrollCompanion: [
     'Hi! Let’s read together—I’m right beside you. Scroll down and I’ll come with you. 💛',
     'You are not alone—many parents like you are learning on this journey.',
@@ -429,6 +547,7 @@ export const enContent: LandingContent = {
     'Thinking about children this way reminds us what we owe them—our care.',
     'Every day’s tips, within easy reach.',
     'Can we say hi to everyone in the community? Please?',
+    'One email—and we’ll remember to stay in touch. 💌',
     'Thanks for being here today. Love you. 🤗',
   ],
 };

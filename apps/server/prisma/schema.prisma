@@ -1329,3 +1329,30 @@ model CrisisScript {
 
   @@map("crisis_scripts")
 }
+
+/// Marketing-site newsletter signups from the Next.js landing (BN/EN).
+model Lead {
+  id        String   @id @default(cuid())
+  name      String?
+  email     String   @unique
+  country   String?
+  language  String   @default("en") // "bn" | "en"
+  source    String? // e.g. landing_bn, landing_en
+  createdAt DateTime @default(now())
+
+  @@map("leads")
+}
+
+/// Visitor feedback submitted from the marketing site (no unique email — multiple messages allowed).
+model SiteFeedback {
+  id        String   @id @default(cuid())
+  email     String
+  name      String?
+  message   String
+  country   String?
+  language  String   @default("en")
+  source    String?
+  createdAt DateTime @default(now())
+
+  @@map("site_feedback")
+}

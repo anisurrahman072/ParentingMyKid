@@ -131,10 +131,11 @@ export default function PrivacyPolicyPage(): React.ReactElement {
                 4. Cookies and similar technologies
               </h2>
               <p className="text-text-main/95">
-                We aim to keep tracking minimal. Any cookies or local storage used by the Site are
-                primarily for basic functionality (such as how the site loads). If we use analytics
-                or similar tools in the future, we will update this policy and, where required, your
-                choices.
+                We aim to keep tracking minimal. The Site may load <strong>Google Analytics 4</strong>{' '}
+                and <strong>Meta Pixel</strong> when configured, to understand how visitors use the
+                site and to measure marketing effectiveness. Those services use cookies or similar
+                technologies under their own privacy terms. Newsletter signup and feedback forms send
+                the information you enter to our servers to respond to you and improve our services.
               </p>
             </section>
 

@@ -7,6 +7,8 @@ import { DeeniLearningSection } from './DeeniLearningSection';
 import { Footer } from './Footer';
 import { HeroSection } from './HeroSection';
 import { ImageShowcase } from './ImageShowcase';
+import { MarketingLeadSection } from './MarketingLeadSection';
+import { NewsletterSignupModal } from './NewsletterSignupModal';
 import { ProblemSection } from './ProblemSection';
 import { QuoteSection } from './QuoteSection';
 import { ScrollCompanion } from './ScrollCompanion';
@@ -71,11 +73,13 @@ export function Landing({ content }: Props): React.ReactElement {
     quote: isBn ? 5 : 4,
     showcase: isBn ? 6 : 5,
     facebook: isBn ? 7 : 6,
-    footer: isBn ? 8 : 7,
+    leads: isBn ? 8 : 7,
+    footer: isBn ? 9 : 8,
   };
 
   return (
     <div className="min-h-screen bg-bg-base">
+      <NewsletterSignupModal content={content} />
       <StickyTopBar followLabel={content.hero.cta} />
       <ScrollCompanion content={content} />
       <main>
@@ -111,6 +115,9 @@ export function Landing({ content }: Props): React.ReactElement {
         </div>
         <div data-scroll-chapter={String(ch.facebook)}>
           <FacebookCTA content={content} />
+        </div>
+        <div data-scroll-chapter={String(ch.leads)}>
+          <MarketingLeadSection content={content} />
         </div>
       </main>
       <div data-scroll-chapter={String(ch.footer)}>

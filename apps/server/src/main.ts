@@ -5,7 +5,7 @@
  *              Sets up global validation, versioning, Swagger docs, and CORS.
  *
  * @business-rule This server serves the ParentingMyKid mobile app (Expo).
- *               During local development: runs on localhost:3000
+ *               During local development: default port 3001 (override with PORT)
  *               In production: deployed to Railway.app with auto-SSL
  */
 
@@ -25,7 +25,7 @@ async function bootstrap(): Promise<void> {
   );
 
   const configService = app.get(ConfigService);
-  const port = configService.get<number>('PORT', 3000);
+  const port = configService.get<number>('PORT', 3001);
   const nodeEnv = configService.get<string>('NODE_ENV', 'development');
   const allowedOrigins = configService.get<string>('ALLOWED_ORIGINS', '').split(',');
 
@@ -53,7 +53,6 @@ async function bootstrap(): Promise<void> {
   app.setGlobalPrefix('api/v1');
 
   // Swagger API documentation — only in development
-  // Access at: http://localhost:3000/api/docs
   if (nodeEnv !== 'production') {
     const swaggerConfig = new DocumentBuilder()
       .setTitle('ParentingMyKid API')
@@ -66,7 +65,7 @@ async function bootstrap(): Promise<void> {
 
     const document = SwaggerModule.createDocument(app, swaggerConfig);
     SwaggerModule.setup('api/docs', app, document);
-    logger.log('Swagger docs: http://localhost:3000/api/docs');
+    logger.log(`Swagger docs: http://localhost:${port}/api/docs`);
   }
 
   await app.listen(port, '0.0.0.0');

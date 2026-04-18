@@ -3,9 +3,9 @@
  * @description API base URL configuration and endpoint constants.
  *
  * Local dev:
- *   1. Run Nest: `cd apps/server && npm run start:dev` (listens on 0.0.0.0:3000)
+ *   1. Run Nest: `cd apps/server && npm run start:dev` (listens on 0.0.0.0:3001)
  *   2. Optional: set `EXPO_PUBLIC_API_BASE_URL` in `apps/mobile/.env`, e.g.
- *      `EXPO_PUBLIC_API_BASE_URL=http://192.168.0.50:3000/api/v1`
+ *      `EXPO_PUBLIC_API_BASE_URL=http://192.168.0.50:3001/api/v1`
  *   3. If unset, we derive the host from Expo (same machine as Metro) so a phone
  *      on the same Wi‑Fi can reach your laptop without hardcoding an IP.
  */
@@ -26,11 +26,11 @@ function getApiBaseUrl(): string {
   if (hostUri) {
     const host = hostUri.split(':')[0];
     if (host && host !== '127.0.0.1' && host !== 'localhost') {
-      return `http://${host}:3000/api/v1`;
+      return `http://${host}:3001/api/v1`;
     }
   }
 
-  return 'http://localhost:3000/api/v1';
+  return 'http://localhost:3001/api/v1';
 }
 
 export const API_BASE_URL = getApiBaseUrl();

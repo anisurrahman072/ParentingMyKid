@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next';
 import { Fraunces, Nunito, Noto_Sans_Bengali, Outfit } from 'next/font/google';
 import { headers } from 'next/headers';
 
+import { AnalyticsScripts } from '@/app/components/AnalyticsScripts';
 import { JsonLd } from '@/app/components/JsonLd';
 import { FACEBOOK_PAGE_URL } from '@/lib/constants';
 import { SITE_NAME, SITE_URL, TWITTER_HANDLE } from '@/lib/site';
@@ -153,6 +154,7 @@ export default async function RootLayout({
       suppressHydrationWarning
     >
       <body className="min-h-screen overflow-x-hidden font-sans" suppressHydrationWarning>
+        <AnalyticsScripts />
         <JsonLd data={organizationJsonLd} />
         <JsonLd data={websiteJsonLd} />
         {children}

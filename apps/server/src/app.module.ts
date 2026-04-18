@@ -38,6 +38,7 @@ import { CalendarModule } from './modules/calendar/calendar.module';
 import { FinanceModule } from './modules/finance/finance.module';
 import { CommunityModule } from './modules/community/community.module';
 import { AnalyticsModule } from './modules/analytics/analytics.module';
+import { LeadsModule } from './modules/leads/leads.module';
 
 @Module({
   imports: [
@@ -87,6 +88,7 @@ import { AnalyticsModule } from './modules/analytics/analytics.module';
     FinanceModule,
     CommunityModule,
     AnalyticsModule,
+    LeadsModule,
   ],
 })
 export class AppModule {}
