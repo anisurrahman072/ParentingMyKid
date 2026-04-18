@@ -170,25 +170,58 @@ async function loadPostsWithFallback(
   return { posts: [], graphError: lastError ?? 'No posts returned from Graph API.' };
 }
 
+function parseInsightValue(v: unknown): number | null {
+  if (typeof v === 'number' && !Number.isNaN(v)) return Math.max(0, Math.floor(v));
+  if (typeof v === 'string') {
+    const n = Number.parseInt(v.replace(/,/g, ''), 10);
+    return Number.isNaN(n) ? null : Math.max(0, n);
+  }
+  return null;
+}
+
+/**
+ * Page post insights need `read_insights` on the token. We try several metrics
+ * because availability varies by post type / API version.
+ */
 async function fetchPostImpressions(
   postId: string,
   token: string,
 ): Promise<number | null> {
-  const u = new URL(
-    `https://graph.facebook.com/${GRAPH_VERSION}/${encodeURIComponent(postId)}/insights`,
-  );
-  u.searchParams.set('metric', 'post_impressions');
-  u.searchParams.set('access_token', token);
+  const metricsPreferred = [
+    'post_impressions',
+    'post_impressions_unique',
+    'post_reach',
+  ] as const;
 
-  try {
+  const fetchMetrics = async (metricParam: string): Promise<number | null> => {
+    const u = new URL(
+      `https://graph.facebook.com/${GRAPH_VERSION}/${encodeURIComponent(postId)}/insights`,
+    );
+    u.searchParams.set('metric', metricParam);
+    u.searchParams.set('access_token', token);
+
     const raw = (await graphJson(u.toString())) as {
-      data?: { name?: string; values?: { value?: number }[] }[];
+      data?: { name?: string; values?: { value?: unknown }[] }[];
       error?: { message?: string };
     };
     if (raw.error) return null;
-    const row = raw.data?.find((d) => d.name === 'post_impressions');
-    const v = row?.values?.[0]?.value;
-    return typeof v === 'number' ? v : null;
+    const rows = raw.data ?? [];
+    for (const name of metricsPreferred) {
+      const row = rows.find((d) => d.name === name);
+      const v = parseInsightValue(row?.values?.[0]?.value);
+      if (v !== null) return v;
+    }
+    return null;
+  };
+
+  try {
+    const combined = await fetchMetrics(metricsPreferred.join(','));
+    if (combined !== null) return combined;
+    for (const m of metricsPreferred) {
+      const one = await fetchMetrics(m);
+      if (one !== null) return one;
+    }
+    return null;
   } catch {
     return null;
   }

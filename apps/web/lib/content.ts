@@ -100,6 +100,9 @@ export type LandingContent = {
     /** Scroll-triggered subscription dialog */
     modalTitle: string;
     modalSubtitle: string;
+    modalWhyJoinTitle: string;
+    modalBenefits: string[];
+    modalClosingLine: string;
     closeLabel: string;
     /** Bottom section when already subscribed (localStorage) */
     subscribedTitle: string;
@@ -322,7 +325,15 @@ export const bnContent: LandingContent = {
     configError: 'সার্ভার ঠিকানা সেট করা নেই। ডেভেলপারকে জানান।',
     modalTitle: 'আপডেট পেতে যুক্ত হবেন?',
     modalSubtitle:
-      'নিচে স্ক্রল করার জন্য ধন্যবাদ। ইমেইল দিন—আমরা টিপস ও আপডেট পাঠাব, যখন প্রস্তুত হব।',
+      'প্যারেন্টিংয়ের এই সুন্দর জার্নিতে আপনার পাশে থাকতে আমরা পাঠাব প্রয়োজনীয় টিপস, বিশেষজ্ঞের পরামর্শ এবং দারুণ সব আপডেট। আমাদের এই ক্ষুদ্র প্রয়াস আপনার সন্তান প্রতিপালনকে করবে আরও সহজ ও আত্মবিশ্বাসী।',
+    modalWhyJoinTitle: 'কেন আপনি আমাদের সাথে যুক্ত হবেন?',
+    modalBenefits: [
+      'বিশেষজ্ঞ টিপস: প্যারেন্টিং হোক আরও আনন্দময়।',
+      'সহজ সমাধান: বাস্তব সমস্যার কার্যকর টিপস।',
+      'সরাসরি ইনবক্স: প্রয়োজনীয় সব আপডেট মেইলে।',
+      'সবসময় পাশে: সন্তানের প্রতিটি পদক্ষেপে।',
+    ],
+    modalClosingLine: 'সেরা টিপস পেতে আজই যুক্ত হোন।',
     closeLabel: 'বন্ধ করুন',
     subscribedTitle: 'আপনি আমাদের সাথে আছেন 💚',
     subscribedBody:
@@ -513,9 +524,17 @@ export const enContent: LandingContent = {
     duplicate: 'This email is already subscribed.',
     error: 'Something went wrong. Please try again in a moment.',
     configError: 'Server URL is not configured. Ask the site admin.',
-    modalTitle: 'Stay in the loop?',
+    modalTitle: 'Join for updates?',
     modalSubtitle:
-      'Thanks for reading. Add your email and we’ll send gentle parenting tips—only when it helps.',
+      'On this parenting journey we’ll send tips, expert advice, and fresh updates—right beside you—so raising your child feels easier and more confident.',
+    modalWhyJoinTitle: 'Why join us?',
+    modalBenefits: [
+      'Expert tips: parenting that feels more joyful.',
+      'Simple solutions: practical tips for real-life challenges.',
+      'Straight to inbox: the updates you need, in your email.',
+      'Always beside you: every step with your child.',
+    ],
+    modalClosingLine: 'Get our best tips—join today.',
     closeLabel: 'Close',
     subscribedTitle: 'You’re on the list 💚',
     subscribedBody:

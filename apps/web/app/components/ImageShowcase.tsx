@@ -312,13 +312,23 @@ function FacebookPostCard({
           </span>
           <span
             className="inline-flex min-w-[4.5rem] flex-col items-center gap-0.5 sm:flex-row sm:gap-1"
-            title={post.viewCount === null ? labels.views : undefined}
+            title={
+              post.viewCount === null
+                ? isBn
+                  ? 'ফেসবুক ইনসাইট থেকে ভিউ সংখ্যা পাওয়া যায়নি।'
+                  : 'View count unavailable from Facebook Insights.'
+                : undefined
+            }
           >
             <IconEye />
             <span className="tabular-nums text-[#050505]">
               {post.viewCount === null ? '—' : post.viewCount.toLocaleString(locale)}
             </span>
-            <span className="hidden sm:inline">{labels.views}</span>
+            {/* Always show "views" label: on small screens the number label is hidden for other stats,
+                and "—" alone looked like a bug. */}
+            <span className="inline max-w-[5rem] text-[11px] leading-tight text-[#65676B] sm:max-w-none sm:text-[13px]">
+              {labels.views}
+            </span>
           </span>
         </div>
       </div>
