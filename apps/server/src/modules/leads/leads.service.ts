@@ -38,8 +38,7 @@ export class LeadsService {
    * unless that exact address is verified — otherwise Resend returns `error` and nothing is sent.
    */
   private newsletterFrom(): string {
-    const raw =
-      this.config.get<string>('EMAIL_FROM')?.trim() || 'noreply@parentingmykid.com';
+    const raw = this.config.get<string>('EMAIL_FROM')?.trim() || 'noreply@parentingmykid.com';
     if (raw.includes('<') && raw.includes('>')) {
       return raw;
     }
@@ -74,11 +73,12 @@ export class LeadsService {
 
   async create(dto: CreateLeadDto): Promise<{ ok: true; kind: 'lead' | 'feedback' }> {
     const message = dto.message?.trim();
+    const emailNorm = dto.email.trim().toLowerCase();
 
     if (message) {
       await this.prisma.siteFeedback.create({
         data: {
-          email: dto.email,
+          email: emailNorm,
           name: dto.name ?? null,
           message,
           country: dto.country ?? null,
@@ -86,14 +86,24 @@ export class LeadsService {
           source: dto.source ?? null,
         },
       });
-      await this.sendFeedbackThankYou(dto.email, dto.name, dto.language);
+      await this.sendFeedbackThankYou(emailNorm, dto.name, dto.language);
       return { ok: true, kind: 'feedback' };
+    }
+
+    const existing = await this.prisma.lead.findFirst({
+      where: {
+        email: { equals: emailNorm, mode: 'insensitive' },
+      },
+    });
+    if (existing) {
+      await this.sendAlreadySubscribedEmail(emailNorm, dto.name, dto.language);
+      throw new ConflictException('This email is already on the list.');
     }
 
     try {
       await this.prisma.lead.create({
         data: {
-          email: dto.email,
+          email: emailNorm,
           name: dto.name ?? null,
           country: dto.country ?? null,
           language: dto.language,
@@ -102,14 +112,17 @@ export class LeadsService {
       });
     } catch (e) {
       if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
-        // New inserts get welcome mail; duplicates used to get nothing — still send confirmation.
-        await this.sendAlreadySubscribedEmail(dto.email, dto.name, dto.language);
+        // `Lead` only has @@unique on `email` — races or legacy casing can land here after a missed findFirst.
+        this.logger.warn(
+          `Lead unique violation for normalized email=${emailNorm} meta=${JSON.stringify(e.meta)}`,
+        );
+        await this.sendAlreadySubscribedEmail(emailNorm, dto.name, dto.language);
         throw new ConflictException('This email is already on the list.');
       }
       throw e;
     }
 
-    await this.sendWelcomeEmail(dto.email, dto.name, dto.language);
+    await this.sendWelcomeEmail(emailNorm, dto.name, dto.language);
     return { ok: true, kind: 'lead' };
   }
 
