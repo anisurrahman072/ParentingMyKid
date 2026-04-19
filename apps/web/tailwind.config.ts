@@ -10,6 +10,8 @@ const config: Config = {
       colors: {
         brand: {
           teal: '#00A878',
+          /** Alias used across forms; same as teal */
+          mint: '#00A878',
           purple: '#A020D8',
           pink: '#F472B6',
         },

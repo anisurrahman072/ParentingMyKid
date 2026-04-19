@@ -24,7 +24,7 @@
 > | **When must I run it?**             | (1) **First time** after creating a new Neon database and setting `DATABASE_URL`. (2) After you **change** `schema.prisma` and want those changes applied to Neon. (3) When you **switch** to a new empty database (new `DATABASE_URL`). |
 > | **When do I run it again?**         | Any time the schema file changes and you need the live DB to match — e.g. after `git pull` that updates `schema.prisma`.                                                                                                                 |
 > | **What does it _not_ do?**          | It does not delete your app code. It does not fill tables with fake data unless you add a seed script.                                                                                                                                   |
-> | **Safe on production?**             | `db push` can be destructive in edge cases (e.g. renames). For production with strict change control, teams often use **`prisma migrate`** instead; this project currently documents **`db push`** for simplicity.                     |
+> | **Safe on production?**             | `db push` can be destructive in edge cases (e.g. renames). For production with strict change control, teams often use **`prisma migrate`** instead; this project currently documents **`db push`** for simplicity.                       |
 >
 > **Also required after install:** `npm install` runs `prisma generate` in the server package — that **only regenerates the TypeScript client**, it **does not create tables**. Tables = **`db:push`** (or migrate).
 >
@@ -233,13 +233,31 @@ Default ports in this repo: **NestJS API → 3001**, **Next.js marketing site (`
 # 1. Install all dependencies
 npm install
 
+-------------- DATABASE 👇 --------------
+-------------- DATABASE 👇 --------------
+
+# Go to SERVER directory first then
+cd apps/server
+
+# Open the database in a browser --> usually http://localhost:5555
+npx prisma studio
+
+# Creates/updates tables in Neon — run once per new DB / after schema changes ----> It does the same job like as "prisma migrate dev" but it just can't write migration histories.
+npm run db:push
+
+# Creates/updates tables in Neon ----> It does the same job like as "npm run db:push" but it can write migration history under "prisma/migrations/" directory.
+# The full command is --> prisma migrate dev --name describe_your_change
+prisma migrate dev
+
+# Apply the same migrations to staging DB/ PRODUCTION DB (applying on DATABASE_URL in .env file)
+prisma migrate deploy
+
 -------------- SERVER 👇 --------------
 -------------- SERVER 👇 --------------
 
 # 2. Configure and sync the database (see 🚨 Prisma alert at top of file)
 cd apps/server
 cp .env.example .env   # Fill in DATABASE_URL and other secrets
-npm run db:push        # Creates/updates tables in Neon — run once per new DB / after schema changes
 
 # 3. Start the backend
 npm run dev      # auto starts on http://localhost:3001

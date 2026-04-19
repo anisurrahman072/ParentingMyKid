@@ -312,7 +312,32 @@
   50% { transform: rotate(5.5deg); }
 }
 
+/* Marketing lead section: slow drift for decorative SVG curves */
+@keyframes marketingLeadCurves {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+    opacity: 0.55;
+  }
+  50% {
+    transform: translate3d(12px, -8px, 0) scale(1.02);
+    opacity: 0.72;
+  }
+}
+
+.marketing-lead-curves {
+  animation: marketingLeadCurves 18s ease-in-out infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
+  .mesh-cta {
+    animation: none;
+  }
+
+  .marketing-lead-curves {
+    animation: none;
+  }
+
   .hero-falling-stars {
     display: none;
   }

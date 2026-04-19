@@ -39,9 +39,13 @@ function scrollDepth(): number {
  */
 export function NewsletterSignupModal({ content }: Props): React.ReactElement | null {
   const dialogRef = useRef<HTMLDialogElement>(null);
+  const viewportRef = useRef<HTMLDivElement>(null);
+  const wrapperRef = useRef<HTMLDivElement>(null);
+  const cardRef = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
   const [phase, setPhase] = useState<ModalPhase>('form');
   const [hydrated, setHydrated] = useState(false);
+  const [canCenter, setCanCenter] = useState(true);
   const openRef = useRef(false);
   const isBn = content.locale === 'bn';
   const t = content.leadCapture;
@@ -190,46 +194,117 @@ export function NewsletterSignupModal({ content }: Props): React.ReactElement | 
     return () => el.removeEventListener('cancel', onCancel);
   }, [handleSnooze]);
 
+  useEffect(() => {
+    if (!open) return;
+    setCanCenter(true);
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    const viewport = viewportRef.current;
+    const wrapper = wrapperRef.current;
+    const card = cardRef.current;
+    if (!viewport || !wrapper || !card) return;
+
+    const updateFit = (): void => {
+      const styles = window.getComputedStyle(wrapper);
+      const padTop = Number.parseFloat(styles.paddingTop) || 0;
+      const padBottom = Number.parseFloat(styles.paddingBottom) || 0;
+      const availableHeight = wrapper.clientHeight - padTop - padBottom;
+      const modalHeight = card.getBoundingClientRect().height;
+      const fits = modalHeight <= availableHeight + 1;
+      setCanCenter(fits);
+      if (fits) viewport.scrollTop = 0;
+    };
+
+    const rafA = window.requestAnimationFrame(() => {
+      updateFit();
+      window.requestAnimationFrame(updateFit);
+    });
+    const resizeObserver = new ResizeObserver(updateFit);
+    resizeObserver.observe(wrapper);
+    resizeObserver.observe(card);
+    window.addEventListener('resize', updateFit, { passive: true });
+
+    return () => {
+      window.cancelAnimationFrame(rafA);
+      resizeObserver.disconnect();
+      window.removeEventListener('resize', updateFit);
+    };
+  }, [open, phase]);
+
   if (!hydrated) return null;
 
   return (
     <dialog
       ref={dialogRef}
-      className="fixed inset-0 z-[100] max-h-none max-w-none overflow-visible bg-transparent p-4 backdrop:bg-black/55 backdrop:backdrop-blur-[2px]"
+      className="fixed inset-0 z-[100] m-0 h-dvh w-dvw max-h-none max-w-none overflow-hidden border-0 bg-transparent p-0 backdrop:bg-slate-950/60 backdrop:backdrop-blur-[3px]"
       aria-labelledby="newsletter-modal-title"
       aria-describedby="newsletter-modal-desc"
-      onClick={(e) => {
-        if (e.target === dialogRef.current) handleSnooze();
-      }}
     >
       <div
-        className="relative mx-auto mt-[min(8vh,4rem)] w-full max-w-md rounded-3xl border border-white/15 bg-bg-base p-6 shadow-2xl ring-1 ring-white/10 sm:p-8"
-        onClick={(e) => e.stopPropagation()}
+        ref={viewportRef}
+        className="h-dvh w-dvw overflow-x-hidden overflow-y-auto overscroll-contain"
+        onClick={(e) => {
+          const card = cardRef.current;
+          if (card && !card.contains(e.target as Node)) handleSnooze();
+        }}
       >
-        {phase === 'form' ? (
-          <>
+        <div
+          ref={wrapperRef}
+          className={`mx-auto flex min-h-dvh w-full max-w-2xl justify-center px-2 py-2 sm:px-4 sm:py-4 ${canCenter ? 'items-center' : 'items-start'}`}
+        >
+          <div
+            ref={cardRef}
+            className="relative w-full overflow-hidden rounded-[2rem] border border-white/35 bg-gradient-to-br from-[#eef6ff] via-[#f4f0ff] to-[#e8fff7] p-5 shadow-[0_30px_80px_-30px_rgba(15,23,42,0.58)] ring-1 ring-white/70 sm:p-8"
+            onClick={(e) => e.stopPropagation()}
+          >
+          <div
+            aria-hidden
+            className="pointer-events-none absolute -right-20 -top-20 h-64 w-64 rounded-full bg-gradient-to-br from-cyan-300/45 via-indigo-300/40 to-fuchsia-300/45 blur-3xl"
+          />
+          <div
+            aria-hidden
+            className="pointer-events-none absolute -bottom-24 -left-20 h-72 w-72 rounded-full bg-gradient-to-br from-emerald-300/35 via-sky-300/30 to-blue-300/35 blur-3xl"
+          />
+          {phase === 'form' ? (
+            <div className="relative z-10">
             <button
               type="button"
               onClick={handleSnooze}
-              className="absolute right-4 top-4 flex h-10 w-10 items-center justify-center rounded-full text-2xl leading-none text-text-soft transition hover:bg-white/10 hover:text-text-main"
+              className="absolute right-0 top-0 flex h-11 w-11 items-center justify-center rounded-full border border-sky-500/55 bg-white/85 text-2xl leading-none text-sky-700 shadow-sm transition hover:-translate-y-0.5 hover:bg-white hover:text-sky-900"
               aria-label={t.closeLabel}
             >
               ×
             </button>
-            <p className="text-xs font-semibold uppercase tracking-widest text-brand-mint">ParentingMyKid</p>
+            <p className="text-[11px] font-bold uppercase tracking-[0.28em] text-slate-700">ParentingMyKid</p>
             <h2
               id="newsletter-modal-title"
-              className={`mt-2 text-2xl font-black text-text-main sm:text-3xl ${isBn ? 'font-bengali' : ''}`}
+              className={`mt-2 max-w-[92%] text-2xl font-black text-slate-900 sm:text-4xl ${isBn ? 'font-bengali leading-[1.25]' : ''}`}
             >
               {t.modalTitle}
             </h2>
             <p
               id="newsletter-modal-desc"
-              className={`mt-2 text-base leading-relaxed text-text-soft ${isBn ? 'font-bengali' : ''}`}
+              className={`mt-3 text-sm leading-relaxed text-slate-700 sm:text-base ${isBn ? 'font-bengali leading-[1.9]' : ''}`}
             >
               {t.modalSubtitle}
             </p>
-            <div className="mt-6">
+            <div
+              className={`mt-5 rounded-2xl border border-white/70 bg-white/70 p-4 text-slate-800 shadow-[0_16px_44px_-28px_rgba(30,64,175,0.45)] sm:p-5 ${isBn ? 'font-bengali' : ''}`}
+            >
+              <p className="text-base font-bold text-slate-900">{t.modalWhyJoinTitle}</p>
+              <ul className="mt-3 space-y-2 text-sm leading-relaxed sm:text-[15px]">
+                {t.modalBenefits.map((benefit) => (
+                  <li key={benefit} className="flex gap-2">
+                    <span aria-hidden className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-sky-600" />
+                    <span>{benefit}</span>
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-4 font-semibold text-slate-800">{t.modalClosingLine}</p>
+            </div>
+            <div className="mt-5">
               <LeadCaptureForm
                 content={content}
                 variant="modal"
@@ -237,57 +312,59 @@ export function NewsletterSignupModal({ content }: Props): React.ReactElement | 
               />
             </div>
             <div
-              className={`mt-6 flex flex-col gap-2 border-t border-white/10 pt-5 sm:flex-row sm:flex-wrap sm:justify-center sm:gap-3 ${isBn ? 'font-bengali' : ''}`}
+              className={`mt-5 flex flex-wrap items-center justify-center gap-x-3 gap-y-2 border-t border-slate-200/85 pt-4 ${isBn ? 'font-bengali' : ''}`}
             >
               <button
                 type="button"
                 onClick={handleSnooze}
-                className="order-1 min-h-[44px] rounded-full border border-white/20 bg-white/5 px-5 py-2.5 text-sm font-semibold text-text-main transition hover:bg-white/10"
+                className="min-h-[42px] rounded-full border border-slate-300 bg-white/80 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-white hover:text-slate-900"
               >
                 {t.remindLater}
               </button>
               <button
                 type="button"
                 onClick={handleQuiet}
-                className="order-2 min-h-[44px] rounded-full px-5 py-2.5 text-sm font-medium text-text-soft underline decoration-white/30 underline-offset-4 transition hover:text-text-main"
+                className="min-h-[42px] rounded-full px-4 py-2 text-sm font-medium text-slate-600 underline decoration-slate-300 underline-offset-4 transition hover:text-slate-900"
               >
                 {t.notForNow}
               </button>
               <button
                 type="button"
                 onClick={handleAlreadySubscribed}
-                className="order-3 min-h-[44px] rounded-full px-5 py-2.5 text-sm font-medium text-text-soft transition hover:text-text-main"
+                className="min-h-[42px] rounded-full px-4 py-2 text-sm font-medium text-slate-600 transition hover:text-slate-900"
               >
                 {t.alreadySubscribed}
               </button>
             </div>
-          </>
-        ) : (
-          <div className="pt-2 text-center">
-            <p className="text-4xl" aria-hidden>
-              💛
-            </p>
-            <h2
-              id="newsletter-modal-title"
-              className={`mt-3 text-2xl font-black text-text-main ${isBn ? 'font-bengali' : ''}`}
-            >
-              {t.quietGoodbyeTitle}
-            </h2>
-            <p
-              id="newsletter-modal-desc"
-              className={`mt-3 text-base leading-relaxed text-text-soft ${isBn ? 'font-bengali' : ''}`}
-            >
-              {t.quietGoodbyeBody}
-            </p>
-            <button
-              type="button"
-              onClick={finishQuiet}
-              className="mt-8 inline-flex min-h-[44px] items-center justify-center rounded-full bg-brand-mint px-8 py-3 text-sm font-bold text-white shadow-lg transition hover:brightness-110"
-            >
-              {t.quietGoodbyeCta}
-            </button>
+            </div>
+          ) : (
+            <div className="relative z-10 pt-2 text-center">
+              <p className="text-4xl" aria-hidden>
+                💛
+              </p>
+              <h2
+                id="newsletter-modal-title"
+                className={`mt-3 text-2xl font-black text-slate-900 ${isBn ? 'font-bengali' : ''}`}
+              >
+                {t.quietGoodbyeTitle}
+              </h2>
+              <p
+                id="newsletter-modal-desc"
+                className={`mt-3 text-base leading-relaxed text-slate-700 ${isBn ? 'font-bengali' : ''}`}
+              >
+                {t.quietGoodbyeBody}
+              </p>
+              <button
+                type="button"
+                onClick={finishQuiet}
+                className="mt-8 inline-flex min-h-[44px] items-center justify-center rounded-full bg-gradient-to-r from-sky-600 via-indigo-600 to-fuchsia-600 px-8 py-3 text-sm font-bold text-white shadow-lg transition hover:brightness-110"
+              >
+                {t.quietGoodbyeCta}
+              </button>
+            </div>
+          )}
           </div>
-        )}
+        </div>
       </div>
     </dialog>
   );

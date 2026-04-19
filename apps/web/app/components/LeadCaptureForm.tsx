@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from 'react';
 
+import { CountrySelect } from './CountrySelect';
+
 import { getMarketingApiBaseUrl } from '@/lib/marketing-api';
 import { markNewsletterSubscribed } from '@/lib/newsletter-state';
 
@@ -24,13 +26,38 @@ export function LeadCaptureForm({
   const lang = content.locale;
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
-  const [country, setCountry] = useState('');
+  const [country, setCountry] = useState(() =>
+    variant === 'full' ? (lang === 'bn' ? 'BD' : 'US') : '',
+  );
   const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'duplicate' | 'error'>(
     'idle',
   );
 
   const t = content.leadCapture;
   const isBn = lang === 'bn';
+
+  useEffect(() => {
+    if (variant !== 'full') return;
+    let cancelled = false;
+    const fallback = lang === 'bn' ? 'BD' : 'US';
+    fetch('/api/geo-country')
+      .then((r) => r.json() as Promise<{ country?: string }>)
+      .then((data) => {
+        if (cancelled) return;
+        const c = data.country?.trim().toUpperCase();
+        if (c && /^[A-Z]{2}$/.test(c) && c !== 'XX') {
+          setCountry(c);
+        } else {
+          setCountry(fallback);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setCountry(fallback);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [lang, variant]);
 
   useEffect(() => {
     if (variant !== 'modal' || !onSubscribed) return;
@@ -60,15 +87,15 @@ export function LeadCaptureForm({
         }),
       });
       if (res.status === 201) {
-        markNewsletterSubscribed();
+        markNewsletterSubscribed(email.trim());
         setStatus('success');
         setName('');
         setEmail('');
-        setCountry('');
+        setCountry(variant === 'full' ? (lang === 'bn' ? 'BD' : 'US') : '');
         return;
       }
       if (res.status === 409) {
-        markNewsletterSubscribed();
+        markNewsletterSubscribed(email.trim());
         setStatus('duplicate');
         return;
       }
@@ -106,7 +133,7 @@ export function LeadCaptureForm({
     return (
       <form onSubmit={onSubmit} className="space-y-4">
         <label className="block">
-          <span className={`mb-1 block text-sm font-medium text-text-main ${isBn ? 'font-bengali' : ''}`}>
+          <span className={`mb-1.5 block text-sm font-semibold text-slate-900 ${isBn ? 'font-bengali' : ''}`}>
             {t.emailLabel} <span className="text-red-500">*</span>
           </span>
           <input
@@ -116,7 +143,8 @@ export function LeadCaptureForm({
             autoComplete="email"
             value={email}
             onChange={(ev) => setEmail(ev.target.value)}
-            className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-text-main shadow-sm outline-none ring-brand-mint/30 placeholder:text-text-soft focus:ring-2"
+            className="w-full rounded-2xl border border-sky-200/80 bg-white/95 px-4 py-3 text-slate-900 shadow-[0_16px_34px_-22px_rgba(14,116,144,0.55)] outline-none ring-sky-300/40 transition placeholder:text-slate-400 focus:border-sky-400 focus:ring-4"
+            placeholder={isBn ? 'আপনার ইমেইল লিখুন' : 'Enter your email'}
           />
         </label>
         {status === 'error' ? (
@@ -125,7 +153,7 @@ export function LeadCaptureForm({
         <button
           type="submit"
           disabled={status === 'loading'}
-          className="inline-flex min-h-[44px] w-full items-center justify-center rounded-full bg-brand-mint px-8 py-3 text-sm font-bold text-white shadow-lg transition hover:brightness-110 disabled:opacity-60"
+          className="inline-flex min-h-[48px] w-full items-center justify-center rounded-full bg-gradient-to-r from-sky-600 via-indigo-600 to-fuchsia-600 px-8 py-3 text-sm font-bold text-white shadow-[0_18px_36px_-18px_rgba(79,70,229,0.8)] transition hover:-translate-y-0.5 hover:brightness-110 disabled:translate-y-0 disabled:opacity-60"
         >
           {status === 'loading' ? '…' : t.submit}
         </button>
@@ -133,24 +161,25 @@ export function LeadCaptureForm({
     );
   }
 
+  const fieldClass =
+    'w-full rounded-2xl border border-sky-200/80 bg-white/95 px-4 py-3 text-slate-900 shadow-[0_16px_34px_-22px_rgba(14,116,144,0.45)] outline-none ring-sky-300/40 transition placeholder:text-slate-400 focus:border-sky-400 focus:ring-4';
+
   return (
-    <form onSubmit={onSubmit} className="space-y-4">
-      <div className="grid gap-3 sm:grid-cols-2">
-        <label className="block">
-          <span className={`mb-1 block text-sm font-medium text-text-main ${isBn ? 'font-bengali' : ''}`}>
-            {t.nameLabel}
-          </span>
+    <form onSubmit={onSubmit} className={`space-y-4 ${isBn ? 'font-bengali' : ''}`}>
+      <div className="grid gap-4">
+        <label className="block w-full">
+          <span className={`mb-1.5 block text-sm font-semibold text-slate-900`}>{t.nameLabel}</span>
           <input
             type="text"
             name="name"
             autoComplete="name"
             value={name}
             onChange={(ev) => setName(ev.target.value)}
-            className="w-full rounded-xl border border-white/20 bg-white/80 px-3 py-2.5 text-text-main shadow-sm outline-none ring-brand-mint/30 placeholder:text-text-soft focus:ring-2"
+            className={fieldClass}
           />
         </label>
-        <label className="block sm:col-span-2">
-          <span className={`mb-1 block text-sm font-medium text-text-main ${isBn ? 'font-bengali' : ''}`}>
+        <label className="block w-full">
+          <span className={`mb-1.5 block text-sm font-semibold text-slate-900`}>
             {t.emailLabel} <span className="text-red-500">*</span>
           </span>
           <input
@@ -160,23 +189,17 @@ export function LeadCaptureForm({
             autoComplete="email"
             value={email}
             onChange={(ev) => setEmail(ev.target.value)}
-            className="w-full rounded-xl border border-white/20 bg-white/80 px-3 py-2.5 text-text-main shadow-sm outline-none ring-brand-mint/30 placeholder:text-text-soft focus:ring-2"
+            className={fieldClass}
+            placeholder={isBn ? 'আপনার ইমেইল' : 'you@example.com'}
           />
         </label>
-        <label className="block sm:col-span-2">
-          <span className={`mb-1 block text-sm font-medium text-text-main ${isBn ? 'font-bengali' : ''}`}>
-            {t.countryLabel}
-          </span>
-          <input
-            type="text"
-            name="country"
-            autoComplete="country"
-            placeholder={t.countryHint}
-            value={country}
-            onChange={(ev) => setCountry(ev.target.value)}
-            className="w-full rounded-xl border border-white/20 bg-white/80 px-3 py-2.5 text-text-main shadow-sm outline-none ring-brand-mint/30 placeholder:text-text-soft focus:ring-2"
-          />
-        </label>
+        <CountrySelect
+          label={t.countryLabel}
+          value={country}
+          onChange={setCountry}
+          locale={lang}
+          disabled={status === 'loading'}
+        />
       </div>
       {status === 'duplicate' ? (
         <p className={`text-sm text-amber-800 ${isBn ? 'font-bengali' : ''}`}>{t.duplicate}</p>
@@ -187,7 +210,7 @@ export function LeadCaptureForm({
       <button
         type="submit"
         disabled={status === 'loading'}
-        className="inline-flex min-h-[44px] items-center justify-center rounded-full bg-brand-mint px-8 py-3 text-sm font-bold text-white shadow-lg transition hover:brightness-110 disabled:opacity-60"
+        className="inline-flex min-h-[52px] w-full items-center justify-center rounded-full bg-gradient-to-r from-sky-600 via-indigo-600 to-fuchsia-600 px-8 py-3.5 text-base font-bold text-white shadow-[0_18px_36px_-18px_rgba(79,70,229,0.75)] transition hover:-translate-y-0.5 hover:brightness-110 disabled:translate-y-0 disabled:opacity-60"
       >
         {status === 'loading' ? '…' : t.submit}
       </button>
