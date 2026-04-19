@@ -115,6 +115,10 @@ export type LandingContent = {
     quietGoodbyeTitle: string;
     quietGoodbyeBody: string;
     quietGoodbyeCta: string;
+    /** Footer card: label above saved email */
+    subscribedEmailLabel: string;
+    /** Footer card: “Member since …” line */
+    subscribedMemberSinceLabel: string;
   };
   /** Visitor feedback copy */
   feedback: {
@@ -127,6 +131,8 @@ export type LandingContent = {
     success: string;
     error: string;
     configError: string;
+    /** Newsletter opt-in above Send when not already subscribed */
+    newsletterOptInLabel: string;
   };
   /** Scroll-linked kid companion: one line per `[data-scroll-chapter]` block in order. */
   scrollCompanion: string[];
@@ -345,6 +351,8 @@ export const bnContent: LandingContent = {
     quietGoodbyeBody:
       'ঠিক আছে—এই ভিজিটে আর জিজ্ঞাসা করব না। নিচে পেজের শেষে আপনি যেকোনো সময় সাবস্ক্রাইব করতে পারবেন।',
     quietGoodbyeCta: 'বুঝেছি',
+    subscribedEmailLabel: 'আপনার ইমেইল',
+    subscribedMemberSinceLabel: 'আমাদের সাথে যুক্ত',
   },
   feedback: {
     title: 'মতামত শেয়ার করুন',
@@ -356,6 +364,8 @@ export const bnContent: LandingContent = {
     success: 'ধন্যবাদ! আপনার বার্তা পেয়েছি।',
     error: 'পাঠাতে পারিনি। একটু পরে আবার চেষ্টা করুন।',
     configError: 'সার্ভার ঠিকানা সেট করা নেই। ডেভেলপারকে জানান।',
+    newsletterOptInLabel:
+      'আমি নিউজলেটার পেতে চাই—প্যারেন্টিং টিপস ও আপডেট আমার ইমেইলে পাঠান।',
   },
   scrollCompanion: [
     '“হাই! একসাথে পড়ুন—আমি পাশে আছি। নিচে স্ক্রল করুন, আমি আপনার সাথে এগিয়ে যাব। 💛”',
@@ -546,6 +556,8 @@ export const enContent: LandingContent = {
     quietGoodbyeBody:
       'No problem—we won’t ask again this visit. You can still subscribe anytime in the section at the bottom of the page.',
     quietGoodbyeCta: 'Got it',
+    subscribedEmailLabel: 'Your email',
+    subscribedMemberSinceLabel: 'With us since',
   },
   feedback: {
     title: 'Send us feedback',
@@ -557,6 +569,8 @@ export const enContent: LandingContent = {
     success: 'Thanks! We received your message.',
     error: 'Could not send. Please try again shortly.',
     configError: 'Server URL is not configured. Ask the site admin.',
+    newsletterOptInLabel:
+      'Email me the newsletter with parenting tips and updates (same address as above).',
   },
   scrollCompanion: [
     'Hi! Let’s read together—I’m right beside you. Scroll down and I’ll come with you. 💛',

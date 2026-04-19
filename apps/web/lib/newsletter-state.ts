@@ -3,6 +3,10 @@
  */
 
 const LS_SUBSCRIBED = 'pmk.newsletter.subscribed';
+/** Email shown in “you’re on the list” card; set on successful subscribe. */
+const LS_EMAIL = 'pmk.newsletter.email';
+/** ISO timestamp for “member since” line (first time we record in this browser). */
+const LS_SUBSCRIBED_AT = 'pmk.newsletter.subscribedAt';
 /** User tapped “I’m already subscribed” — suppress modal like a real subscribe. */
 const LS_ALREADY_SUBSCRIBED_ACK = 'pmk.newsletter.modal.already_subscribed_ack';
 const SS_TIMES_SHOWN = 'pmk.newsletter.modal.timesShown';
@@ -41,9 +45,37 @@ export function markNewsletterAlreadySubscribedAcknowledged(): void {
   window.localStorage.setItem(LS_ALREADY_SUBSCRIBED_ACK, '1');
 }
 
-export function markNewsletterSubscribed(): void {
+export type NewsletterSubscriptionMeta = {
+  email: string | null;
+  subscribedAtIso: string | null;
+};
+
+/** Email + “member since” for the footer newsletter thank-you card (localStorage). */
+export function getNewsletterSubscriptionMeta(): NewsletterSubscriptionMeta {
+  if (typeof window === 'undefined') return { email: null, subscribedAtIso: null };
+  if (window.localStorage.getItem(LS_SUBSCRIBED) !== '1') {
+    return { email: null, subscribedAtIso: null };
+  }
+  return {
+    email: window.localStorage.getItem(LS_EMAIL),
+    subscribedAtIso: window.localStorage.getItem(LS_SUBSCRIBED_AT),
+  };
+}
+
+/**
+ * Marks the user as subscribed for modal suppression + footer card.
+ * Pass `email` when known so the thank-you card can show it.
+ */
+export function markNewsletterSubscribed(email?: string): void {
   if (typeof window === 'undefined') return;
   window.localStorage.setItem(LS_SUBSCRIBED, '1');
+  const trimmed = email?.trim();
+  if (trimmed) {
+    window.localStorage.setItem(LS_EMAIL, trimmed);
+  }
+  if (!window.localStorage.getItem(LS_SUBSCRIBED_AT)) {
+    window.localStorage.setItem(LS_SUBSCRIBED_AT, new Date().toISOString());
+  }
   window.dispatchEvent(new Event(NEWSLETTER_SUBSCRIBED_EVENT));
 }
 
