@@ -1,6 +1,7 @@
 'use client';
 
 import { FacebookFollowButton } from './FacebookFollowButton';
+import { XPremiumCircleLink } from './XFollowButton';
 import { FloatingEmojis } from './FloatingEmojis';
 
 import type { LandingContent } from '@/lib/content';
@@ -30,8 +31,12 @@ export function FacebookCTA({ content }: Props): React.ReactElement {
         >
           {content.community.body}
         </p>
-        <div className="mt-10 flex justify-center">
+        <div className="mt-10 flex flex-wrap items-center justify-center gap-3 sm:gap-4">
           <FacebookFollowButton label={content.community.cta} size="xl" />
+          <XPremiumCircleLink
+            ariaLabel={content.hero.followXAria}
+            className="h-[3.75rem] w-[3.75rem] sm:h-16 sm:w-16"
+          />
         </div>
       </div>
     </section>

@@ -4,7 +4,7 @@ import Image from 'next/image';
 import { motion } from 'framer-motion';
 import { useEffect, useState } from 'react';
 
-import { FACEBOOK_PAGE_URL } from '@/lib/constants';
+import { FACEBOOK_PAGE_URL, TWITTER_X_PAGE_URL } from '@/lib/constants';
 import type {
   FacebookFeedPage,
   FacebookFeedPost,
@@ -462,6 +462,15 @@ export function ImageShowcase({ content }: Props): React.ReactElement {
             className="font-bold text-brand-teal underline decoration-2 underline-offset-4 hover:text-brand-purple"
           >
             {content.showcase.linkLabel}
+          </a>
+          <span className="text-text-soft"> · </span>
+          <a
+            href={TWITTER_X_PAGE_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-bold text-brand-teal underline decoration-2 underline-offset-4 hover:text-brand-purple"
+          >
+            {content.showcase.twitterLinkLabel}
           </a>
         </p>
       </div>

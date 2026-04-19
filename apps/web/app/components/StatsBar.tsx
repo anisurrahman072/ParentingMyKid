@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 
 import { FacebookMarkIcon } from '@/app/components/FacebookFollowButton';
+import { XPremiumCircleLink } from '@/app/components/XFollowButton';
 import { FACEBOOK_PAGE_URL } from '@/lib/constants';
 import type { LandingContent } from '@/lib/content';
 
@@ -85,19 +86,33 @@ function AreasJourneyDecoration({ isMobile }: { isMobile: boolean }): React.Reac
 }
 
 /** Soft waves = daily rhythm — distinct from dots and path nodes */
-/** Bottom-center Facebook mark — rhythm pillar only; premium disc + gentle shake. */
-function RhythmFacebookBadge({ isMobile }: { isMobile: boolean }): React.ReactElement {
+/** Bottom-center Facebook + X marks — rhythm pillar only; premium discs + gentle shake. */
+function RhythmSocialBadges({
+  isMobile,
+  followXAria,
+}: {
+  isMobile: boolean;
+  followXAria: string;
+}): React.ReactElement {
+  const swing = isMobile ? '' : ' facebook-badge-swing';
   return (
-    <a
-      href={FACEBOOK_PAGE_URL}
-      target="_blank"
-      rel="noopener noreferrer"
-      style={{ transformOrigin: '50% 0%' }}
-      className={`mt-6 inline-flex h-[3.35rem] w-[3.35rem] shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-brand-teal via-teal-600 to-brand-purple text-white shadow-[0_10px_28px_-6px_rgba(0,0,0,0.42),0_2px_10px_rgba(0,0,0,0.18)] ring-2 ring-white/35 ring-offset-2 ring-offset-transparent transition hover:brightness-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/80${isMobile ? '' : ' facebook-badge-swing'}`}
-      aria-label="Facebook page"
-    >
-      <FacebookMarkIcon className="h-[1.65rem] w-[1.65rem] sm:h-[1.8rem] sm:w-[1.8rem]" />
-    </a>
+    <div className="mt-6 flex items-center justify-center gap-3">
+      <a
+        href={FACEBOOK_PAGE_URL}
+        target="_blank"
+        rel="noopener noreferrer"
+        style={{ transformOrigin: '50% 0%' }}
+        className={`inline-flex h-[3.35rem] w-[3.35rem] shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-brand-teal via-teal-600 to-brand-purple text-white shadow-[0_10px_28px_-6px_rgba(0,0,0,0.42),0_2px_10px_rgba(0,0,0,0.18)] ring-2 ring-white/35 ring-offset-2 ring-offset-transparent transition hover:brightness-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/80${swing}`}
+        aria-label="Facebook page"
+      >
+        <FacebookMarkIcon className="h-[1.65rem] w-[1.65rem] sm:h-[1.8rem] sm:w-[1.8rem]" />
+      </a>
+      <XPremiumCircleLink
+        ariaLabel={followXAria}
+        swing={!isMobile}
+        className="h-[3.35rem] w-[3.35rem]"
+      />
+    </div>
   );
 }
 
@@ -217,7 +232,7 @@ export function StatsBar({ content }: Props): React.ReactElement {
                 label={content.stats.rhythm.label}
                 supporting={content.stats.rhythm.supporting}
               />
-              <RhythmFacebookBadge isMobile={isMobile} />
+              <RhythmSocialBadges isMobile={isMobile} followXAria={content.hero.followXAria} />
             </div>
           </StatPillar>
         </div>

@@ -2,6 +2,7 @@
 
 import { motion, useReducedMotion } from 'framer-motion';
 
+import { XPremiumCircleLink } from '@/app/components/XFollowButton';
 import { FACEBOOK_PAGE_URL } from '@/lib/constants';
 
 const DEENI_BENEFITS = [
@@ -207,7 +208,11 @@ function CurvedRibbonDecor({ animate }: { animate: boolean }): React.ReactElemen
   );
 }
 
-export function DeeniLearningSection(): React.ReactElement {
+export function DeeniLearningSection({
+  followXAria,
+}: {
+  followXAria: string;
+}): React.ReactElement {
   const reduceMotion = useReducedMotion() ?? false;
   const animate = !reduceMotion;
 
@@ -349,14 +354,20 @@ export function DeeniLearningSection(): React.ReactElement {
                 প্যারেন্টিং ও শিশু গড়ে তোলার প্রয়োজনীয় দিকনির্দেশনা নিয়মিত শেয়ার করা হয়।
               </p>
             </div>
-            <a
-              href={FACEBOOK_PAGE_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="font-bengali relative mx-auto mt-3 inline-flex items-center rounded-full bg-gradient-to-r from-emerald-500 via-cyan-600 to-violet-600 px-7 py-2.5 text-base font-extrabold text-white shadow-[0_10px_22px_-10px_rgba(8,145,178,0.7)] transition-transform duration-300 hover:scale-[1.02] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-600 md:text-lg"
-            >
-              ফেসবুকে ফলো করুন
-            </a>
+            <div className="relative mt-3 flex flex-wrap items-center justify-center gap-2.5">
+              <a
+                href={FACEBOOK_PAGE_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-bengali inline-flex items-center rounded-full bg-gradient-to-r from-emerald-500 via-cyan-600 to-violet-600 px-7 py-2.5 text-base font-extrabold text-white shadow-[0_10px_22px_-10px_rgba(8,145,178,0.7)] transition-transform duration-300 hover:scale-[1.02] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-600 md:text-lg"
+              >
+                ফেসবুকে ফলো করুন
+              </a>
+              <XPremiumCircleLink
+                ariaLabel={followXAria}
+                className="h-10 w-10 md:h-[2.75rem] md:w-[2.75rem]"
+              />
+            </div>
           </div>
         </div>
       </div>

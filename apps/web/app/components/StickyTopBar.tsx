@@ -3,12 +3,14 @@
 import Image from 'next/image';
 
 import { FacebookFollowButton } from './FacebookFollowButton';
+import { XPremiumCircleLink } from './XFollowButton';
 
 type Props = {
   followLabel: string;
+  followXAria: string;
 };
 
-export function StickyTopBar({ followLabel }: Props): React.ReactElement {
+export function StickyTopBar({ followLabel, followXAria }: Props): React.ReactElement {
   return (
     <header className="sticky top-0 z-50 border-b border-white/40 bg-white/[0.97] backdrop-blur-none md:bg-white/75 md:backdrop-blur-md">
       <div className="mx-auto flex max-w-6xl items-center justify-between gap-2 px-4 py-3 sm:gap-4 sm:px-6">
@@ -25,16 +27,26 @@ export function StickyTopBar({ followLabel }: Props): React.ReactElement {
             ParentingMyKid
           </span>
         </div>
-        <FacebookFollowButton
-          label={followLabel}
-          variant="icon"
-          className="md:hidden"
-        />
-        <FacebookFollowButton
-          label={followLabel}
-          size="md"
-          className="hidden md:inline-flex"
-        />
+        <div className="flex shrink-0 items-center gap-2">
+          <FacebookFollowButton
+            label={followLabel}
+            variant="icon"
+            className="md:hidden"
+          />
+          <XPremiumCircleLink
+            ariaLabel={followXAria}
+            className="h-11 w-11 md:hidden"
+          />
+          <FacebookFollowButton
+            label={followLabel}
+            size="md"
+            className="hidden md:inline-flex"
+          />
+          <XPremiumCircleLink
+            ariaLabel={followXAria}
+            className="hidden h-11 w-11 md:inline-flex"
+          />
+        </div>
       </div>
     </header>
   );

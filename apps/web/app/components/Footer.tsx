@@ -1,7 +1,7 @@
 import Image from 'next/image';
 import Link from 'next/link';
 
-import { FACEBOOK_PAGE_URL } from '@/lib/constants';
+import { FACEBOOK_PAGE_URL, TWITTER_X_PAGE_URL } from '@/lib/constants';
 import type { LandingContent } from '@/lib/content';
 
 type Props = {
@@ -39,6 +39,14 @@ export function Footer({ content }: Props): React.ReactElement {
             className="text-brand-purple hover:underline"
           >
             Facebook
+          </a>
+          <a
+            href={TWITTER_X_PAGE_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-brand-purple hover:underline"
+          >
+            {content.footer.twitterLabel}
           </a>
           <Link
             href="/privacy-policy"

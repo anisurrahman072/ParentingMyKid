@@ -28,8 +28,7 @@ const BN_MENTAL_QUOTE_ACCENT = '“তুমি কি একটু বিরক
 const BN_EMOTIONAL_LOVE_PHRASE = 'তার বাবা-মাকে ভালোবাসতে শেখে';
 
 /** Bangla physical pillar — sun / vitamin D clause (must match `content.ts`). */
-const BN_PHYSICAL_SUN_VITAMIN_PHRASE =
-  'রোদে থাকার মাধ্যমে সে ভিটামিন ডি পায় যা হাড়কে মজবুত করে';
+const BN_PHYSICAL_SUN_VITAMIN_PHRASE = 'রোদে থাকার মাধ্যমে সে ভিটামিন ডি পায় যা হাড়কে মজবুত করে';
 
 /** Bangla play & friendship pillar — phrase to emphasize (must match `content.ts`). */
 const BN_PLAY_SOCIAL_CONFIDENCE_PHRASE = 'সামাজিকভাবে দক্ষ ও আত্মবিশ্বাসী';
@@ -62,6 +61,19 @@ const PILLAR_TITLE_GRADIENT = [
   'bg-gradient-to-br from-orange-800 via-rose-700 to-amber-900',
   'bg-gradient-to-br from-emerald-900 via-teal-800 to-green-900',
   'bg-gradient-to-br from-fuchsia-900 via-pink-800 to-purple-900',
+] as const;
+
+/**
+ * Card faces: light tints in the same hue families as `PILLAR_TITLE_GRADIENT`.
+ * `via-white` lifts each card off the section’s mint/violet wash (`bg-soft`) so edges stay visible.
+ */
+const PILLAR_CARD_CLASS = [
+  'border-2 border-teal-300/85 bg-gradient-to-br from-teal-100 via-white to-cyan-50 shadow-[0_22px_52px_-18px_rgba(13,148,136,0.32)] ring-1 ring-white/95',
+  'border-2 border-violet-300/85 bg-gradient-to-br from-violet-100 via-white to-fuchsia-50 shadow-[0_22px_52px_-18px_rgba(124,58,237,0.28)] ring-1 ring-white/95',
+  'border-2 border-sky-300/85 bg-gradient-to-br from-sky-100 via-white to-indigo-50 shadow-[0_22px_52px_-18px_rgba(14,165,233,0.28)] ring-1 ring-white/95',
+  'border-2 border-rose-300/85 bg-gradient-to-br from-orange-100 via-white to-rose-100 shadow-[0_22px_52px_-18px_rgba(244,63,94,0.22)] ring-1 ring-white/95',
+  'border-2 border-emerald-400/75 bg-gradient-to-br from-emerald-100 via-white to-teal-50 shadow-[0_22px_52px_-18px_rgba(5,150,105,0.3)] ring-1 ring-white/95',
+  'border-2 border-fuchsia-300/85 bg-gradient-to-br from-fuchsia-100 via-white to-purple-50 shadow-[0_22px_52px_-18px_rgba(192,38,211,0.26)] ring-1 ring-white/95',
 ] as const;
 
 type TopicBodyAccent = { phrase: string; className: string };
@@ -197,7 +209,7 @@ export function TopicBentoGrid({ content }: Props): React.ReactElement {
                   <PillarCardStarBorder variant={index} />
                   <motion.article
                     variants={itemVariants}
-                    className={`group relative z-10 flex h-full flex-col overflow-hidden rounded-[2rem] p-8 ${topic.gradientClass}`}
+                    className={`group relative z-10 flex h-full flex-col overflow-hidden rounded-[2rem] p-8 ${PILLAR_CARD_CLASS[index % PILLAR_CARD_CLASS.length]}`}
                     whileHover={
                       isCoarse
                         ? undefined
@@ -212,7 +224,7 @@ export function TopicBentoGrid({ content }: Props): React.ReactElement {
                     }
                   >
                     <div
-                      className="pointer-events-none absolute inset-0 rounded-[inherit] bg-[linear-gradient(135deg,rgba(255,255,255,0.55)_0%,transparent_48%,rgba(255,255,255,0.2)_100%)] opacity-70"
+                      className="pointer-events-none absolute inset-0 rounded-[inherit] bg-[linear-gradient(135deg,rgba(255,255,255,0.42)_0%,transparent_52%,rgba(255,255,255,0.14)_100%)] opacity-80"
                       aria-hidden
                     />
                     {/* Subtle corner sparkles — CSS-driven slow orbit (no JS animation layer) */}
@@ -269,28 +281,36 @@ export function TopicBentoGrid({ content }: Props): React.ReactElement {
                           index === 0
                             ? [
                                 {
-                                  phrase: isBn ? BN_HEALTH_SLEEP_HABIT_PHRASE : EN_HEALTH_SLEEP_HABIT_PHRASE,
+                                  phrase: isBn
+                                    ? BN_HEALTH_SLEEP_HABIT_PHRASE
+                                    : EN_HEALTH_SLEEP_HABIT_PHRASE,
                                   className: 'font-semibold text-teal-900',
                                 },
                               ]
                             : index === 1
                               ? [
                                   {
-                                    phrase: isBn ? BN_EDUCATION_BODY_ACCENT : EN_EDUCATION_BODY_ACCENT,
+                                    phrase: isBn
+                                      ? BN_EDUCATION_BODY_ACCENT
+                                      : EN_EDUCATION_BODY_ACCENT,
                                     className: 'font-semibold text-violet-900',
                                   },
                                 ]
                               : index === 2
                                 ? [
                                     {
-                                      phrase: isBn ? BN_MENTAL_QUOTE_ACCENT : EN_MENTAL_QUOTE_ACCENT,
+                                      phrase: isBn
+                                        ? BN_MENTAL_QUOTE_ACCENT
+                                        : EN_MENTAL_QUOTE_ACCENT,
                                       className: 'font-semibold text-sky-800',
                                     },
                                   ]
                                 : index === 3
                                   ? [
                                       {
-                                        phrase: isBn ? BN_EMOTIONAL_LOVE_PHRASE : EN_EMOTIONAL_LOVE_PHRASE,
+                                        phrase: isBn
+                                          ? BN_EMOTIONAL_LOVE_PHRASE
+                                          : EN_EMOTIONAL_LOVE_PHRASE,
                                         className: 'font-semibold text-rose-800',
                                       },
                                     ]

@@ -5,6 +5,7 @@ import Image from 'next/image';
 import type { HeroSubheadline } from '@/lib/content';
 
 import { FacebookFollowButton } from './FacebookFollowButton';
+import { XPremiumCircleLink } from './XFollowButton';
 
 /** English hero: one color per topic word (teal → emerald → purple → fuchsia → pink). */
 const HERO_TOPIC_WORD_CLASSES = [
@@ -21,10 +22,17 @@ type Props = {
   headline: string;
   subheadline: HeroSubheadline;
   cta: string;
+  followXAria: string;
   isBengali: boolean;
 };
 
-export function HeroSection({ headline, subheadline, cta, isBengali }: Props): React.ReactElement {
+export function HeroSection({
+  headline,
+  subheadline,
+  cta,
+  followXAria,
+  isBengali,
+}: Props): React.ReactElement {
   return (
     <section className="relative overflow-hidden mesh-hero px-4 pb-0 pt-10 sm:pt-14">
       <FallingStars />
@@ -95,8 +103,12 @@ export function HeroSection({ headline, subheadline, cta, isBengali }: Props): R
             </p>
           )}
         </div>
-        <div className="mt-10">
+        <div className="mt-10 flex flex-wrap items-center justify-center gap-3">
           <FacebookFollowButton label={cta} size="lg" />
+          <XPremiumCircleLink
+            ariaLabel={followXAria}
+            className="h-[3.25rem] w-[3.25rem] sm:h-14 sm:w-14"
+          />
         </div>
       </div>
       <WaveDivider className="mt-16 text-bg-base" />
