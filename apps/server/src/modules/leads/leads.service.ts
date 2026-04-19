@@ -12,9 +12,6 @@ import { Resend } from 'resend';
 import { PrismaService } from '../../database/prisma.service';
 import { CreateLeadDto } from './dto/create-lead.dto';
 
-/** Match verified sender domain in Resend (same family as weekly reports). */
-const FROM_NEWSLETTER = 'ParentingMyKid <reports@parentingmykid.com>';
-
 @Injectable()
 export class LeadsService {
   private readonly logger = new Logger(LeadsService.name);
@@ -26,11 +23,39 @@ export class LeadsService {
   ) {
     const key = this.config.get<string>('RESEND_API_KEY')?.trim();
     this.resend = key ? new Resend(key) : null;
+    if (this.resend) {
+      this.logger.log('Resend is configured (transactional emails enabled).');
+    } else {
+      this.logger.warn(
+        'RESEND_API_KEY is missing or empty — newsletter/feedback confirmation emails are disabled.',
+      );
+    }
+  }
+
+  /**
+   * Use EMAIL_FROM from `apps/server/.env` (same as tutors/analytics). Must match a verified
+   * sender/domain in Resend. Do not hardcode a different address (e.g. reports@ vs noreply@)
+   * unless that exact address is verified — otherwise Resend returns `error` and nothing is sent.
+   */
+  private newsletterFrom(): string {
+    const raw =
+      this.config.get<string>('EMAIL_FROM')?.trim() || 'noreply@parentingmykid.com';
+    if (raw.includes('<') && raw.includes('>')) {
+      return raw;
+    }
+    return `ParentingMyKid <${raw}>`;
+  }
+
+  private static plainTextFromHtml(html: string): string {
+    return html
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
   }
 
   /** Resend v4 returns `{ data, error }` and does not throw on API errors — must check `error`. */
   private async sendResendEmail(
-    payload: { from: string; to: string; subject: string; html: string },
+    payload: { from: string; to: string; subject: string; html: string; text: string },
     logLabel: string,
   ): Promise<void> {
     if (!this.resend) {
@@ -103,20 +128,22 @@ export class LeadsService {
         ? `<p>${greeting}</p><p>ParentingMyKid-এর আপডেট পেতে ধন্যবাদ। আমরা শিগগিরই আপনার সাথে যোগাযোগ করব।</p>`
         : `<p>${greeting}</p><p>Thanks for joining ParentingMyKid. We’ll share warm, practical parenting ideas with you soon.</p>`;
 
+    const html = `
+          <div style="font-family:system-ui,sans-serif;max-width:560px;margin:0 auto;padding:24px;">
+            ${body}
+            <p style="color:#64748b;font-size:14px;margin-top:24px;">ParentingMyKid</p>
+          </div>
+        `;
     await this.sendResendEmail(
       {
-        from: FROM_NEWSLETTER,
+        from: this.newsletterFrom(),
         to: email,
         subject:
           language === 'bn'
             ? 'ParentingMyKid — সাবস্ক্রিপশন নিশ্চিত'
             : 'ParentingMyKid — You’re on the list',
-        html: `
-          <div style="font-family:system-ui,sans-serif;max-width:560px;margin:0 auto;padding:24px;">
-            ${body}
-            <p style="color:#64748b;font-size:14px;margin-top:24px;">ParentingMyKid</p>
-          </div>
-        `,
+        html,
+        text: LeadsService.plainTextFromHtml(html),
       },
       'welcome email',
     );
@@ -133,20 +160,22 @@ export class LeadsService {
         ? `<p>আসসালামু আলাইকুম${name ? `, ${name}` : ''}!</p><p>আপনি ইতিমধ্যে আমাদের তালিকায় আছেন। নতুন টিপস ও আপডেট আপনার ইনবক্সে পৌঁছাবে।</p>`
         : `<p>Hi${name ? ` ${name}` : ''}!</p><p>You’re already on our ParentingMyKid list—we’ll keep sending tips and updates to your inbox.</p>`;
 
+    const html = `
+          <div style="font-family:system-ui,sans-serif;max-width:560px;margin:0 auto;padding:24px;">
+            ${body}
+            <p style="color:#64748b;font-size:14px;margin-top:24px;">ParentingMyKid</p>
+          </div>
+        `;
     await this.sendResendEmail(
       {
-        from: FROM_NEWSLETTER,
+        from: this.newsletterFrom(),
         to: email,
         subject:
           language === 'bn'
             ? 'ParentingMyKid — আপনি তালিকায় আছেন'
             : 'ParentingMyKid — You’re already subscribed',
-        html: `
-          <div style="font-family:system-ui,sans-serif;max-width:560px;margin:0 auto;padding:24px;">
-            ${body}
-            <p style="color:#64748b;font-size:14px;margin-top:24px;">ParentingMyKid</p>
-          </div>
-        `,
+        html,
+        text: LeadsService.plainTextFromHtml(html),
       },
       'already-subscribed email',
     );
@@ -162,20 +191,22 @@ export class LeadsService {
         ? `<p>আসসালামু আলাইকুম${name ? `, ${name}` : ''}!</p><p>আপনার মতামতের জন্য ধন্যবাদ। আমরা শীঘ্রই পড়ব।</p>`
         : `<p>Hi${name ? ` ${name}` : ''}!</p><p>Thanks for your feedback — we read every message.</p>`;
 
+    const html = `
+          <div style="font-family:system-ui,sans-serif;max-width:560px;margin:0 auto;padding:24px;">
+            ${body}
+            <p style="color:#64748b;font-size:14px;margin-top:24px;">ParentingMyKid</p>
+          </div>
+        `;
     await this.sendResendEmail(
       {
-        from: FROM_NEWSLETTER,
+        from: this.newsletterFrom(),
         to: email,
         subject:
           language === 'bn'
             ? 'ParentingMyKid — মতামত পেয়েছি'
             : 'ParentingMyKid — We received your message',
-        html: `
-          <div style="font-family:system-ui,sans-serif;max-width:560px;margin:0 auto;padding:24px;">
-            ${body}
-            <p style="color:#64748b;font-size:14px;margin-top:24px;">ParentingMyKid</p>
-          </div>
-        `,
+        html,
+        text: LeadsService.plainTextFromHtml(html),
       },
       'feedback thank-you email',
     );
