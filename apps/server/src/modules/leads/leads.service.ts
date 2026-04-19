@@ -11,6 +11,11 @@ import { Resend } from 'resend';
 
 import { PrismaService } from '../../database/prisma.service';
 import { CreateLeadDto } from './dto/create-lead.dto';
+import {
+  buildAlreadySubscribedEmail,
+  buildFeedbackThankYouEmail,
+  buildWelcomeNewsletterEmail,
+} from './leads-email-templates';
 
 @Injectable()
 export class LeadsService {
@@ -45,11 +50,16 @@ export class LeadsService {
     return `ParentingMyKid <${raw}>`;
   }
 
-  private static plainTextFromHtml(html: string): string {
-    return html
-      .replace(/<[^>]+>/g, ' ')
-      .replace(/\s+/g, ' ')
-      .trim();
+  /**
+   * Public marketing site origin (no trailing slash). Used for email links and `/logo.png`.
+   * Set `PUBLIC_WEB_URL` in production so images load; defaults to www.parentingmykid.com.
+   */
+  private publicMarketingSiteUrl(): string {
+    const raw =
+      this.config.get<string>('PUBLIC_WEB_URL')?.trim() ||
+      this.config.get<string>('WEB_PUBLIC_URL')?.trim() ||
+      '';
+    return raw ? raw.replace(/\/+$/, '') : 'https://www.parentingmykid.com';
   }
 
   /** Resend v4 returns `{ data, error }` and does not throw on API errors — must check `error`. */
@@ -131,32 +141,18 @@ export class LeadsService {
     name: string | undefined,
     language: 'en' | 'bn',
   ): Promise<void> {
-    const greeting =
-      language === 'bn'
-        ? `আসসালামু আলাইকুম${name ? `, ${name}` : ''}!`
-        : `Hi${name ? ` ${name}` : ''}!`;
-
-    const body =
-      language === 'bn'
-        ? `<p>${greeting}</p><p>ParentingMyKid-এর আপডেট পেতে ধন্যবাদ। আমরা শিগগিরই আপনার সাথে যোগাযোগ করব।</p>`
-        : `<p>${greeting}</p><p>Thanks for joining ParentingMyKid. We’ll share warm, practical parenting ideas with you soon.</p>`;
-
-    const html = `
-          <div style="font-family:system-ui,sans-serif;max-width:560px;margin:0 auto;padding:24px;">
-            ${body}
-            <p style="color:#64748b;font-size:14px;margin-top:24px;">ParentingMyKid</p>
-          </div>
-        `;
+    const { subject, html, text } = buildWelcomeNewsletterEmail(
+      language,
+      name,
+      this.publicMarketingSiteUrl(),
+    );
     await this.sendResendEmail(
       {
         from: this.newsletterFrom(),
         to: email,
-        subject:
-          language === 'bn'
-            ? 'ParentingMyKid — সাবস্ক্রিপশন নিশ্চিত'
-            : 'ParentingMyKid — You’re on the list',
+        subject,
         html,
-        text: LeadsService.plainTextFromHtml(html),
+        text,
       },
       'welcome email',
     );
@@ -168,27 +164,18 @@ export class LeadsService {
     name: string | undefined,
     language: 'en' | 'bn',
   ): Promise<void> {
-    const body =
-      language === 'bn'
-        ? `<p>আসসালামু আলাইকুম${name ? `, ${name}` : ''}!</p><p>আপনি ইতিমধ্যে আমাদের তালিকায় আছেন। নতুন টিপস ও আপডেট আপনার ইনবক্সে পৌঁছাবে।</p>`
-        : `<p>Hi${name ? ` ${name}` : ''}!</p><p>You’re already on our ParentingMyKid list—we’ll keep sending tips and updates to your inbox.</p>`;
-
-    const html = `
-          <div style="font-family:system-ui,sans-serif;max-width:560px;margin:0 auto;padding:24px;">
-            ${body}
-            <p style="color:#64748b;font-size:14px;margin-top:24px;">ParentingMyKid</p>
-          </div>
-        `;
+    const { subject, html, text } = buildAlreadySubscribedEmail(
+      language,
+      name,
+      this.publicMarketingSiteUrl(),
+    );
     await this.sendResendEmail(
       {
         from: this.newsletterFrom(),
         to: email,
-        subject:
-          language === 'bn'
-            ? 'ParentingMyKid — আপনি তালিকায় আছেন'
-            : 'ParentingMyKid — You’re already subscribed',
+        subject,
         html,
-        text: LeadsService.plainTextFromHtml(html),
+        text,
       },
       'already-subscribed email',
     );
@@ -199,27 +186,18 @@ export class LeadsService {
     name: string | undefined,
     language: 'en' | 'bn',
   ): Promise<void> {
-    const body =
-      language === 'bn'
-        ? `<p>আসসালামু আলাইকুম${name ? `, ${name}` : ''}!</p><p>আপনার মতামতের জন্য ধন্যবাদ। আমরা শীঘ্রই পড়ব।</p>`
-        : `<p>Hi${name ? ` ${name}` : ''}!</p><p>Thanks for your feedback — we read every message.</p>`;
-
-    const html = `
-          <div style="font-family:system-ui,sans-serif;max-width:560px;margin:0 auto;padding:24px;">
-            ${body}
-            <p style="color:#64748b;font-size:14px;margin-top:24px;">ParentingMyKid</p>
-          </div>
-        `;
+    const { subject, html, text } = buildFeedbackThankYouEmail(
+      language,
+      name,
+      this.publicMarketingSiteUrl(),
+    );
     await this.sendResendEmail(
       {
         from: this.newsletterFrom(),
         to: email,
-        subject:
-          language === 'bn'
-            ? 'ParentingMyKid — মতামত পেয়েছি'
-            : 'ParentingMyKid — We received your message',
+        subject,
         html,
-        text: LeadsService.plainTextFromHtml(html),
+        text,
       },
       'feedback thank-you email',
     );
