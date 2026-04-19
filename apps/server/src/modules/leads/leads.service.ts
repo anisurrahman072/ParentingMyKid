@@ -11,9 +11,11 @@ import { Resend } from 'resend';
 
 import { PrismaService } from '../../database/prisma.service';
 import { CreateLeadDto } from './dto/create-lead.dto';
-
-/** Match verified sender domain in Resend (same family as weekly reports). */
-const FROM_NEWSLETTER = 'ParentingMyKid <reports@parentingmykid.com>';
+import {
+  buildAlreadySubscribedEmail,
+  buildFeedbackThankYouEmail,
+  buildWelcomeNewsletterEmail,
+} from './leads-email-templates';
 
 @Injectable()
 export class LeadsService {
@@ -26,11 +28,43 @@ export class LeadsService {
   ) {
     const key = this.config.get<string>('RESEND_API_KEY')?.trim();
     this.resend = key ? new Resend(key) : null;
+    if (this.resend) {
+      this.logger.log('Resend is configured (transactional emails enabled).');
+    } else {
+      this.logger.warn(
+        'RESEND_API_KEY is missing or empty — newsletter/feedback confirmation emails are disabled.',
+      );
+    }
+  }
+
+  /**
+   * Use EMAIL_FROM from `apps/server/.env` (same as tutors/analytics). Must match a verified
+   * sender/domain in Resend. Do not hardcode a different address (e.g. reports@ vs noreply@)
+   * unless that exact address is verified — otherwise Resend returns `error` and nothing is sent.
+   */
+  private newsletterFrom(): string {
+    const raw = this.config.get<string>('EMAIL_FROM')?.trim() || 'noreply@parentingmykid.com';
+    if (raw.includes('<') && raw.includes('>')) {
+      return raw;
+    }
+    return `ParentingMyKid <${raw}>`;
+  }
+
+  /**
+   * Public marketing site origin (no trailing slash). Used for email links and `/logo.png`.
+   * Set `PUBLIC_WEB_URL` in production so images load; defaults to www.parentingmykid.com.
+   */
+  private publicMarketingSiteUrl(): string {
+    const raw =
+      this.config.get<string>('PUBLIC_WEB_URL')?.trim() ||
+      this.config.get<string>('WEB_PUBLIC_URL')?.trim() ||
+      '';
+    return raw ? raw.replace(/\/+$/, '') : 'https://www.parentingmykid.com';
   }
 
   /** Resend v4 returns `{ data, error }` and does not throw on API errors — must check `error`. */
   private async sendResendEmail(
-    payload: { from: string; to: string; subject: string; html: string },
+    payload: { from: string; to: string; subject: string; html: string; text: string },
     logLabel: string,
   ): Promise<void> {
     if (!this.resend) {
@@ -49,11 +83,12 @@ export class LeadsService {
 
   async create(dto: CreateLeadDto): Promise<{ ok: true; kind: 'lead' | 'feedback' }> {
     const message = dto.message?.trim();
+    const emailNorm = dto.email.trim().toLowerCase();
 
     if (message) {
       await this.prisma.siteFeedback.create({
         data: {
-          email: dto.email,
+          email: emailNorm,
           name: dto.name ?? null,
           message,
           country: dto.country ?? null,
@@ -61,14 +96,24 @@ export class LeadsService {
           source: dto.source ?? null,
         },
       });
-      await this.sendFeedbackThankYou(dto.email, dto.name, dto.language);
+      await this.sendFeedbackThankYou(emailNorm, dto.name, dto.language);
       return { ok: true, kind: 'feedback' };
+    }
+
+    const existing = await this.prisma.lead.findFirst({
+      where: {
+        email: { equals: emailNorm, mode: 'insensitive' },
+      },
+    });
+    if (existing) {
+      await this.sendAlreadySubscribedEmail(emailNorm, dto.name, dto.language);
+      throw new ConflictException('This email is already on the list.');
     }
 
     try {
       await this.prisma.lead.create({
         data: {
-          email: dto.email,
+          email: emailNorm,
           name: dto.name ?? null,
           country: dto.country ?? null,
           language: dto.language,
@@ -77,14 +122,17 @@ export class LeadsService {
       });
     } catch (e) {
       if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
-        // New inserts get welcome mail; duplicates used to get nothing — still send confirmation.
-        await this.sendAlreadySubscribedEmail(dto.email, dto.name, dto.language);
+        // `Lead` only has @@unique on `email` — races or legacy casing can land here after a missed findFirst.
+        this.logger.warn(
+          `Lead unique violation for normalized email=${emailNorm} meta=${JSON.stringify(e.meta)}`,
+        );
+        await this.sendAlreadySubscribedEmail(emailNorm, dto.name, dto.language);
         throw new ConflictException('This email is already on the list.');
       }
       throw e;
     }
 
-    await this.sendWelcomeEmail(dto.email, dto.name, dto.language);
+    await this.sendWelcomeEmail(emailNorm, dto.name, dto.language);
     return { ok: true, kind: 'lead' };
   }
 
@@ -93,30 +141,18 @@ export class LeadsService {
     name: string | undefined,
     language: 'en' | 'bn',
   ): Promise<void> {
-    const greeting =
-      language === 'bn'
-        ? `আসসালামু আলাইকুম${name ? `, ${name}` : ''}!`
-        : `Hi${name ? ` ${name}` : ''}!`;
-
-    const body =
-      language === 'bn'
-        ? `<p>${greeting}</p><p>ParentingMyKid-এর আপডেট পেতে ধন্যবাদ। আমরা শিগগিরই আপনার সাথে যোগাযোগ করব।</p>`
-        : `<p>${greeting}</p><p>Thanks for joining ParentingMyKid. We’ll share warm, practical parenting ideas with you soon.</p>`;
-
+    const { subject, html, text } = buildWelcomeNewsletterEmail(
+      language,
+      name,
+      this.publicMarketingSiteUrl(),
+    );
     await this.sendResendEmail(
       {
-        from: FROM_NEWSLETTER,
+        from: this.newsletterFrom(),
         to: email,
-        subject:
-          language === 'bn'
-            ? 'ParentingMyKid — সাবস্ক্রিপশন নিশ্চিত'
-            : 'ParentingMyKid — You’re on the list',
-        html: `
-          <div style="font-family:system-ui,sans-serif;max-width:560px;margin:0 auto;padding:24px;">
-            ${body}
-            <p style="color:#64748b;font-size:14px;margin-top:24px;">ParentingMyKid</p>
-          </div>
-        `,
+        subject,
+        html,
+        text,
       },
       'welcome email',
     );
@@ -128,25 +164,18 @@ export class LeadsService {
     name: string | undefined,
     language: 'en' | 'bn',
   ): Promise<void> {
-    const body =
-      language === 'bn'
-        ? `<p>আসসালামু আলাইকুম${name ? `, ${name}` : ''}!</p><p>আপনি ইতিমধ্যে আমাদের তালিকায় আছেন। নতুন টিপস ও আপডেট আপনার ইনবক্সে পৌঁছাবে।</p>`
-        : `<p>Hi${name ? ` ${name}` : ''}!</p><p>You’re already on our ParentingMyKid list—we’ll keep sending tips and updates to your inbox.</p>`;
-
+    const { subject, html, text } = buildAlreadySubscribedEmail(
+      language,
+      name,
+      this.publicMarketingSiteUrl(),
+    );
     await this.sendResendEmail(
       {
-        from: FROM_NEWSLETTER,
+        from: this.newsletterFrom(),
         to: email,
-        subject:
-          language === 'bn'
-            ? 'ParentingMyKid — আপনি তালিকায় আছেন'
-            : 'ParentingMyKid — You’re already subscribed',
-        html: `
-          <div style="font-family:system-ui,sans-serif;max-width:560px;margin:0 auto;padding:24px;">
-            ${body}
-            <p style="color:#64748b;font-size:14px;margin-top:24px;">ParentingMyKid</p>
-          </div>
-        `,
+        subject,
+        html,
+        text,
       },
       'already-subscribed email',
     );
@@ -157,25 +186,18 @@ export class LeadsService {
     name: string | undefined,
     language: 'en' | 'bn',
   ): Promise<void> {
-    const body =
-      language === 'bn'
-        ? `<p>আসসালামু আলাইকুম${name ? `, ${name}` : ''}!</p><p>আপনার মতামতের জন্য ধন্যবাদ। আমরা শীঘ্রই পড়ব।</p>`
-        : `<p>Hi${name ? ` ${name}` : ''}!</p><p>Thanks for your feedback — we read every message.</p>`;
-
+    const { subject, html, text } = buildFeedbackThankYouEmail(
+      language,
+      name,
+      this.publicMarketingSiteUrl(),
+    );
     await this.sendResendEmail(
       {
-        from: FROM_NEWSLETTER,
+        from: this.newsletterFrom(),
         to: email,
-        subject:
-          language === 'bn'
-            ? 'ParentingMyKid — মতামত পেয়েছি'
-            : 'ParentingMyKid — We received your message',
-        html: `
-          <div style="font-family:system-ui,sans-serif;max-width:560px;margin:0 auto;padding:24px;">
-            ${body}
-            <p style="color:#64748b;font-size:14px;margin-top:24px;">ParentingMyKid</p>
-          </div>
-        `,
+        subject,
+        html,
+        text,
       },
       'feedback thank-you email',
     );

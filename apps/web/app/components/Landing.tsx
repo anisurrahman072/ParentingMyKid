@@ -80,7 +80,7 @@ export function Landing({ content }: Props): React.ReactElement {
   return (
     <div className="min-h-screen bg-bg-base">
       <NewsletterSignupModal content={content} />
-      <StickyTopBar followLabel={content.hero.cta} />
+      <StickyTopBar followLabel={content.hero.cta} followXAria={content.hero.followXAria} />
       <ScrollCompanion content={content} />
       <main>
         <div data-scroll-chapter="0">
@@ -88,6 +88,7 @@ export function Landing({ content }: Props): React.ReactElement {
             headline={content.hero.headline}
             subheadline={content.hero.subheadline}
             cta={content.hero.cta}
+            followXAria={content.hero.followXAria}
             isBengali={isBn}
           />
         </div>
@@ -103,7 +104,7 @@ export function Landing({ content }: Props): React.ReactElement {
         {isBn ? (
           <div data-scroll-chapter="4">
             <IslamicSectionWaveDivider />
-            <DeeniLearningSection />
+            <DeeniLearningSection followXAria={content.hero.followXAria} />
           </div>
         ) : null}
         <StarSectionDivider />

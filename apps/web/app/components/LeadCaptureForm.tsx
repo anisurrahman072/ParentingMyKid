@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { CountrySelect } from './CountrySelect';
 
@@ -32,6 +32,9 @@ export function LeadCaptureForm({
   const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'duplicate' | 'error'>(
     'idle',
   );
+  const modalAutoCloseRef = useRef<number | null>(null);
+  /** Prevents double-submit (double-click / fast Enter) from firing two POSTs — second could get 409. */
+  const submitLockRef = useRef(false);
 
   const t = content.leadCapture;
   const isBn = lang === 'bn';
@@ -59,12 +62,30 @@ export function LeadCaptureForm({
     };
   }, [lang, variant]);
 
+  /** Keep the result message visible long enough to read; optional early dismiss via button. */
+  const MODAL_RESULT_MS = 10_000;
+
+  const dismissModalAfterResult = (): void => {
+    if (modalAutoCloseRef.current) {
+      window.clearTimeout(modalAutoCloseRef.current);
+      modalAutoCloseRef.current = null;
+    }
+    onSubscribed?.();
+  };
+
   useEffect(() => {
     if (variant !== 'modal' || !onSubscribed) return;
     if (status !== 'success' && status !== 'duplicate') return;
-    const ms = status === 'success' ? 850 : 1200;
-    const id = window.setTimeout(() => onSubscribed(), ms);
-    return () => window.clearTimeout(id);
+    modalAutoCloseRef.current = window.setTimeout(() => {
+      modalAutoCloseRef.current = null;
+      onSubscribed();
+    }, MODAL_RESULT_MS);
+    return () => {
+      if (modalAutoCloseRef.current) {
+        window.clearTimeout(modalAutoCloseRef.current);
+        modalAutoCloseRef.current = null;
+      }
+    };
   }, [status, variant, onSubscribed]);
 
   async function onSubmit(e: React.FormEvent): Promise<void> {
@@ -73,6 +94,8 @@ export function LeadCaptureForm({
       setStatus('error');
       return;
     }
+    if (submitLockRef.current) return;
+    submitLockRef.current = true;
     setStatus('loading');
     try {
       const res = await fetch(`${base}/api/v1/leads`, {
@@ -102,6 +125,8 @@ export function LeadCaptureForm({
       setStatus('error');
     } catch {
       setStatus('error');
+    } finally {
+      submitLockRef.current = false;
     }
   }
 
@@ -114,6 +139,22 @@ export function LeadCaptureForm({
   }
 
   if (status === 'success') {
+    if (variant === 'modal' && onSubscribed) {
+      return (
+        <div className="space-y-4">
+          <p className={`text-sm font-medium text-emerald-700 ${isBn ? 'font-bengali' : ''}`}>
+            {t.success}
+          </p>
+          <button
+            type="button"
+            onClick={dismissModalAfterResult}
+            className="inline-flex min-h-[44px] w-full items-center justify-center rounded-full border border-sky-500/50 bg-white/90 px-6 py-2.5 text-sm font-semibold text-sky-900 shadow-sm transition hover:bg-white"
+          >
+            {t.closeLabel}
+          </button>
+        </div>
+      );
+    }
     return (
       <p className={`text-sm font-medium text-emerald-700 ${isBn ? 'font-bengali' : ''}`}>
         {t.success}
@@ -123,9 +164,20 @@ export function LeadCaptureForm({
 
   if (variant === 'modal' && status === 'duplicate') {
     return (
-      <p className={`text-sm font-medium text-amber-800 ${isBn ? 'font-bengali' : ''}`}>
-        {t.duplicate}
-      </p>
+      <div className="space-y-4">
+        <p className={`text-sm font-medium text-amber-800 ${isBn ? 'font-bengali' : ''}`}>
+          {t.duplicate}
+        </p>
+        {onSubscribed ? (
+          <button
+            type="button"
+            onClick={dismissModalAfterResult}
+            className="inline-flex min-h-[44px] w-full items-center justify-center rounded-full border border-sky-500/50 bg-white/90 px-6 py-2.5 text-sm font-semibold text-sky-900 shadow-sm transition hover:bg-white"
+          >
+            {t.closeLabel}
+          </button>
+        ) : null}
+      </div>
     );
   }
 

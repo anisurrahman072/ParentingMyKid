@@ -7,6 +7,8 @@
  *               Adding a new feature always means: create a new module, register it here.
  */
 
+import { join } from 'node:path';
+
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { ThrottlerModule } from '@nestjs/throttler';
@@ -45,7 +47,15 @@ import { LeadsModule } from './modules/leads/leads.module';
     // Global config — loads .env file and validates environment variables
     ConfigModule.forRoot({
       isGlobal: true,
-      envFilePath: ['.env', '.env.local'],
+      // Nest resolves `.env` from process.cwd(). When the API is started from the repo root
+      // (turbo, some IDEs), cwd may not be `apps/server`, so `RESEND_API_KEY` would be missing
+      // while `DATABASE_URL` still works if set in the shell. Include both locations.
+      envFilePath: [
+        join(process.cwd(), '.env'),
+        join(process.cwd(), '.env.local'),
+        join(process.cwd(), 'apps', 'server', '.env'),
+        join(process.cwd(), 'apps', 'server', '.env.local'),
+      ],
     }),
 
     // Rate limiting — protects AI endpoints and auth from abuse

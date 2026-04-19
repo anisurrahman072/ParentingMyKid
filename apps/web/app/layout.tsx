@@ -4,7 +4,7 @@ import { headers } from 'next/headers';
 
 import { AnalyticsScripts } from '@/app/components/AnalyticsScripts';
 import { JsonLd } from '@/app/components/JsonLd';
-import { FACEBOOK_PAGE_URL } from '@/lib/constants';
+import { FACEBOOK_PAGE_URL, TWITTER_X_PAGE_URL } from '@/lib/constants';
 import { SITE_NAME, SITE_URL, TWITTER_HANDLE } from '@/lib/site';
 
 import './globals.css';
@@ -126,7 +126,7 @@ const organizationJsonLd = {
     '@type': 'ImageObject',
     url: `${SITE_URL}/logo.png`,
   },
-  sameAs: [FACEBOOK_PAGE_URL],
+  sameAs: [FACEBOOK_PAGE_URL, TWITTER_X_PAGE_URL],
 };
 
 const websiteJsonLd = {

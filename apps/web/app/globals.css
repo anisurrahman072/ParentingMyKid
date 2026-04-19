@@ -113,6 +113,14 @@
     animation: facebookSwing 4.3s ease-in-out infinite;
   }
 
+  .x-badge-swing {
+    animation: facebookSwing 4.3s ease-in-out infinite;
+  }
+
+  .x-mark-premium {
+    animation: xMarkGlow 2.8s ease-in-out infinite;
+  }
+
   /* Community dot hover — stops bounce and lifts+scales the dot.
    * Using animation:none rather than paused because active animations
    * win over the cascade for the properties they animate, so we must
@@ -312,6 +320,18 @@
   50% { transform: rotate(5.5deg); }
 }
 
+@keyframes xMarkGlow {
+  0%,
+  100% {
+    filter: drop-shadow(0 0 3px rgba(255, 255, 255, 0.45)) drop-shadow(0 0 10px rgba(255, 255, 255, 0.2));
+    opacity: 0.96;
+  }
+  50% {
+    filter: drop-shadow(0 0 7px rgba(255, 255, 255, 0.75)) drop-shadow(0 0 18px rgba(244, 244, 245, 0.35));
+    opacity: 1;
+  }
+}
+
 /* Marketing lead section: slow drift for decorative SVG curves */
 @keyframes marketingLeadCurves {
   0%,
@@ -355,6 +375,14 @@
   }
 
   .facebook-badge-swing {
+    animation: none;
+  }
+
+  .x-badge-swing {
+    animation: none;
+  }
+
+  .x-mark-premium {
     animation: none;
   }
 

@@ -3,7 +3,6 @@ export type TopicCard = {
   title: string;
   body: string;
   tag: string;
-  gradientClass: string;
 };
 
 /** Hero subhead: split for typography hierarchy without extra vertical space */
@@ -51,6 +50,8 @@ export type LandingContent = {
     headline: string;
     subheadline: HeroSubheadline;
     cta: string;
+    /** Accessible name for icon-only X links shown beside Facebook. */
+    followXAria: string;
   };
   stats: {
     /** First column: human, non-numeric “community” framing (no fake metrics) */
@@ -79,11 +80,18 @@ export type LandingContent = {
   showcase: {
     caption: string;
     linkLabel: string;
+    /** Inline link text for X/Twitter next to the Facebook page link. */
+    twitterLinkLabel: string;
     /** Optional gallery (e.g. BN: three banners). When absent, landing uses the default two-card stack. */
     gallery?: { src: string; alt: string }[];
   };
   community: { title: string; body: string; cta: string };
-  footer: { tagline: string; rights: string; privacyLabel: string };
+  footer: {
+    tagline: string;
+    rights: string;
+    privacyLabel: string;
+    twitterLabel: string;
+  };
   /** Newsletter signup copy */
   leadCapture: {
     title: string;
@@ -155,6 +163,7 @@ export const bnContent: LandingContent = {
       payoffTrail: '',
     },
     cta: 'ফেসবুকে ফলো করুন',
+    followXAria: 'X-এ ফলো করুন',
   },
   stats: {
     community: {
@@ -205,48 +214,36 @@ export const bnContent: LandingContent = {
       title: 'স্বাস্থ্য ও পুষ্টি',
       body: 'আপনার সন্তানের শরীর ও মনের জন্য খাবার, পানি আর ঘুম হলো সবচেয়ে জরুরি জ্বালানি। আজ আপনি যদি তাকে সঠিক খাবার দেন, পর্যাপ্ত পানি পান করান আর নিয়মিত ঘুমের অভ্যাস গড়ে তোলেন, তাহলে আগামী দিনে তার মনোযোগ, শান্তি আর সুস্থতা আরও বাড়বে।',
       tag: 'দৈনন্দিন যত্ন',
-      gradientClass:
-        'bg-gradient-to-br from-teal-100/95 via-emerald-50/90 to-cyan-100/85 border border-teal-200/55 shadow-[0_22px_56px_-20px_rgba(13,148,136,0.28)] ring-1 ring-white/70 backdrop-blur-none sm:backdrop-blur-[2px]',
     },
     {
       emoji: '📚',
       title: 'শিক্ষা ও মেধা বিকাশ',
       body: 'আপনার সন্তানের প্রশ্ন আর কৌতূহলকে স্বাগত জানান—এটাই তার শেখার আসল শক্তি। আজ সে যে প্রশ্ন করছে, সেটিই আগামী দিনের আত্মবিশ্বাস গড়ে তোলে। পড়ার জন্য চাপ না দিয়ে তাকে উৎসাহ দিন নিজের মতো করে জানতে, ভাবতে আর শিখতে।',
       tag: 'চিন্তা ও শেখা',
-      gradientClass:
-        'bg-gradient-to-br from-violet-100/95 via-purple-50/90 to-fuchsia-100/80 border border-violet-200/50 shadow-[0_22px_56px_-20px_rgba(124,58,237,0.22)] ring-1 ring-white/70 backdrop-blur-none sm:backdrop-blur-[2px]',
     },
     {
       emoji: '🧠',
       title: 'মানসিক স্থিতিশীলতা',
       body: 'শিশুকে তার রাগ, দুঃখ বা ভয় চিনে নাম বলতে শেখান। এতে সে বুঝতে পারে তার ভেতরে কী চলছে, বিভ্রান্ত হয় না এবং ধীরে ধীরে শান্ত থাকতে শেখে। যেমন, সন্তান রেগে গেলে তাকে বলুন—“তুমি কি একটু বিরক্ত বোধ করছো?”। এতে সে নিজের আবেগ চিনতে শিখবে এবং ধীরে ধীরে শান্ত থাকার অভ্যাস গড়ে তুলবে।',
       tag: 'মনের শক্তি',
-      gradientClass:
-        'bg-gradient-to-br from-sky-100/95 via-blue-50/90 to-indigo-100/82 border border-sky-200/50 shadow-[0_22px_56px_-20px_rgba(14,165,233,0.22)] ring-1 ring-white/70 backdrop-blur-none sm:backdrop-blur-[2px]',
     },
     {
       emoji: '❤️',
       title: 'আবেগীয় ভারসাম্য',
       body: 'শিশু তার আবেগকে নিরাপদ মনে করে তখনই, যখন তার বাবা-মা মনোযোগ দিয়ে তার কথা শোনেন আর স্নেহ দেখান। এতে সে নিজেকে এবং তার বাবা-মাকে ভালোবাসতে শেখে এবং সম্পর্কের প্রতি বিশ্বাস গড়ে তোলে।',
       tag: 'ভালোবাসা ও নিরাপত্তা',
-      gradientClass:
-        'bg-gradient-to-br from-orange-100/95 via-amber-50/90 to-rose-100/80 border border-orange-200/50 shadow-[0_22px_56px_-20px_rgba(234,88,12,0.18)] ring-1 ring-white/70 backdrop-blur-none sm:backdrop-blur-[2px]',
     },
     {
       emoji: '💪',
       title: 'শারীরিক বিকাশ',
       body: 'নিয়মিত নড়াচড়া ও বাইরে সময় কাটানো শিশুর শরীরকে শক্ত রাখে, মেজাজকে সতেজ করে এবং তার পূর্ণ বিকাশে সাহায্য করে। খোলা আকাশের নিচে খেলাধুলা বা হাঁটা শুধু তাকে সক্রিয় ও আনন্দময় করে না, রোদে থাকার মাধ্যমে সে ভিটামিন ডি পায় যা হাড়কে মজবুত করে এবং আত্মবিশ্বাস বাড়ায়।',
       tag: 'নড়াচড়া ও শক্তি',
-      gradientClass:
-        'bg-gradient-to-br from-emerald-100/95 via-green-50/90 to-lime-100/78 border border-emerald-200/50 shadow-[0_22px_56px_-20px_rgba(5,150,105,0.24)] ring-1 ring-white/70 backdrop-blur-none sm:backdrop-blur-[2px]',
     },
     {
       emoji: '🎮',
       title: 'খেলাধুলা ও বন্ধুত্ব',
       body: 'বন্ধুদের সঙ্গে খেলায় শিশু নিয়ম মানতে শেখে, জিনিস ভাগাভাগি করতে শিখে এবং অন্যের অনুভূতি বুঝে সহানুভূতিশীল হয়। এসব অভ্যাস তাকে শুধু স্কুলে নয়, জীবনের প্রতিটি ধাপে সামাজিকভাবে দক্ষ ও আত্মবিশ্বাসী করে তোলে।',
       tag: 'সামাজিক শেখা',
-      gradientClass:
-        'bg-gradient-to-br from-fuchsia-100/95 via-pink-50/90 to-purple-100/82 border border-fuchsia-200/45 shadow-[0_22px_56px_-20px_rgba(192,38,211,0.2)] ring-1 ring-white/70 backdrop-blur-none sm:backdrop-blur-[2px]',
     },
   ],
   quote: {
@@ -292,6 +289,7 @@ export const bnContent: LandingContent = {
   showcase: {
     caption: 'আমাদের ফেসবুক পেজে আরও অনুপ্রেরণা, টিপস ও গল্প পাবেন।',
     linkLabel: 'পেজ দেখুন',
+    twitterLinkLabel: 'X (Twitter)',
     gallery: [
       {
         src: '/banner-1.png',
@@ -316,6 +314,7 @@ export const bnContent: LandingContent = {
     tagline: 'শিশুর পাশে দাঁড়ান—আজ থেকেই।',
     rights: '© ParentingMyKid। সর্বস্বত্ব সংরক্ষিত।',
     privacyLabel: 'গোপনীয়তা নীতি',
+    twitterLabel: 'X (Twitter)',
   },
   leadCapture: {
     title: 'আপডেট পেতে যুক্ত হোন',
@@ -397,6 +396,7 @@ export const enContent: LandingContent = {
       topicTrail: ', all on one gentle path.',
     },
     cta: 'Follow on Facebook',
+    followXAria: 'Follow on X',
   },
   stats: {
     community: {
@@ -511,6 +511,7 @@ export const enContent: LandingContent = {
   showcase: {
     caption: 'On our Facebook page you will find more inspiration, tips, and parent stories.',
     linkLabel: 'Visit the page',
+    twitterLinkLabel: 'X (Twitter)',
   },
   community: {
     title: 'Join us 💚',
@@ -521,6 +522,7 @@ export const enContent: LandingContent = {
     tagline: 'Stand beside your child—starting today.',
     rights: '© ParentingMyKid. All rights reserved.',
     privacyLabel: 'Privacy Policy',
+    twitterLabel: 'X (Twitter)',
   },
   leadCapture: {
     title: 'Stay in the loop',
