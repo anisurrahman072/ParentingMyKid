@@ -18,10 +18,16 @@ function logoHeaderRow(siteUrl: string): string {
   const base = normalizedPublicSiteUrl(siteUrl);
   const logoSrc = `${base}/logo.png`;
   return `<tr>
-          <td align="center" style="padding:36px 40px 32px;background-color:#fffdf8;border-bottom:1px solid #e5ddd3;">
-            <a href="${base}" target="_blank" rel="noopener noreferrer" title="ParentingMyKid" style="text-decoration:none;display:inline-block;line-height:0;">
-              <img src="${logoSrc}" width="220" alt="ParentingMyKid" border="0" style="display:block;margin:0 auto;width:220px;max-width:85%;height:auto;border:0;outline:none;-ms-interpolation-mode:bicubic;" />
-            </a>
+          <td align="center" style="padding:26px 32px 18px;background-color:#fffdf8;">
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center">
+              <tr>
+                <td align="center" width="94" height="94" style="width:94px;height:94px;border-radius:999px;background-color:#ffffff;border:1px solid #dce9e2;box-shadow:0 8px 22px rgba(45,106,79,0.14);">
+                  <a href="${base}" target="_blank" rel="noopener noreferrer" title="ParentingMyKid" style="text-decoration:none;display:inline-block;line-height:0;">
+                    <img src="${logoSrc}" width="74" alt="ParentingMyKid" border="0" style="display:block;margin:0 auto;width:74px;max-width:74px;height:74px;border:0;outline:none;border-radius:999px;-ms-interpolation-mode:bicubic;" />
+                  </a>
+                </td>
+              </tr>
+            </table>
           </td>
         </tr>`;
 }
@@ -63,9 +69,10 @@ function emailShell(options: {
         <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="600" style="max-width:600px;width:100%;background-color:#fffdf8;border-radius:20px;overflow:hidden;border:1px solid #e8dfd4;box-shadow:0 8px 32px rgba(45,74,62,0.08);">
           ${logoHeaderRow(siteUrl)}
           <tr>
-            <td style="background-color:#2d6a4f;padding:36px 32px 32px;text-align:center;">
-              <h1 style="margin:0;font-family:${font};font-size:26px;line-height:1.35;font-weight:700;color:#ffffff;">${headerTitleHtml}</h1>
-              <p style="margin:14px 0 0;font-size:28px;line-height:1;">🎉</p>
+            <td style="padding:0 32px 24px;text-align:center;background-color:#fffdf8;border-bottom:1px solid #ece3d9;">
+              <p style="margin:0 0 12px;font-size:12px;line-height:1;letter-spacing:1.2px;text-transform:uppercase;color:#5f7f70;font-weight:700;font-family:${bodyFont};">ParentingMyKid</p>
+              <h1 style="margin:0;font-family:${font};font-size:30px;line-height:1.25;font-weight:700;color:#1f5a43;">${headerTitleHtml}</h1>
+              <p style="margin:8px 0 0;font-size:18px;line-height:1;">🎉</p>
             </td>
           </tr>
           <tr>
