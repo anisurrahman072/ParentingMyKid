@@ -30,8 +30,19 @@ import * as QRCode from 'qrcode';
 import { v4 as uuidv4 } from 'uuid';
 import { PrismaService } from '../../database/prisma.service';
 import { RedisService } from '../../common/redis/redis.service';
-import { RegisterParentDto, LoginDto, ChildPinLoginDto, ConfirmPairingDto, SetChildPinDto } from './dto/register.dto';
-import { UserRole, AuthTokenPayload, AuthResponse, PairingCodeResponse } from '@parentingmykid/shared-types';
+import {
+  RegisterParentDto,
+  LoginDto,
+  ChildPinLoginDto,
+  ConfirmPairingDto,
+  SetChildPinDto,
+} from './dto/register.dto';
+import {
+  UserRole,
+  AuthTokenPayload,
+  AuthResponse,
+  PairingCodeResponse,
+} from '@parentingmykid/shared-types';
 
 @Injectable()
 export class AuthService {
@@ -139,6 +150,7 @@ export class AuthService {
   // ─── Parent Login ──────────────────────────────────────────────────────────
 
   async login(dto: LoginDto): Promise<AuthResponse> {
+    console.log('login', dto);
     const user = await this.prisma.user.findUnique({ where: { email: dto.email } });
 
     if (!user || user.role === UserRole.CHILD) {
@@ -187,12 +199,7 @@ export class AuthService {
       throw new UnauthorizedException('Incorrect PIN. Please try again.');
     }
 
-    return this.issueTokens(
-      child.userId,
-      child.user.email,
-      UserRole.CHILD,
-      [child.familyId],
-    );
+    return this.issueTokens(child.userId, child.user.email, UserRole.CHILD, [child.familyId]);
   }
 
   // ─── Set Child PIN ─────────────────────────────────────────────────────────
@@ -293,7 +300,9 @@ export class AuthService {
     const parentId = await this.redis.getPairingCode(dto.code);
 
     if (!parentId) {
-      throw new BadRequestException('Pairing code is invalid or has expired. Please generate a new code.');
+      throw new BadRequestException(
+        'Pairing code is invalid or has expired. Please generate a new code.',
+      );
     }
 
     // Verify the child belongs to this parent
