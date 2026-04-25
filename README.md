@@ -34,7 +34,7 @@
 >
 > 1. Copy `apps/server/.env.example` → `apps/server/.env` and set `**DATABASE_URL`** from Neon.
 > 2. Run `**cd apps/server && npm run db:push`**.
-> 3. Start the server: `**npm run dev**` (API at **[http://localhost:3001](http://localhost:3001)**).
+> 3. Start the server: `**npm run dev`** (API at **[http://localhost:3001](http://localhost:3001)**).
 
 ---
 
@@ -66,7 +66,7 @@ PostgreSQL  Redis    Cloudinary  OpenAI    Resend
 DATABASE_URL="postgresql://user:pass@ep-xxx.us-east-1.aws.neon.tech/neondb?sslmode=require"
 ```
 
-5. **Create all tables in Neon** (required — see the 🚨 alert at the top of this file):
+1. **Create all tables in Neon** (required — see the 🚨 alert at the top of this file):
 
 ```bash
 cd apps/server
@@ -204,13 +204,15 @@ return 'https://parentingmykid-server.up.railway.app/api/v1';
 
 Short version (from `apps/mobile` after `npm install` and `eas login`):
 
-| Step | Command |
-|------|--------|
-| One-time EAS config | `eas build:configure` |
-| **Install a dev client** (cloud) | `npm run build:dev:android` and/or `npm run build:dev:ios` (or `npm run build:dev` for all) — then install the artifact on device/simulator |
-| **Daily Metro** (with dev app installed) | `npm start` (runs `expo start --dev-client`) |
-| **Preview / production** | `npm run build:preview` / `npm run build:production` |
-| **Local Android/iOS** (Xcode / Android Studio) | `npx expo prebuild` then `npm run android` or `npm run ios` — see `apps/mobile/README.md` |
+
+| Step                                           | Command                                                                                                                                     |
+| ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| One-time EAS config                            | `eas build:configure`                                                                                                                       |
+| **Install a dev client** (cloud)               | `npm run build:dev:android` and/or `npm run build:dev:ios` (or `npm run build:dev` for all) — then install the artifact on device/simulator |
+| **Daily Metro** (with dev app installed)       | `npm start` (runs `expo start --dev-client`)                                                                                                |
+| **Preview / production**                       | `npm run build:preview` / `npm run build:production`                                                                                        |
+| **Local Android/iOS** (Xcode / Android Studio) | `npx expo prebuild` then `npm run android` or `npm run ios` — see `apps/mobile/README.md`                                                   |
+
 
 Set a real `expo.extra.eas.projectId` in `apps/mobile/app.json` (`eas init` or Expo dashboard) before relying on EAS or push.
 
