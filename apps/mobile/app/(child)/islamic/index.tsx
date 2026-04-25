@@ -302,7 +302,7 @@ export default function IslamicScreen() {
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: '#F0FFF4' },
+  screen: { flex: 1, backgroundColor: 'transparent' },
   header: {
     paddingVertical: SPACING[5],
     paddingHorizontal: SPACING[5],

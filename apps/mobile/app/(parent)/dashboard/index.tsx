@@ -9,7 +9,7 @@
  *              - Streak counts
  *              - Quick actions: pause internet, add mission, view location
  *
- * @design Premium dark gradient card layout. Data is beautiful and actionable.
+ * @design Light mint–blush shell with glass cards. Data is beautiful and actionable.
  *         Never overwhelming — only show what matters RIGHT NOW.
  */
 
@@ -44,7 +44,8 @@ export default function ParentDashboard() {
   const { data: pendingFriendInvites } = useQuery({
     queryKey: ['friends-pending', activeFamilyId],
     queryFn: async () => {
-      if (!activeFamilyId) return [] as { id: string; from: { name: string }; to?: { name: string } | null }[];
+      if (!activeFamilyId)
+        return [] as { id: string; from: { name: string }; to?: { name: string } | null }[];
       const { data } = await apiClient.get<
         { id: string; from: { name: string }; to?: { name: string } | null }[]
       >(API_ENDPOINTS.friends.pending(activeFamilyId));
@@ -100,7 +101,9 @@ export default function ParentDashboard() {
         {/* Header */}
         <Animated.View entering={FadeInDown.duration(600)} style={styles.header}>
           <View>
-            <Text style={styles.greeting}>{greeting}, {firstName}! 👋</Text>
+            <Text style={styles.greeting}>
+              {greeting}, {firstName}! 👋
+            </Text>
             <Text style={styles.date}>
               {new Date().toLocaleDateString('en-US', {
                 weekday: 'long',
@@ -117,15 +120,21 @@ export default function ParentDashboard() {
         {/* Urgent Safety Alerts */}
         {urgentAlerts.length > 0 && (
           <Animated.View entering={FadeInDown.duration(600).delay(100)} style={styles.alertPanel}>
-            <Text style={styles.alertPanelTitle}>⚠️ {urgentAlerts.length} Urgent Alert{urgentAlerts.length > 1 ? 's' : ''}</Text>
+            <Text style={styles.alertPanelTitle}>
+              ⚠️ {urgentAlerts.length} Urgent Alert{urgentAlerts.length > 1 ? 's' : ''}
+            </Text>
             <Text style={styles.alertPanelSub}>Tap to review — action required</Text>
           </Animated.View>
         )}
 
         {(pendingFriendInvites?.length ?? 0) > 0 && (
-          <Animated.View entering={FadeInDown.duration(500).delay(50)} style={styles.friendPendingPanel}>
+          <Animated.View
+            entering={FadeInDown.duration(500).delay(50)}
+            style={styles.friendPendingPanel}
+          >
             <Text style={styles.friendPendingTitle}>
-              {pendingFriendInvites?.length} friend request{((pendingFriendInvites?.length ?? 0) > 1) ? 's' : ''} to review
+              {pendingFriendInvites?.length} friend request
+              {(pendingFriendInvites?.length ?? 0) > 1 ? 's' : ''} to review
             </Text>
             {(pendingFriendInvites ?? []).map((inv) => (
               <View key={inv.id} style={styles.friendPendingRow}>
@@ -172,10 +181,30 @@ export default function ParentDashboard() {
         {/* Quick Actions */}
         <Text style={styles.sectionTitle}>Quick Actions</Text>
         <View style={styles.quickActions}>
-          <QuickActionButton icon="📍" label="Location" onPress={() => router.push('/(parent)/safety')} color={Colors.parent.primary} />
-          <QuickActionButton icon="⏸️" label="Pause Internet" onPress={() => {}} color={Colors.parent.warning} />
-          <QuickActionButton icon="📊" label="Reports" onPress={() => router.push('/(parent)/growth')} color={Colors.parent.success} />
-          <QuickActionButton icon="🤖" label="AI Coach" onPress={() => {}} color={Colors.parent.secondary} />
+          <QuickActionButton
+            icon="📍"
+            label="Location"
+            onPress={() => router.push('/(parent)/safety')}
+            color={Colors.parent.primary}
+          />
+          <QuickActionButton
+            icon="⏸️"
+            label="Pause Internet"
+            onPress={() => {}}
+            color={Colors.parent.warning}
+          />
+          <QuickActionButton
+            icon="📊"
+            label="Reports"
+            onPress={() => router.push('/(parent)/growth')}
+            color={Colors.parent.success}
+          />
+          <QuickActionButton
+            icon="🤖"
+            label="AI Coach"
+            onPress={() => {}}
+            color={Colors.parent.secondary}
+          />
         </View>
 
         {/* Upcoming Events */}
@@ -187,7 +216,10 @@ export default function ParentDashboard() {
                 <View key={event.id} style={styles.eventCard}>
                   <Text style={styles.eventTitle}>{event.title}</Text>
                   <Text style={styles.eventDate}>
-                    {new Date(event.startAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                    {new Date(event.startAt).toLocaleDateString('en-US', {
+                      month: 'short',
+                      day: 'numeric',
+                    })}
                   </Text>
                 </View>
               ))}
@@ -210,9 +242,10 @@ function ChildDashboardCardView({
   child: ChildDashboardCard;
   onPress: () => void;
 }) {
-  const missionProgress = child.todayMissionsTotal > 0
-    ? (child.todayMissionsCompleted / child.todayMissionsTotal) * 100
-    : 0;
+  const missionProgress =
+    child.todayMissionsTotal > 0
+      ? (child.todayMissionsCompleted / child.todayMissionsTotal) * 100
+      : 0;
 
   const wellbeingColor =
     (child.wellbeingScore ?? 0) >= 75
@@ -225,9 +258,7 @@ function ChildDashboardCardView({
     <TouchableOpacity style={styles.childCard} onPress={onPress} activeOpacity={0.8}>
       <View style={styles.childCardHeader}>
         <View style={styles.childAvatarContainer}>
-          <Text style={styles.childAvatarText}>
-            {child.name.charAt(0).toUpperCase()}
-          </Text>
+          <Text style={styles.childAvatarText}>{child.name.charAt(0).toUpperCase()}</Text>
         </View>
         <View style={styles.childInfo}>
           <Text style={styles.childName}>{child.name}</Text>
@@ -324,7 +355,7 @@ function QuickActionButton({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.parent.backgroundDark,
+    backgroundColor: 'transparent',
   },
   scrollContent: {
     paddingHorizontal: Spacing.screenPadding,
@@ -374,9 +405,9 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   friendPendingPanel: {
-    backgroundColor: 'rgba(99, 102, 241, 0.2)',
+    backgroundColor: 'rgba(59, 130, 246, 0.15)',
     borderWidth: 1,
-    borderColor: 'rgba(99, 102, 241, 0.45)',
+    borderColor: 'rgba(59, 130, 246, 0.35)',
     borderRadius: Spacing.cardBorderRadius,
     padding: Spacing.base,
     marginBottom: Spacing.lg,

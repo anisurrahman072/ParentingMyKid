@@ -17,7 +17,8 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { router, Link } from 'expo-router';
+import { router } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 import { useAuthStore } from '../../src/store/auth.store';
 import { apiClient } from '../../src/services/api.client';
@@ -46,15 +47,30 @@ export default function LoginScreen() {
       await login(data.accessToken, data.refreshToken, data.user);
       // Root layout handles redirect based on role
     } catch (err: any) {
-      const message = err.response?.data?.message || 'Login failed. Please check your credentials.';
-      Alert.alert('Login failed', message);
+      if (!err.response) {
+        const isNetwork =
+          err.code === 'ERR_NETWORK' ||
+          err.message === 'Network Error' ||
+          String(err.message ?? '').toLowerCase().includes('network');
+        if (isNetwork) {
+          Alert.alert(
+            "Can't connect to server",
+            "The app couldn't reach the API. If you're on a real phone, add EXPO_PUBLIC_API_BASE_URL in apps/mobile/.env (e.g. http://YOUR_LAN_IP:3001/api/v1) and restart Metro. On Android emulators, the host is detected automatically. Confirm Nest is running on port 3001.",
+          );
+        } else {
+          Alert.alert('Login failed', err.message || 'Request failed. Please try again.');
+        }
+      } else {
+        const message = err.response?.data?.message || 'Login failed. Please check your credentials.';
+        Alert.alert('Login failed', message);
+      }
     } finally {
       setLoading(false);
     }
   }
 
   return (
-    <LinearGradient colors={['#0F0A1E', '#1A1035', '#0F0A1E']} style={styles.gradient}>
+    <LinearGradient colors={COLORS.parent.gradientHero} style={styles.gradient}>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.flex}
@@ -65,10 +81,14 @@ export default function LoginScreen() {
           showsVerticalScrollIndicator={false}
         >
           <Animated.View entering={FadeInUp.delay(100).springify()} style={styles.header}>
-            <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-              <Text style={styles.backIcon}>←</Text>
+            <TouchableOpacity
+              onPress={() => router.back()}
+              style={styles.backButton}
+              accessibilityLabel="Go back"
+              accessibilityRole="button"
+            >
+              <Ionicons name="chevron-back" size={28} color={COLORS.parent.textSecondary} />
             </TouchableOpacity>
-            <Text style={styles.logo}>ParentingMyKid</Text>
             <Text style={styles.title}>Welcome back</Text>
             <Text style={styles.subtitle}>Sign in to continue your family journey</Text>
           </Animated.View>
@@ -81,7 +101,7 @@ export default function LoginScreen() {
                 value={email}
                 onChangeText={setEmail}
                 placeholder="parent@email.com"
-                placeholderTextColor="rgba(255,255,255,0.3)"
+                placeholderTextColor={COLORS.parent.textMuted}
                 keyboardType="email-address"
                 autoCapitalize="none"
                 autoComplete="email"
@@ -99,7 +119,7 @@ export default function LoginScreen() {
                   value={password}
                   onChangeText={setPassword}
                   placeholder="Your password"
-                  placeholderTextColor="rgba(255,255,255,0.3)"
+                  placeholderTextColor={COLORS.parent.textMuted}
                   secureTextEntry={!showPassword}
                   autoComplete="password"
                   returnKeyType="done"
@@ -148,10 +168,7 @@ export default function LoginScreen() {
           <Animated.View entering={FadeInDown.delay(350)} style={styles.footer}>
             <Text style={styles.footerText}>
               Don't have an account?{' '}
-              <Text
-                style={styles.signUpLink}
-                onPress={() => router.replace('/auth/register')}
-              >
+              <Text style={styles.signUpLink} onPress={() => router.replace('/auth/register')}>
                 Start free trial
               </Text>
             </Text>
@@ -178,49 +195,36 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginBottom: SPACING[4],
   },
-  backIcon: { fontSize: 24, color: 'rgba(255,255,255,0.7)' },
-  logo: {
-    fontSize: 14,
-    color: COLORS.parent.primary,
-    fontFamily: 'Inter',
-    fontWeight: '700',
-    letterSpacing: 1.5,
-    textTransform: 'uppercase',
-    marginBottom: SPACING[3],
-  },
   title: {
     fontSize: 32,
-    fontFamily: 'Inter',
-    fontWeight: '700',
-    color: '#FFFFFF',
+    fontFamily: 'Inter_700Bold',
+    color: COLORS.parent.textPrimary,
     marginBottom: SPACING[2],
   },
   subtitle: {
     fontSize: 16,
-    fontFamily: 'Inter',
-    color: 'rgba(255,255,255,0.6)',
+    fontFamily: 'Inter_400Regular',
+    color: COLORS.parent.textSecondary,
     lineHeight: 22,
   },
   form: { gap: SPACING[4] },
   inputGroup: { gap: SPACING[2] },
   label: {
     fontSize: 13,
-    fontFamily: 'Inter',
-    fontWeight: '600',
-    color: 'rgba(255,255,255,0.7)',
+    fontFamily: 'Inter_600SemiBold',
+    color: COLORS.parent.textSecondary,
     textTransform: 'uppercase',
-    letterSpacing: 0.5,
   },
   input: {
-    backgroundColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: COLORS.parent.surface,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.12)',
+    borderColor: COLORS.parent.surfaceBorder,
     borderRadius: 12,
     paddingHorizontal: SPACING[4],
     paddingVertical: SPACING[4],
     fontSize: 16,
-    fontFamily: 'Inter',
-    color: '#FFFFFF',
+    fontFamily: 'Inter_400Regular',
+    color: COLORS.parent.textPrimary,
   },
   passwordContainer: { position: 'relative' },
   passwordInput: { paddingRight: 52 },
@@ -237,9 +241,8 @@ const styles = StyleSheet.create({
   forgotPassword: { alignSelf: 'flex-end' },
   forgotText: {
     fontSize: 14,
-    fontFamily: 'Inter',
+    fontFamily: 'Inter_500Medium',
     color: COLORS.parent.primary,
-    fontWeight: '500',
   },
   loginButton: {
     backgroundColor: COLORS.parent.primary,
@@ -251,8 +254,7 @@ const styles = StyleSheet.create({
   loginButtonDisabled: { opacity: 0.7 },
   loginButtonText: {
     fontSize: 16,
-    fontFamily: 'Inter',
-    fontWeight: '700',
+    fontFamily: 'Inter_700Bold',
     color: '#FFFFFF',
   },
   divider: {
@@ -264,39 +266,38 @@ const styles = StyleSheet.create({
   dividerLine: {
     flex: 1,
     height: 1,
-    backgroundColor: 'rgba(255,255,255,0.12)',
+    backgroundColor: 'rgba(92, 61, 46, 0.15)',
   },
   dividerText: {
     fontSize: 13,
-    color: 'rgba(255,255,255,0.4)',
-    fontFamily: 'Inter',
+    color: COLORS.parent.textMuted,
+    fontFamily: 'Inter_400Regular',
   },
   childPinButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: SPACING[2],
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: COLORS.parent.surface,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
+    borderColor: COLORS.parent.surfaceBorder,
     borderRadius: 14,
     paddingVertical: SPACING[4],
   },
   childPinIcon: { fontSize: 20 },
   childPinText: {
     fontSize: 15,
-    fontFamily: 'Inter',
-    color: 'rgba(255,255,255,0.7)',
-    fontWeight: '500',
+    fontFamily: 'Inter_600SemiBold',
+    color: COLORS.parent.textPrimary,
   },
   footer: { marginTop: SPACING[8], alignItems: 'center' },
   footerText: {
     fontSize: 14,
-    fontFamily: 'Inter',
-    color: 'rgba(255,255,255,0.5)',
+    fontFamily: 'Inter_400Regular',
+    color: COLORS.parent.textSecondary,
   },
   signUpLink: {
+    fontFamily: 'Inter_700Bold',
     color: COLORS.parent.primary,
-    fontWeight: '700',
   },
 });

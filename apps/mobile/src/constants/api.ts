@@ -6,11 +6,38 @@
  *   1. Run Nest: `cd apps/server && npm run start:dev` (listens on 0.0.0.0:3001)
  *   2. Optional: set `EXPO_PUBLIC_API_BASE_URL` in `apps/mobile/.env`, e.g.
  *      `EXPO_PUBLIC_API_BASE_URL=http://192.168.0.50:3001/api/v1`
- *   3. If unset, we derive the host from Expo (same machine as Metro) so a phone
- *      on the same Wi‑Fi can reach your laptop without hardcoding an IP.
+ *   3. If unset, we resolve the dev machine from the Metro bundle URL (`SourceCode.scriptURL`)
+ *      so physical devices and emulators point at the same host as the packager (port 3001 for API).
+ *      Android emulators: `10.0.2.2` (not `localhost` — that is the device itself).
  */
 
+import { NativeModules, Platform } from 'react-native';
 import Constants from 'expo-constants';
+
+type SourceCodeModule = { scriptURL?: string };
+
+/** Packager / Metro host: same as your dev machine (LAN IP, 10.0.2.2 on Android emulator, etc.) */
+function getDevHostFromBundle(): string | null {
+  const scriptURL = (NativeModules as { SourceCode?: SourceCodeModule }).SourceCode?.scriptURL;
+  if (!scriptURL) {
+    return null;
+  }
+  try {
+    const { hostname } = new URL(scriptURL);
+    if (Platform.OS === 'android') {
+      if (hostname === 'localhost' || hostname === '127.0.0.1') {
+        return '10.0.2.2';
+      }
+      return hostname;
+    }
+    if (hostname && hostname !== '127.0.0.1' && hostname !== 'localhost') {
+      return hostname;
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
 
 function getApiBaseUrl(): string {
   const fromEnv = process.env.EXPO_PUBLIC_API_BASE_URL?.trim();
@@ -22,7 +49,13 @@ function getApiBaseUrl(): string {
     return 'https://parentingmykid-server.up.railway.app/api/v1';
   }
 
-  const hostUri = Constants.expoConfig?.hostUri;
+  const fromBundle = getDevHostFromBundle();
+  if (fromBundle) {
+    return `http://${fromBundle}:3001/api/v1`;
+  }
+
+  // Legacy: some Expo versions expose this (often undefined in SDK 50+)
+  const hostUri = (Constants.expoConfig as { hostUri?: string } | undefined)?.hostUri;
   if (hostUri) {
     const host = hostUri.split(':')[0];
     if (host && host !== '127.0.0.1' && host !== 'localhost') {
@@ -30,10 +63,20 @@ function getApiBaseUrl(): string {
     }
   }
 
+  if (Platform.OS === 'android') {
+    return 'http://10.0.2.2:3001/api/v1';
+  }
+
   return 'http://localhost:3001/api/v1';
 }
 
 export const API_BASE_URL = getApiBaseUrl();
+
+if (typeof __DEV__ !== 'undefined' && __DEV__) {
+  // Helps verify the client is not stuck on localhost on Android (see getApiBaseUrl).
+  // eslint-disable-next-line no-console
+  console.log('[ParentingMyKid] API_BASE_URL =', API_BASE_URL);
+}
 
 export const API_ENDPOINTS = {
   // ─── Auth ───────────────────────────────────────────────────────────────

@@ -97,8 +97,8 @@ export default function ChildFamilyChat() {
             return (
               <View style={[styles.bubble, mine ? styles.bubbleMine : styles.bubbleOther]}>
                 <Text style={styles.name}>{item.senderName}</Text>
-                <Text style={styles.content}>{item.content}</Text>
-                <Text style={styles.time}>
+                <Text style={[styles.content, mine && styles.contentMine]}>{item.content}</Text>
+                <Text style={[styles.time, mine && styles.timeMine]}>
                   {new Date(item.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                 </Text>
               </View>
@@ -130,38 +130,47 @@ export default function ChildFamilyChat() {
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
-  screen: { flex: 1, backgroundColor: '#F7F5FF' },
+  screen: { flex: 1, backgroundColor: 'transparent' },
   top: { paddingHorizontal: SPACING[4], marginBottom: 6, paddingTop: 8 },
-  title: { fontSize: 22, fontWeight: '900', color: '#1e1b4b', fontFamily: 'Nunito_800ExtraBold' },
-  sub: { color: 'rgba(30, 27, 75, 0.55)', marginTop: 4, fontFamily: 'Nunito_500Medium' },
+  title: { fontSize: 22, fontWeight: '900', color: COLORS.kids.textOnGradient, fontFamily: 'Nunito_800ExtraBold' },
+  sub: { color: COLORS.kids.textOnGradientMuted, marginTop: 4, fontFamily: 'Nunito_500Medium' },
   list: { padding: SPACING[3], gap: 10, paddingBottom: 60 },
   bubble: { maxWidth: '90%', padding: 12, borderRadius: 16 },
-  bubbleMine: { alignSelf: 'flex-end', backgroundColor: 'rgba(99,102,241,0.2)' },
-  bubbleOther: { alignSelf: 'flex-start', backgroundColor: '#fff', shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 4, shadowOffset: { width: 0, height: 1 }, elevation: 1 },
+  bubbleMine: { alignSelf: 'flex-end', backgroundColor: COLORS.kids.glassButtonBg, borderWidth: 1, borderColor: 'rgba(255,255,255,0.5)' },
+  bubbleOther: { alignSelf: 'flex-start', backgroundColor: 'rgba(255,255,255,0.88)', shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 4, shadowOffset: { width: 0, height: 1 }, elevation: 1 },
   name: { fontSize: 12, color: COLORS.kids.primary, fontWeight: '800' },
-  content: { color: '#1e1b4b', marginTop: 4, lineHeight: 20, fontFamily: 'Nunito_500Medium' },
+  content: { color: '#1E293B', marginTop: 4, lineHeight: 20, fontFamily: 'Nunito_500Medium' },
+  contentMine: { color: COLORS.kids.textOnGradient },
   time: { fontSize: 10, color: 'rgba(30, 27, 75, 0.4)', marginTop: 6 },
-  empty: { textAlign: 'center', color: 'rgba(30, 27, 75, 0.5)', marginTop: SPACING[6] },
+  timeMine: { color: 'rgba(255,255,255,0.75)' },
+  empty: { textAlign: 'center', color: COLORS.kids.textOnGradientMuted, marginTop: SPACING[6] },
   inputRow: {
     flexDirection: 'row',
     alignItems: 'flex-end',
     padding: SPACING[2],
     gap: 8,
-    backgroundColor: '#fff',
+    backgroundColor: 'rgba(255,255,255,0.82)',
     borderTopWidth: 1,
-    borderColor: 'rgba(0,0,0,0.06)',
+    borderColor: 'rgba(255,255,255,0.3)',
   },
   input: {
     flex: 1,
     minHeight: 44,
     maxHeight: 120,
-    color: '#1e1b4b',
+    color: '#1E293B',
     backgroundColor: 'rgba(0,0,0,0.04)',
     borderRadius: 12,
     paddingHorizontal: 12,
     paddingVertical: 10,
   },
-  send: { backgroundColor: COLORS.kids.primary, paddingHorizontal: 16, paddingVertical: 12, borderRadius: 12 },
+  send: {
+    backgroundColor: COLORS.kids.glassButtonBg,
+    borderWidth: 1.5,
+    borderColor: COLORS.kids.glassButtonBorder,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 12,
+  },
   sendOff: { opacity: 0.4 },
   sendText: { color: '#fff', fontWeight: '800' },
 });

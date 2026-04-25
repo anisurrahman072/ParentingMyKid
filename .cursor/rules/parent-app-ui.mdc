@@ -1,0 +1,41 @@
+---
+description: Parent app visual language — light green-pink gradient, brown text, blue CTA buttons
+globs: apps/mobile/app/(parent)/**/*,apps/mobile/src/components/parent/**/*,apps/mobile/src/constants/colors.ts,apps/mobile/src/store/theme.store.ts
+alwaysApply: false
+---
+
+# Parent App Design System
+
+## Screen background rule (CRITICAL)
+
+- NEVER set an opaque `backgroundColor` on the outermost `SafeAreaView` or `View` for a parent screen.
+- Always use `backgroundColor: 'transparent'` (or omit it) on the screen root.
+- The shell gradient is applied by `(parent)/_layout.tsx` via `LinearGradient` at `StyleSheet.absoluteFill` using `GRADIENT_PRESETS` from `theme.store.ts` (light mint / blush / peach variants).
+- Inner cards use `backgroundColor: COLORS.parent.surface` = `rgba(255,255,255,0.72)`.
+
+## Text colors
+
+- Primary headings / screen titles: `COLORS.parent.textPrimary` = `#5C3D2E`
+- Subtitles / labels: `COLORS.parent.textSecondary` = `#8B6355`
+- Meta / hints / muted: `COLORS.parent.textMuted` = `#B89580`
+- On blue CTA buttons: `#FFFFFF`
+- Shorter alias: `COLORS.parent.text` → same as `textPrimary` (brown on light)
+
+## Primary action buttons
+
+- Main CTAs: prefer `ParentPrimaryButton` from `src/components/parent/ui/ParentPrimaryButton.tsx` using `COLORS.parent.gradientCtaBlue`.
+- Secondary outline: `borderColor: COLORS.parent.primary` + `color: COLORS.parent.primary`, transparent fill.
+
+## Cards / surfaces
+
+- `backgroundColor: COLORS.parent.surface` + `borderRadius: 16` + `borderWidth: 1` + `borderColor: COLORS.parent.surfaceBorder`.
+- Avoid legacy dark hex fills; `card` / `surface` / `surfaceDark` map to translucent white in `colors.ts`.
+
+## Tab bar (parent layout)
+
+- `COLORS.parent.tabBarBg`, `tabBarBorder`, `tabBarActive` (blue), `tabBarInactive` (muted brown).
+
+## Do NOT
+
+- Do not use solid `#0F0F1A` as the outer screen background in `(parent)`.
+- Do not use indigo `#6366F1` as the primary CTA color — `primary` is now blue `#3B82F6` / `gradientCtaBlue`.

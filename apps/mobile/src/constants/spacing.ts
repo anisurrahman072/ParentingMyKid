@@ -59,7 +59,7 @@ export const Shadow = {
     elevation: 4,
   },
   lg: {
-    shadowColor: '#6366F1',
+    shadowColor: '#3B82F6',
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.2,
     shadowRadius: 16,
@@ -67,7 +67,7 @@ export const Shadow = {
   },
   // Colored shadow for premium cards
   primary: {
-    shadowColor: '#6366F1',
+    shadowColor: '#3B82F6',
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.25,
     shadowRadius: 12,

@@ -8,6 +8,7 @@ import React from 'react';
 import {
   View,
   Text,
+  Image,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
@@ -22,6 +23,7 @@ import { useAuthStore } from '../../../src/store/auth.store';
 import { deviceSessionService, CHILD_ID_KEY } from '../../../src/store/deviceSession.store';
 import { COLORS } from '../../../src/constants/colors';
 import { SPACING } from '../../../src/constants/spacing';
+import { LOGO_PNG, APP_DISPLAY_NAME } from '../../../src/constants/branding';
 import { XpBar } from '../../../src/components/kids/XpBar';
 import { StreakBadge } from '../../../src/components/kids/StreakBadge';
 
@@ -58,8 +60,12 @@ export default function ChildProfileScreen() {
   return (
     <SafeAreaView style={styles.screen} edges={['top']}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+        <View style={styles.brandStrip}>
+          <Image source={LOGO_PNG} style={styles.brandStripLogo} resizeMode="cover" />
+          <Text style={styles.brandStripName}>{APP_DISPLAY_NAME}</Text>
+        </View>
         {/* Header banner */}
-        <LinearGradient colors={['#4F46E5', '#7C3AED', '#A855F7']} style={styles.header}>
+        <LinearGradient colors={[...COLORS.kids.gradientApp]} style={styles.header}>
           <Animated.View entering={FadeInUp.springify()} style={styles.headerContent}>
             <View style={styles.avatarRing}>
               <Text style={styles.avatarEmoji}>{user?.avatar ?? '🐼'}</Text>
@@ -149,8 +155,22 @@ export default function ChildProfileScreen() {
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: '#F8F4FF' },
+  screen: { flex: 1, backgroundColor: 'transparent' },
   scrollContent: { paddingBottom: SPACING[10] },
+  brandStrip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: SPACING[3],
+    paddingVertical: SPACING[3],
+    paddingHorizontal: SPACING[4],
+  },
+  brandStripLogo: { width: 40, height: 40, borderRadius: 10 },
+  brandStripName: {
+    fontFamily: 'Nunito_800ExtraBold',
+    fontSize: 18,
+    color: COLORS.kids.textOnGradient,
+  },
   header: {
     paddingTop: SPACING[4],
     paddingBottom: SPACING[8],
@@ -180,12 +200,12 @@ const styles = StyleSheet.create({
   },
   statsBar: {
     flexDirection: 'row',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: 'rgba(255,255,255,0.88)',
     marginHorizontal: SPACING[5],
     marginTop: -SPACING[5],
     borderRadius: 20,
     paddingVertical: SPACING[4],
-    shadowColor: '#7C3AED',
+    shadowColor: '#FF6B6B',
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.15,
     shadowRadius: 12,
@@ -214,7 +234,7 @@ const styles = StyleSheet.create({
     marginTop: SPACING[4],
   },
   card: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: 'rgba(255,255,255,0.88)',
     borderRadius: 20,
     padding: SPACING[5],
     gap: SPACING[3],
@@ -231,7 +251,7 @@ const styles = StyleSheet.create({
     color: '#333',
   },
   streakCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: 'rgba(255,255,255,0.88)',
     borderRadius: 20,
     padding: SPACING[5],
     alignItems: 'center',
@@ -263,12 +283,12 @@ const styles = StyleSheet.create({
     borderColor: 'transparent',
   },
   avatarOptionSelected: {
-    borderColor: '#7C3AED',
-    backgroundColor: 'rgba(124,58,237,0.1)',
+    borderColor: COLORS.kids.primary,
+    backgroundColor: 'rgba(255,255,255,0.35)',
   },
   avatarOptionEmoji: { fontSize: 30 },
   settingsCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: 'rgba(255,255,255,0.88)',
     borderRadius: 20,
     overflow: 'hidden',
     shadowColor: '#000',

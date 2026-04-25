@@ -32,9 +32,9 @@ export function DeviceContextBanner() {
 
 const styles = StyleSheet.create({
   wrap: {
-    backgroundColor: 'rgba(99, 102, 241, 0.2)',
+    backgroundColor: 'rgba(59, 130, 246, 0.12)',
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(99, 102, 241, 0.35)',
+    borderBottomColor: 'rgba(59, 130, 246, 0.28)',
     paddingVertical: SPACING[2],
     paddingHorizontal: SPACING[4],
   },

@@ -415,12 +415,12 @@ function AllCompleteCelebration({ completedCount }: { completedCount: number }) 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.kids.backgroundWarm,
+    backgroundColor: 'transparent',
   },
   loadingText: {
     fontFamily: Typography.fonts.bold,
     fontSize: Typography.kids.heading,
-    color: Colors.kids.textPrimary,
+    color: Colors.kids.textOnGradient,
   },
   pauseBackdrop: {
     ...StyleSheet.absoluteFillObject,
@@ -447,7 +447,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.screenPadding,
     paddingTop: 60,
     paddingBottom: Spacing.md,
-    backgroundColor: Colors.white,
+    backgroundColor: 'rgba(255,255,255,0.3)',
     ...Shadow.sm,
   },
   progressHeader: {
@@ -484,7 +484,7 @@ const styles = StyleSheet.create({
   mascotSpeech: {
     fontFamily: Typography.fonts.semiBold,
     fontSize: Typography.kids.body,
-    color: Colors.kids.textPrimary,
+    color: Colors.kids.textOnGradient,
     marginTop: Spacing.sm,
     textAlign: 'center',
   },
@@ -578,7 +578,9 @@ const styles = StyleSheet.create({
   // THE MOST IMPORTANT BUTTON IN THE APP
   // Big, colorful, satisfying — minimum 64dp height per design rules
   checkButton: {
-    backgroundColor: Colors.white,
+    backgroundColor: Colors.kids.glassButtonBg,
+    borderWidth: 1.5,
+    borderColor: Colors.kids.glassButtonBorder,
     borderRadius: Spacing.kidsBigButtonRadius,
     height: Spacing.kidsBigButtonHeight,
     justifyContent: 'center',
@@ -588,7 +590,7 @@ const styles = StyleSheet.create({
   checkButtonText: {
     fontFamily: Typography.fonts.black,
     fontSize: Typography.kids.missionTitle,
-    color: Colors.kids.textPrimary,
+    color: Colors.kids.glassButtonText,
     letterSpacing: 1,
   },
   photoButton: {
@@ -615,11 +617,11 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: '#CBD5E1',
+    backgroundColor: 'rgba(255,255,255,0.4)',
   },
   pageIndicatorActive: {
     width: 24,
-    backgroundColor: Colors.kids.textPrimary,
+    backgroundColor: Colors.kids.textOnGradient,
   },
   pageIndicatorComplete: {
     backgroundColor: Colors.kids.physical,
@@ -633,14 +635,14 @@ const styles = StyleSheet.create({
   moodTitle: {
     fontFamily: Typography.fonts.black,
     fontSize: Typography.kids.headingLarge,
-    color: Colors.kids.textPrimary,
+    color: Colors.kids.textOnGradient,
     textAlign: 'center',
     marginBottom: Spacing.sm,
   },
   moodQuestion: {
     fontFamily: Typography.fonts.semiBold,
     fontSize: Typography.kids.missionTitle,
-    color: Colors.kids.textSecondary,
+    color: Colors.kids.textOnGradientMuted,
     textAlign: 'center',
     marginBottom: Spacing.xxxl,
   },
@@ -671,14 +673,14 @@ const styles = StyleSheet.create({
   skipMoodText: {
     fontFamily: Typography.fonts.regular,
     fontSize: Typography.kids.body,
-    color: Colors.kids.textSecondary,
+    color: Colors.kids.textOnGradientMuted,
     textDecorationLine: 'underline',
   },
   // Celebration
   celebrationContainer: {
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#FFF9F0',
+    backgroundColor: 'transparent',
   },
   celebrationContent: {
     alignItems: 'center',
@@ -688,26 +690,26 @@ const styles = StyleSheet.create({
   celebrationTitle: {
     fontFamily: Typography.fonts.black,
     fontSize: Typography.kids.displayLarge,
-    color: Colors.kids.textPrimary,
+    color: Colors.kids.textOnGradient,
     marginTop: Spacing.lg,
   },
   celebrationSubtitle: {
     fontFamily: Typography.fonts.bold,
     fontSize: Typography.kids.missionTitle,
-    color: Colors.kids.textSecondary,
+    color: Colors.kids.textOnGradientMuted,
     textAlign: 'center',
     marginTop: Spacing.md,
   },
   celebrationStats: {
     fontFamily: Typography.fonts.extraBold,
     fontSize: Typography.kids.heading,
-    color: Colors.kids.coin,
+    color: '#FEF3C7',
     marginTop: Spacing.xl,
   },
   celebrationPrompt: {
     fontFamily: Typography.fonts.semiBold,
     fontSize: Typography.kids.body,
-    color: Colors.kids.textSecondary,
+    color: Colors.kids.textOnGradientMuted,
     marginTop: Spacing.md,
     textAlign: 'center',
   },

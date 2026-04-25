@@ -57,7 +57,7 @@ const PLANS: PlanConfig[] = [
     period: '/month',
     children: 1,
     recommended: false,
-    color: '#4F46E5',
+    color: '#2563EB',
     features: [
       '1 child profile',
       'Daily missions & habits',
@@ -92,7 +92,7 @@ const PLANS: PlanConfig[] = [
     period: '/month',
     children: 5,
     recommended: false,
-    color: '#7C3AED',
+    color: '#0EA5E9',
     features: [
       'Everything in Pro',
       '5 children profiles',
@@ -151,7 +151,7 @@ export default function PaywallScreen() {
     <SafeAreaView style={styles.screen}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
         {/* Header */}
-        <LinearGradient colors={['#0F0A1E', '#1A1035']} style={styles.header}>
+        <LinearGradient colors={[...COLORS.parent.gradientCtaBlue3]} style={styles.header}>
           <TouchableOpacity style={styles.closeButton} onPress={() => router.back()}>
             <Text style={styles.closeText}>✕</Text>
           </TouchableOpacity>
@@ -238,7 +238,11 @@ export default function PaywallScreen() {
         {/* CTA */}
         <View style={styles.ctaContainer}>
           <TouchableOpacity
-            style={[styles.ctaButton, { backgroundColor: selected.color }, loading && styles.ctaDisabled]}
+            style={[
+              styles.ctaButton,
+              { backgroundColor: COLORS.parent.primary },
+              loading && styles.ctaDisabled,
+            ]}
             onPress={handlePurchase}
             disabled={loading}
           >

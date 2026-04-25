@@ -51,15 +51,15 @@ export default function ParentLayout() {
       screenOptions={{
         headerShown: false,
         tabBarStyle: {
-          backgroundColor: 'rgba(15, 15, 26, 0.85)',
-          borderTopColor: 'rgba(255,255,255,0.1)',
+          backgroundColor: COLORS.parent.tabBarBg,
+          borderTopColor: COLORS.parent.tabBarBorder,
           borderTopWidth: 1,
           paddingBottom: Platform.OS === 'ios' ? 24 : 8,
           paddingTop: 8,
           height: Platform.OS === 'ios' ? 88 : 64,
         },
-        tabBarActiveTintColor: COLORS.parent.primary,
-        tabBarInactiveTintColor: COLORS.parent.textMuted,
+        tabBarActiveTintColor: COLORS.parent.tabBarActive,
+        tabBarInactiveTintColor: COLORS.parent.tabBarInactive,
         tabBarLabelStyle: {
           fontSize: 11,
           fontFamily: 'Inter',
@@ -117,6 +117,6 @@ export default function ParentLayout() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#0F0F1A' },
+  root: { flex: 1, backgroundColor: '#C8F5E1' },
   stack: { flex: 1 },
 });

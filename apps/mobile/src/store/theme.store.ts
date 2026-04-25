@@ -3,15 +3,32 @@ import * as SecureStore from 'expo-secure-store';
 
 const THEME_KEY = 'pmk_theme';
 
-export type GradientPreset = 'default' | 'midnight' | 'sunset' | 'ocean' | 'forest';
+/** Light green–pink family only (replaces old dark “Nebula” presets) */
+export type GradientPreset = 'mint' | 'blossom' | 'peach' | 'sage';
+
+const LEGACY_DARK_PRESETS = [
+  'default',
+  'midnight',
+  'sunset',
+  'ocean',
+  'forest',
+] as const;
+
+const VALID_PRESETS: readonly GradientPreset[] = ['mint', 'blossom', 'peach', 'sage'];
 
 export const GRADIENT_PRESETS: Record<GradientPreset, [string, string, string]> = {
-  default: ['#0F0F1A', '#1A1035', '#0F0A1E'],
-  midnight: ['#0D0D0D', '#1a1a2e', '#16213e'],
-  sunset: ['#1a0a2e', '#3d1147', '#6b1a3a'],
-  ocean: ['#0a1628', '#0d2e4e', '#0a4a5e'],
-  forest: ['#0a1a0d', '#0f2e14', '#1a4a1f'],
+  mint: ['#C8F5E1', '#D8EFD8', '#FADADD'],
+  blossom: ['#FAD0E8', '#F9C6D0', '#FDE8CB'],
+  peach: ['#FDE8CB', '#FADADD', '#FAD0E8'],
+  sage: ['#D4EDDA', '#C8F5E1', '#E8F5E9'],
 };
+
+function migratePreset(p: string | undefined): GradientPreset {
+  if (!p) return 'mint';
+  if (LEGACY_DARK_PRESETS.includes(p as (typeof LEGACY_DARK_PRESETS)[number])) return 'mint';
+  if (VALID_PRESETS.includes(p as GradientPreset)) return p as GradientPreset;
+  return 'mint';
+}
 
 interface ThemeState {
   gradientPreset: GradientPreset;
@@ -23,7 +40,7 @@ interface ThemeState {
 }
 
 export const useThemeStore = create<ThemeState>((set) => ({
-  gradientPreset: 'default',
+  gradientPreset: 'mint',
   customBackgroundUri: null,
   hydrated: false,
   setGradientPreset: (gradientPreset) => {
@@ -34,19 +51,22 @@ export const useThemeStore = create<ThemeState>((set) => ({
     );
   },
   setCustomBackground: (customBackgroundUri) => {
-    set({ customBackgroundUri, gradientPreset: 'default' });
+    set({ customBackgroundUri, gradientPreset: 'mint' });
     void SecureStore.setItemAsync(
       THEME_KEY,
-      JSON.stringify({ gradientPreset: 'default', customBackgroundUri }),
+      JSON.stringify({ gradientPreset: 'mint', customBackgroundUri }),
     );
   },
   load: async () => {
     try {
       const raw = await SecureStore.getItemAsync(THEME_KEY);
       if (raw) {
-        const p = JSON.parse(raw) as { gradientPreset?: GradientPreset; customBackgroundUri?: string | null };
+        const p = JSON.parse(raw) as {
+          gradientPreset?: string;
+          customBackgroundUri?: string | null;
+        };
         set({
-          gradientPreset: p.gradientPreset ?? 'default',
+          gradientPreset: migratePreset(p.gradientPreset),
           customBackgroundUri: p.customBackgroundUri ?? null,
         });
       }

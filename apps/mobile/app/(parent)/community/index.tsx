@@ -164,7 +164,7 @@ export default function CommunityScreen() {
                         backgroundColor:
                           cs.severity === 'Urgent' ? 'rgba(220,38,38,0.15)' :
                           cs.severity === 'Critical' ? 'rgba(234,88,12,0.15)' :
-                          'rgba(99,102,241,0.15)',
+                          'rgba(59,130,246,0.12)',
                       },
                     ]}>
                       <Text style={[
@@ -337,7 +337,7 @@ const styles = StyleSheet.create({
   tipPreview: { fontSize: 13, fontFamily: 'Inter', color: COLORS.parent.textMuted, lineHeight: 19 },
   tipReadTime: { fontSize: 11, fontFamily: 'Inter', color: COLORS.parent.textMuted },
   savedIcon: { fontSize: 20 },
-  crisisInfo: { backgroundColor: 'rgba(99,102,241,0.12)', borderRadius: 14, padding: SPACING[4] },
+  crisisInfo: { backgroundColor: 'rgba(59,130,246,0.1)', borderRadius: 14, padding: SPACING[4] },
   crisisInfoText: { fontSize: 14, fontFamily: 'Inter', color: 'rgba(255,255,255,0.7)', lineHeight: 21 },
   crisisCard: { backgroundColor: COLORS.parent.card, borderRadius: 16, padding: SPACING[5], gap: SPACING[3], borderWidth: 1, borderColor: 'rgba(255,255,255,0.07)' },
   crisisHeader: { flexDirection: 'row', alignItems: 'center', gap: SPACING[3] },
@@ -349,7 +349,7 @@ const styles = StyleSheet.create({
   crisisScript: { fontSize: 14, fontFamily: 'Inter', color: COLORS.parent.textSecondary, lineHeight: 22, fontStyle: 'italic' },
   moodRow: { flexDirection: 'row', justifyContent: 'space-between' },
   moodButton: { alignItems: 'center', gap: SPACING[1], padding: SPACING[2], borderRadius: 12, borderWidth: 2, borderColor: 'transparent' },
-  moodButtonSelected: { borderColor: COLORS.parent.primary, backgroundColor: 'rgba(99,102,241,0.1)' },
+  moodButtonSelected: { borderColor: COLORS.parent.primary, backgroundColor: 'rgba(59,130,246,0.1)' },
   moodEmoji: { fontSize: 32 },
   moodLabel: { fontSize: 10, fontFamily: 'Inter', color: COLORS.parent.textMuted, textAlign: 'center' },
   saveMoodButton: { backgroundColor: COLORS.parent.primary, borderRadius: 12, paddingVertical: SPACING[3], alignItems: 'center' },

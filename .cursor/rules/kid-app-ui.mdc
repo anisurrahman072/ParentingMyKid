@@ -1,0 +1,34 @@
+---
+description: Kids app visual language — coral-orange gradient, white text, glass circular controls
+globs: apps/mobile/app/(child)/**/*,apps/mobile/app/auth/child-pin.tsx,apps/mobile/app/auth/link-device.tsx,apps/mobile/src/components/kids/**/*
+alwaysApply: false
+---
+
+# Kids App Design System
+
+## Reference
+
+Approved reference: `child-pin` PIN screen — coral / salmon through golden orange, white type, glass circular keypad.
+
+## Screen background (CRITICAL)
+
+- The root `(child)/_layout.tsx` applies `LinearGradient` with `COLORS.kids.gradientApp` as `StyleSheet.absoluteFill`.
+- Each screen's outer `SafeAreaView` / `View` must use `backgroundColor: 'transparent'` so the shell gradient shows.
+- For routes outside `(child)` (e.g. `link-device`, `child-pin`), wrap with `KidsGradientScreen` or repeat the same gradient pattern.
+
+## Text on gradient
+
+- `COLORS.kids.textOnGradient` and `textOnGradientMuted` for hero copy on the gradient; avoid `#1E293B` / `#1e1b4b` for text sitting directly on the gradient background.
+
+## Glass controls
+
+- `COLORS.kids.glassButtonBg`, `glassButtonBorder`, `glassButtonText`; use `KidsGlassButton` where a circular / pill key matches the PIN keypad.
+
+## Tab bar
+
+- `tabBarActive` white, `tabBarInactive` semi-transparent white; `tabBarBg` light coral tint.
+
+## Do NOT
+
+- Do not use full-screen cream / violet tints (`#F7F5FF`, `#F8F4FF`, `#FFF8F0`) as the **root** screen fill — they block the shared gradient. Use `transparent` on the root; cards may use `rgba(255,255,255,0.88)`.
+- Do not use parent indigo (`#6366F1`) on kid flows.

@@ -133,12 +133,12 @@ export default function ChildFriendsScreen() {
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: '#F7F5FF' },
+  screen: { flex: 1, backgroundColor: 'transparent' },
   scroll: { padding: SPACING[4], paddingBottom: 100 },
-  title: { fontSize: 26, fontWeight: '900', color: '#1e1b4b', fontFamily: 'Nunito_900Black' },
-  sub: { color: 'rgba(30, 27, 75, 0.55)', marginTop: 6, marginBottom: SPACING[4], lineHeight: 20 },
+  title: { fontSize: 26, fontWeight: '900', color: COLORS.kids.textOnGradient, fontFamily: 'Nunito_900Black' },
+  sub: { color: COLORS.kids.textOnGradientMuted, marginTop: 6, marginBottom: SPACING[4], lineHeight: 20 },
   card: {
-    backgroundColor: '#fff',
+    backgroundColor: 'rgba(255,255,255,0.88)',
     borderRadius: 16,
     padding: SPACING[4],
     marginBottom: SPACING[3],
@@ -159,22 +159,24 @@ const styles = StyleSheet.create({
     marginBottom: SPACING[2],
   },
   primaryBtn: {
-    backgroundColor: COLORS.kids.primary,
+    backgroundColor: COLORS.kids.glassButtonBg,
+    borderWidth: 1.5,
+    borderColor: COLORS.kids.glassButtonBorder,
     paddingVertical: 14,
     borderRadius: 14,
     alignItems: 'center',
   },
   btnOff: { opacity: 0.45 },
   primaryBtnText: { color: '#fff', fontWeight: '800', fontSize: 16 },
-  section: { fontSize: 18, fontWeight: '900', color: '#1e1b4b', marginTop: SPACING[2], marginBottom: SPACING[2] },
+  section: { fontSize: 18, fontWeight: '900', color: COLORS.kids.textOnGradient, marginTop: SPACING[2], marginBottom: SPACING[2] },
   friendRow: {
-    backgroundColor: '#fff',
+    backgroundColor: 'rgba(255,255,255,0.88)',
     borderRadius: 14,
     padding: SPACING[3],
     marginBottom: SPACING[2],
   },
   friendName: { fontSize: 17, fontWeight: '800', color: '#1e1b4b' },
   friendSince: { fontSize: 12, color: 'rgba(30, 27, 75, 0.45)', marginTop: 4 },
-  empty: { textAlign: 'center', marginTop: 40, color: 'rgba(30, 27, 75, 0.5)' },
-  emptySmall: { color: 'rgba(30, 27, 75, 0.45)' },
+  empty: { textAlign: 'center', marginTop: 40, color: COLORS.kids.textOnGradientMuted },
+  emptySmall: { color: COLORS.kids.textOnGradientMuted },
 });

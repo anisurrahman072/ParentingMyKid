@@ -78,7 +78,7 @@ export default function LinkDeviceScreen() {
   }
 
   return (
-    <LinearGradient colors={['#1e1b4b', '#312e81', '#1e1b4b']} style={styles.gradient}>
+    <LinearGradient colors={[...COLORS.kids.gradientApp]} style={styles.gradient}>
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -137,7 +137,7 @@ const styles = StyleSheet.create({
   sub: { color: 'rgba(255,255,255,0.75)', fontSize: 14, lineHeight: 20, marginBottom: SPACING[4] },
   label: { color: 'rgba(255,255,255,0.85)', fontSize: 13, fontWeight: '600', marginTop: SPACING[2] },
   input: {
-    backgroundColor: 'rgba(255,255,255,0.1)',
+    backgroundColor: 'rgba(255,255,255,0.25)',
     borderRadius: 12,
     padding: 14,
     color: '#fff',

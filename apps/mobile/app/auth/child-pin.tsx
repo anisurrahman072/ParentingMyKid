@@ -109,7 +109,7 @@ export default function ChildPinScreen() {
   }));
 
   return (
-    <LinearGradient colors={['#FF6B6B', '#FF8E53', '#FFA726']} style={styles.gradient}>
+    <LinearGradient colors={[...COLORS.kids.gradientApp]} style={styles.gradient}>
       <View style={styles.container}>
         <Animated.View entering={FadeInUp.delay(100).springify()} style={styles.header}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
@@ -235,11 +235,11 @@ const styles = StyleSheet.create({
     width: 76,
     height: 76,
     borderRadius: 38,
-    backgroundColor: 'rgba(255,255,255,0.25)',
+    backgroundColor: COLORS.kids.glassButtonBg,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: 'rgba(255,255,255,0.35)',
+    borderWidth: 1.5,
+    borderColor: COLORS.kids.glassButtonBorder,
   },
   padButtonInvisible: {
     backgroundColor: 'transparent',

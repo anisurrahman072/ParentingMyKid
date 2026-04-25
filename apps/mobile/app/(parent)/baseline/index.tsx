@@ -341,7 +341,7 @@ export default function BaselineAssessmentScreen() {
         <ScrollView contentContainerStyle={styles.reportScroll} showsVerticalScrollIndicator={false}>
           <Animated.View entering={FadeInUp.springify()} style={styles.reportHeader}>
             <LinearGradient
-              colors={['#0F0A1E', '#1A1035']}
+              colors={[...COLORS.parent.gradientCtaBlue3]}
               style={styles.reportHeaderGradient}
             >
               <Text style={styles.reportEmoji}>📊</Text>
@@ -927,11 +927,11 @@ const styles = StyleSheet.create({
     lineHeight: 22,
   },
   noteCard: {
-    backgroundColor: 'rgba(99,102,241,0.12)',
+    backgroundColor: 'rgba(59,130,246,0.12)',
     borderRadius: 14,
     padding: SPACING[5],
     borderWidth: 1,
-    borderColor: 'rgba(99,102,241,0.25)',
+    borderColor: 'rgba(59,130,246,0.25)',
   },
   noteText: {
     fontSize: 15,

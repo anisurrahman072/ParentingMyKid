@@ -8,11 +8,10 @@ import { SPACING } from '../../../src/constants/spacing';
 import { useThemeStore, GRADIENT_PRESETS, GradientPreset } from '../../../src/store/theme.store';
 
 const LABELS: Record<GradientPreset, string> = {
-  default: 'Nebula',
-  midnight: 'Midnight',
-  sunset: 'Sunset',
-  ocean: 'Ocean',
-  forest: 'Forest',
+  mint: 'Mint',
+  blossom: 'Blossom',
+  peach: 'Peach',
+  sage: 'Sage',
 };
 
 export default function AppearanceScreen() {
@@ -77,11 +76,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
+    borderColor: 'rgba(92, 61, 46, 0.12)',
     overflow: 'hidden',
     minHeight: 64,
   },
-  cardOn: { borderColor: 'rgba(99,102,241,0.6)' },
+  cardOn: { borderColor: 'rgba(59,130,246,0.55)' },
   swash: { width: 80, minHeight: 64 },
   label: {
     flex: 1,

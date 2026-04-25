@@ -641,7 +641,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   addChannelButton: {
-    backgroundColor: 'rgba(99,102,241,0.3)',
+    backgroundColor: 'rgba(59,130,246,0.22)',
     borderRadius: 12,
     paddingVertical: SPACING[3],
     alignItems: 'center',

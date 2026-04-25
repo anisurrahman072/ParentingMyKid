@@ -1,107 +1,128 @@
 /**
  * @module colors.ts
  * @description Design system color tokens for the ParentingMyKid app.
- *              Three distinct palettes: Parent UI, Kids UI, Islamic Module.
+ *              Palettes: Parent UI (light premium), Kids UI (coral gradient shell), Islamic Module.
  *
  * @design-rule CRITICAL RULES (never violate):
  *   1. All text must have minimum 4.5:1 contrast ratio (WCAG AA)
- *   2. Never white text on light background
- *   3. Never dark text on dark background
- *   4. Kids screen backgrounds are always bright/warm — never dark or scary
- *   5. Parent UI uses deep dark/indigo gradients — premium feel
+ *   2. Parent: brown text on light mint–blush gradient + glass cards
+ *   3. Kids: white text on coral–orange gradient; cards may be light/opaque on top
+ *   4. Never use pure black on warm backgrounds for body copy — use brown family (parent)
  */
 
 export const Colors = {
-  // ─── Parent UI Palette ─────────────────────────────────────────────────
+  // ─── Parent UI Palette (light premium — mint/blush shell, blue CTAs) ───
   parent: {
-    // Primary gradient: Indigo → Violet (premium, trustworthy)
-    primary: '#6366F1',
-    primaryLight: '#818CF8',
-    primaryDark: '#4F46E5',
-    secondary: '#8B5CF6', // Violet
+    // Shell reference (2-stop; tab layout also uses theme.store 3-stop presets)
+    gradientApp: ['#C8F5E1', '#FADADD'] as const,
+    gradientCtaBlue: ['#3B82F6', '#0EA5E9'] as const,
+    gradientCtaBlue3: ['#2563EB', '#3B82F6', '#0EA5E9'] as const,
 
-    // Accent colors
-    gold: '#F59E0B',      // Achievement gold — rewards, badges
-    success: '#10B981',   // Green — mission complete, healthy, safe
-    warning: '#F97316',   // Orange — alerts, streaks
-    danger: '#EF4444',    // Red — critical alerts, SOS, danger
+    // Primary / blue (replaces legacy indigo #6366F1)
+    primary: '#3B82F6',
+    primaryLight: '#60A5FA',
+    primaryDark: '#2563EB',
+    secondary: '#8B5CF6',
 
-    // Backgrounds (dark mode default for parent)
-    backgroundDark: '#0F0F1A',
-    surfaceDark: '#1E1E2E',
-    surfaceDark2: '#252535',
-    cardDark: '#2A2A3E',
+    // Accent / semantic
+    gold: '#D97706',
+    success: '#059669',
+    warning: '#F59E0B',
+    danger: '#DC2626',
 
-    // Backgrounds (light mode)
-    backgroundLight: '#F8F7FF',
-    surfaceLight: '#FFFFFF',
-    cardLight: '#F1F0FF',
+    // Text — warm brown family (on light gradient + glass cards)
+    textPrimary: '#5C3D2E',
+    textSecondary: '#8B6355',
+    textMuted: '#B89580',
+    text: '#5C3D2E',
+    textPrimaryLight: '#5C3D2E',
+    textSecondaryLight: '#8B6355',
 
-    // Text
-    textPrimary: '#F1F5F9',     // On dark backgrounds
-    textSecondary: '#94A3B8',   // Subtle text on dark
-    textPrimaryLight: '#1E1E2E', // On light backgrounds
-    textSecondaryLight: '#64748B',
+    // Surfaces
+    surface: 'rgba(255,255,255,0.72)',
+    surfaceSolid: '#FFFFFF',
+    surfaceBorder: 'rgba(255,255,255,0.55)',
+    card: 'rgba(255,255,255,0.72)',
 
-    // Semantic aliases (screens use these shorter names)
-    background: '#0F0F1A',
-    surface: '#1E1E2E',
-    text: '#F1F5F9',
-    textMuted: '#94A3B8',
-    card: '#2A2A3E',
+    // Tab bar (parent layout)
+    tabBarBg: 'rgba(255,255,255,0.82)',
+    tabBarBorder: 'rgba(200,245,225,0.6)',
+    tabBarActive: '#3B82F6',
+    tabBarInactive: '#B89580',
 
-    // Gradient arrays for LinearGradient
-    gradientPrimary: ['#6366F1', '#8B5CF6'],
-    gradientGold: ['#F59E0B', '#EF4444'],
-    gradientSuccess: ['#10B981', '#059669'],
-    gradientCard: ['#1E1E2E', '#252535'],
-    gradientHero: ['#0F0F1A', '#1E1E3F'],
+    // Legacy aliases — remapped for light theme (avoid breaking imports)
+    background: 'transparent',
+    backgroundDark: '#F9FBF9',
+    backgroundLight: '#F9FBF9',
+    surfaceDark: 'rgba(255,255,255,0.72)',
+    surfaceDark2: 'rgba(255,255,255,0.55)',
+    cardDark: 'rgba(255,255,255,0.72)',
+
+    /** Auth display name: deep green → deep pink (SVG wordmark) */
+    wordmarkGreen: '#064E3B',
+    wordmarkPink: '#9F1239',
+
+    // Gradients (non-CTA)
+    gradientPrimary: ['#3B82F6', '#0EA5E9'] as const,
+    gradientGold: ['#D97706', '#F59E0B'] as const,
+    gradientSuccess: ['#059669', '#10B981'] as const,
+    gradientCard: ['rgba(255,255,255,0.72)', 'rgba(255,255,255,0.55)'] as const,
+    gradientHero: ['#C8F5E1', '#FADADD'] as const,
   },
 
-  // ─── Kids UI Palette ──────────────────────────────────────────────────
-  // Always bright, always colorful, always warm — never dark or scary
+  // ─── Kids UI Palette ─────────────────────────────────────────────────
   kids: {
-    // Mission category colors (each category has a distinct color)
-    academic: '#3B82F6',    // Blue — learning, knowledge
-    physical: '#10B981',    // Green — health, energy
-    habit: '#F59E0B',       // Gold — building good habits
-    social: '#EC4899',      // Pink — friendship, kindness
-    islamic: '#0D9488',     // Teal — spiritual growth
-    creative: '#8B5CF6',    // Purple — creativity, expression
-    selfCare: '#F97316',    // Orange — self-love, wellbeing
+    // Shell gradient (approved child PIN screen)
+    gradientApp: ['#FF6B6B', '#FF8E53', '#FFA726'] as const,
+    gradientAppShort: ['#FF6B6B', '#FFA726'] as const,
 
-    // Achievement colors
+    textOnGradient: '#FFFFFF',
+    textOnGradientMuted: 'rgba(255,255,255,0.75)',
+
+    glassButtonBg: 'rgba(255,255,255,0.28)',
+    glassButtonBorder: '#FFFFFF',
+    glassButtonText: '#FFFFFF',
+
+    tabBarBg: 'rgba(255,107,107,0.18)',
+    tabBarBorder: 'rgba(255,255,255,0.3)',
+    tabBarActive: '#FFFFFF',
+    tabBarInactive: 'rgba(255,255,255,0.5)',
+
+    // Mission category colors
+    academic: '#3B82F6',
+    physical: '#10B981',
+    habit: '#F59E0B',
+    social: '#EC4899',
+    islamic: '#0D9488',
+    creative: '#8B5CF6',
+    selfCare: '#F97316',
+
     achievementGold: '#F59E0B',
     achievementSilver: '#94A3B8',
     achievementBronze: '#B45309',
     achievementPlatinum: '#7C3AED',
     achievementRoyal: '#DC2626',
 
-    // Backgrounds (always bright and warm)
-    backgroundWarm: '#FFF9F0',   // Warm cream background
-    backgroundBlue: '#EFF6FF',   // Light blue background
-    backgroundGreen: '#F0FDF4',  // Light green background
-    backgroundPurple: '#FAF5FF', // Light purple background
-    gradientBackground: ['#1A1A3E', '#2D1B69'], // Dark premium gradient for gaming zone
+    backgroundWarm: '#FFF9F0',
+    backgroundBlue: '#EFF6FF',
+    backgroundGreen: '#F0FDF4',
+    backgroundPurple: '#FAF5FF',
+    gradientBackground: ['#FF6B6B', '#FF8E53', '#FFA726'] as const,
 
-    // Big button colors (56dp minimum height)
     buttonBlue: '#3B82F6',
     buttonGreen: '#10B981',
     buttonPurple: '#8B5CF6',
     buttonPink: '#EC4899',
     buttonOrange: '#F97316',
 
-    // XP/Level progress bar
     xpFill: '#F59E0B',
     xpBackground: '#FEF3C7',
 
-    // Text on kids screens (always high contrast)
-    textPrimary: '#1E293B',   // Very dark on light backgrounds
+    textPrimary: '#1E293B',
     textSecondary: '#475569',
     textWhite: '#FFFFFF',
 
-    // Primary UI / buttons (aliases used by KidsButton, tabs, XP bar)
-    primary: '#FF6B35',
+    primary: '#FF8E53',
     secondary: '#10B981',
     success: '#10B981',
     danger: '#EF4444',
@@ -109,25 +130,21 @@ export const Colors = {
     text: '#1E293B',
     textMuted: '#475569',
 
-    // Streak fire
     streakFire: '#EF4444',
-
-    // Coin color
     coin: '#F59E0B',
   },
 
   // ─── Islamic Module Palette ────────────────────────────────────────────
   islamic: {
-    primary: '#0D9488',     // Deep teal
-    secondary: '#D97706',   // Golden
-    dark: '#1E3A5F',        // Night blue
-    light: '#F0FDFA',       // Light teal background
+    primary: '#0D9488',
+    secondary: '#D97706',
+    dark: '#1E3A5F',
+    light: '#F0FDFA',
     gold: '#D97706',
-    green: '#15803D',       // Islamic green
-    gradientHeader: ['#0D9488', '#0F766E'],
+    green: '#15803D',
+    gradientHeader: ['#0D9488', '#0F766E'] as const,
   },
 
-  // ─── SOS / Emergency ──────────────────────────────────────────────────
   sos: {
     button: '#EF4444',
     buttonGlow: '#FCA5A5',
@@ -135,12 +152,10 @@ export const Colors = {
     background: '#FEF2F2',
   },
 
-  // ─── Shared ────────────────────────────────────────────────────────────
   transparent: 'transparent',
   white: '#FFFFFF',
   black: '#000000',
 
-  // Severity colors for alerts
   severity: {
     low: '#10B981',
     medium: '#F59E0B',
@@ -148,11 +163,10 @@ export const Colors = {
     critical: '#EF4444',
   },
 
-  // Wellbeing score colors
   wellbeing: {
-    great: '#10B981',    // 75-100: green
-    okay: '#F59E0B',     // 50-74: amber
-    poor: '#EF4444',     // 0-49: red
+    great: '#10B981',
+    okay: '#F59E0B',
+    poor: '#EF4444',
   },
 } as const;
 

@@ -10,8 +10,8 @@ export default function TutorLayout() {
   return (
     <Stack
       screenOptions={{
-        headerStyle: { backgroundColor: COLORS.parent.surface },
-        headerTintColor: COLORS.parent.text,
+        headerStyle: { backgroundColor: COLORS.parent.surfaceSolid },
+        headerTintColor: COLORS.parent.textPrimary,
         headerTitleStyle: { fontFamily: 'Inter', fontWeight: '600' },
       }}
     >

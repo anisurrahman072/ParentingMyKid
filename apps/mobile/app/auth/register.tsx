@@ -8,6 +8,7 @@ import React, { useState } from 'react';
 import {
   View,
   Text,
+  Image,
   StyleSheet,
   TextInput,
   TouchableOpacity,
@@ -26,6 +27,8 @@ import { apiClient } from '../../src/services/api.client';
 import { API_ENDPOINTS } from '../../src/constants/api';
 import { COLORS } from '../../src/constants/colors';
 import { SPACING } from '../../src/constants/spacing';
+import { AppLogoMark } from '../../src/components/branding/AppLogoMark';
+import { LOGO_PNG, APP_DISPLAY_NAME } from '../../src/constants/branding';
 
 type Step = 'personal' | 'consent' | 'success';
 
@@ -94,9 +97,12 @@ export default function RegisterScreen() {
     return (
       <LinearGradient colors={['#0F0A1E', '#1A1035', '#0F0A1E']} style={styles.gradient}>
         <View style={styles.successContainer}>
-          <Animated.Text entering={FadeInUp.springify()} style={styles.successEmoji}>🎉</Animated.Text>
+          <Animated.View entering={FadeInUp.springify()} style={styles.successLogoWrap}>
+            <Image source={LOGO_PNG} style={styles.successLogo} resizeMode="cover" />
+          </Animated.View>
+          <Animated.Text entering={FadeInUp.delay(80).springify()} style={styles.successEmoji}>🎉</Animated.Text>
           <Animated.Text entering={FadeInDown.delay(200)} style={styles.successTitle}>
-            Welcome to the family!
+            Welcome to {APP_DISPLAY_NAME}!
           </Animated.Text>
           <Animated.Text entering={FadeInDown.delay(350)} style={styles.successSubtitle}>
             Your 14-day free trial has started.{'\n'}Let's build your family profile.
@@ -120,7 +126,9 @@ export default function RegisterScreen() {
             <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
               <Text style={styles.backIcon}>←</Text>
             </TouchableOpacity>
-            <Text style={styles.logo}>ParentingMyKid</Text>
+            <View style={styles.logoBlock}>
+              <AppLogoMark size={80} showWordmark wordmarkColor="light" />
+            </View>
 
             {/* Step indicator */}
             <View style={styles.stepIndicator}>
@@ -297,13 +305,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: SPACING[6],
   },
-  successEmoji: { fontSize: 80 },
+  successLogoWrap: {
+    marginBottom: SPACING[3],
+    padding: 6,
+    borderRadius: 24,
+    backgroundColor: 'rgba(255,255,255,0.12)',
+  },
+  successLogo: { width: 88, height: 88, borderRadius: 20 },
+  successEmoji: { fontSize: 72 },
   successTitle: {
     fontSize: 28,
     fontFamily: 'Inter',
     fontWeight: '700',
     color: '#FFFFFF',
-    marginTop: SPACING[5],
+    marginTop: SPACING[3],
     textAlign: 'center',
   },
   successSubtitle: {
@@ -317,15 +332,7 @@ const styles = StyleSheet.create({
   header: { marginBottom: SPACING[8] },
   backButton: { width: 40, height: 40, justifyContent: 'center', marginBottom: SPACING[4] },
   backIcon: { fontSize: 24, color: 'rgba(255,255,255,0.7)' },
-  logo: {
-    fontSize: 14,
-    color: COLORS.parent.primary,
-    fontFamily: 'Inter',
-    fontWeight: '700',
-    letterSpacing: 1.5,
-    textTransform: 'uppercase',
-    marginBottom: SPACING[4],
-  },
+  logoBlock: { alignItems: 'center', marginBottom: SPACING[3] },
   stepIndicator: {
     flexDirection: 'row',
     alignItems: 'center',

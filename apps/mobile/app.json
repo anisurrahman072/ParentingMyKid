@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "ParentingMyKid",
+    "name": "Parenting My Kid",
     "slug": "parentingmykid",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -10,7 +10,7 @@
     "splash": {
       "image": "./assets/icons/splash.png",
       "resizeMode": "contain",
-      "backgroundColor": "#6366F1"
+      "backgroundColor": "#FCE8F0"
     },
     "ios": {
       "supportsTablet": false,
@@ -32,7 +32,7 @@
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/icons/adaptive-icon.png",
-        "backgroundColor": "#6366F1"
+        "backgroundColor": "#FCE8F0"
       },
       "package": "com.parentingmykid.app",
       "versionCode": 1,
@@ -55,7 +55,7 @@
         "expo-notifications",
         {
           "icon": "./assets/icons/notification-icon.png",
-          "color": "#6366F1",
+          "color": "#059669",
           "sounds": ["./assets/sounds/notification.wav"]
         }
       ],

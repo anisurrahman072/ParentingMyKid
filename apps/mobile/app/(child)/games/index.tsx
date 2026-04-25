@@ -257,7 +257,7 @@ export default function GamesScreen() {
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: '#F8F4FF' },
+  screen: { flex: 1, backgroundColor: 'transparent' },
   header: {
     paddingHorizontal: SPACING[5],
     paddingVertical: SPACING[5],
@@ -289,7 +289,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     backgroundColor: 'rgba(0,0,0,0.06)',
   },
-  tabActive: { backgroundColor: '#7C3AED' },
+  tabActive: { backgroundColor: COLORS.kids.primary },
   tabText: {
     fontSize: 12,
     fontFamily: 'Nunito_400Regular',
