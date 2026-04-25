@@ -194,17 +194,25 @@ return 'https://parentingmykid-server.up.railway.app/api/v1';
 
 ---
 
-## 8. Expo EAS Build — Mobile Production
+## 8. Mobile app — EAS & development builds (not Expo Go)
 
-**Steps:**
+**Default local workflow** for this app is a **[development build](https://docs.expo.dev/develop/development-builds/introduction/)** (`expo-dev-client`): required for full **remote push** (`expo-notifications` on SDK 53+), RevenueCat, and any native add-ons. **Expo Go** is not the target runtime.
 
-1. Install EAS CLI: `npm install -g eas-cli`
-2. Login: `eas login`
-3. Configure: `cd apps/mobile && eas build:configure`
-4. Build for development: `eas build --profile development --platform ios`
-5. Build for production: `eas build --profile production --platform all`
+**Full command reference (EAS, Android, iOS, local `expo run`)** lives in:
 
-**Credentials:** EAS handles code signing automatically
+**[apps/mobile/README.md](apps/mobile/README.md)**
+
+Short version (from `apps/mobile` after `npm install` and `eas login`):
+
+| Step | Command |
+|------|--------|
+| One-time EAS config | `eas build:configure` |
+| **Install a dev client** (cloud) | `npm run build:dev:android` and/or `npm run build:dev:ios` (or `npm run build:dev` for all) — then install the artifact on device/simulator |
+| **Daily Metro** (with dev app installed) | `npm start` (runs `expo start --dev-client`) |
+| **Preview / production** | `npm run build:preview` / `npm run build:production` |
+| **Local Android/iOS** (Xcode / Android Studio) | `npx expo prebuild` then `npm run android` or `npm run ios` — see `apps/mobile/README.md` |
+
+Set a real `expo.extra.eas.projectId` in `apps/mobile/app.json` (`eas init` or Expo dashboard) before relying on EAS or push.
 
 ---
 
@@ -276,11 +284,15 @@ npm run dev            # auto starts → http://localhost:4001
 -------------- MOBILE 👇 --------------
 -------------- MOBILE 👇 --------------
 
-# 5. Start the mobile app (in another terminal)
-cd apps/mobile
-npx expo start
+# 5. Mobile — see **apps/mobile/README.md** (development build + EAS, Android & iOS)
 
-# 6. Scan the QR code with Expo Go (or press i/a for simulator)
+#    First time: build and install a **development** client on device/simulator, then:
+cd apps/mobile
+npm start
+#    (`npm start` = `expo start --dev-client` — use the **development build** app, not Expo Go.)
+
+#    Expo Go: `npx expo start --go` or `npm run start:go` (limited; not used for this app’s
+#    push / native-dependent features)
 ```
 
 ---
