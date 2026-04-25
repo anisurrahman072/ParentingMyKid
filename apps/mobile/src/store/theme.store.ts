@@ -6,21 +6,27 @@ const THEME_KEY = 'pmk_theme';
 /** Light green–pink family only (replaces old dark “Nebula” presets) */
 export type GradientPreset = 'mint' | 'blossom' | 'peach' | 'sage';
 
-const LEGACY_DARK_PRESETS = [
-  'default',
-  'midnight',
-  'sunset',
-  'ocean',
-  'forest',
-] as const;
+const LEGACY_DARK_PRESETS = ['default', 'midnight', 'sunset', 'ocean', 'forest'] as const;
 
 const VALID_PRESETS: readonly GradientPreset[] = ['mint', 'blossom', 'peach', 'sage'];
 
+/** Very soft mint → blush; all stops lightened so the shell never feels “deep”. */
 export const GRADIENT_PRESETS: Record<GradientPreset, [string, string, string]> = {
-  mint: ['#C8F5E1', '#D8EFD8', '#FADADD'],
-  blossom: ['#FAD0E8', '#F9C6D0', '#FDE8CB'],
-  peach: ['#FDE8CB', '#FADADD', '#FAD0E8'],
-  sage: ['#D4EDDA', '#C8F5E1', '#E8F5E9'],
+  mint: ['#E8F4EC', '#EEF0EE', '#F2E8E9'],
+  blossom: ['#F0E3EC', '#F1E1E0', '#F6ECDE'],
+  peach: ['#F4ECDE', '#F0E6E5', '#F0E2EA'],
+  sage: ['#E4F0E8', '#E9F2EC', '#F0F4F0'],
+};
+
+/**
+ * Selected tab “pill” — two-stop only: airy light cyan → light pink (premium, not deep/saturated).
+ * Sheen comes from the white overlay in `ParentTabBarButton`, not extra gradient stops.
+ */
+export const TAB_PILL_GLASS_GRADIENTS: Record<GradientPreset, readonly [string, string]> = {
+  mint: ['rgba(195, 233, 252, 0.88)', 'rgba(250, 215, 232, 0.88)'],
+  blossom: ['rgba(192, 230, 250, 0.88)', 'rgba(250, 218, 235, 0.88)'],
+  peach: ['rgba(200, 235, 250, 0.87)', 'rgba(250, 212, 225, 0.88)'],
+  sage: ['rgba(190, 232, 248, 0.88)', 'rgba(248, 218, 234, 0.87)'],
 };
 
 function migratePreset(p: string | undefined): GradientPreset {

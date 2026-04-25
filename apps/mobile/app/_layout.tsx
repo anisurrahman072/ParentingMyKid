@@ -40,6 +40,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import Constants, { ExecutionEnvironment } from 'expo-constants';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { StyleSheet } from 'react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { useAuthStore } from '../src/store/auth.store';
 import { UserRole } from '@parentingmykid/shared-types';
 import { apiClient } from '../src/services/api.client';
@@ -174,15 +175,22 @@ export default function RootLayout() {
 
   return (
     <GestureHandlerRootView style={styles.root}>
-      <QueryClientProvider client={queryClient}>
-        <StatusBar style="auto" />
-        <Stack screenOptions={{ headerShown: false }}>
-          <Stack.Screen name="auth" />
-          <Stack.Screen name="(parent)" />
-          <Stack.Screen name="(child)" />
-          <Stack.Screen name="(tutor)" />
-        </Stack>
-      </QueryClientProvider>
+      <SafeAreaProvider>
+        <QueryClientProvider client={queryClient}>
+          <StatusBar style="auto" />
+          <Stack
+            screenOptions={{
+              headerShown: false,
+              contentStyle: { backgroundColor: 'transparent' },
+            }}
+          >
+            <Stack.Screen name="auth" />
+            <Stack.Screen name="(parent)" />
+            <Stack.Screen name="(child)" />
+            <Stack.Screen name="(tutor)" />
+          </Stack>
+        </QueryClientProvider>
+      </SafeAreaProvider>
     </GestureHandlerRootView>
   );
 }

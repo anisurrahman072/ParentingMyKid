@@ -14,7 +14,7 @@ export const Colors = {
   // ─── Parent UI Palette (light premium — mint/blush shell, blue CTAs) ───
   parent: {
     // Shell reference (2-stop; tab layout also uses theme.store 3-stop presets)
-    gradientApp: ['#C8F5E1', '#FADADD'] as const,
+    gradientApp: ['#E8F4EC', '#F2E8E9'] as const,
     gradientCtaBlue: ['#3B82F6', '#0EA5E9'] as const,
     gradientCtaBlue3: ['#2563EB', '#3B82F6', '#0EA5E9'] as const,
 
@@ -45,10 +45,15 @@ export const Colors = {
     card: 'rgba(255,255,255,0.72)',
 
     // Tab bar (parent layout)
+    /** Translucent; prefer `tabBarFill` for the actual painted bar (avoids two-tone with gradient). */
     tabBarBg: 'rgba(255,255,255,0.82)',
+    /** Solid — full-bleed bottom tab; warm neutral to match the blush part of the shell. */
+    tabBarFill: '#F3EDE6',
     tabBarBorder: 'rgba(200,245,225,0.6)',
     tabBarActive: '#3B82F6',
     tabBarInactive: '#B89580',
+    /** Selected tab on vivid green/pink glass pill — darker than textPrimary for contrast */
+    tabBarPillForeground: '#24150F',
 
     // Legacy aliases — remapped for light theme (avoid breaking imports)
     background: 'transparent',
@@ -67,7 +72,7 @@ export const Colors = {
     gradientGold: ['#D97706', '#F59E0B'] as const,
     gradientSuccess: ['#059669', '#10B981'] as const,
     gradientCard: ['rgba(255,255,255,0.72)', 'rgba(255,255,255,0.55)'] as const,
-    gradientHero: ['#C8F5E1', '#FADADD'] as const,
+    gradientHero: ['#E8F4EC', '#F2E8E9'] as const,
   },
 
   // ─── Kids UI Palette ─────────────────────────────────────────────────
