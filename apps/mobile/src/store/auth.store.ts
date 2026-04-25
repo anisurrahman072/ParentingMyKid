@@ -11,7 +11,10 @@
 
 import { create } from 'zustand';
 import * as SecureStore from 'expo-secure-store';
+import axios from 'axios';
 import { UserProfile } from '@parentingmykid/shared-types';
+import { useFamilyStore } from './family.store';
+import { API_BASE_URL, API_ENDPOINTS } from '../constants/api';
 
 const REFRESH_TOKEN_KEY = 'pmk_refresh_token';
 const USER_DATA_KEY = 'pmk_user_data';
@@ -30,6 +33,8 @@ interface AuthState {
   setAccessToken: (token: string) => void;
   loadPersistedAuth: () => Promise<void>;
   updateUser: (user: Partial<UserProfile>) => void;
+  /** Sets access (and optional rotated refresh) from refresh token — used when only SecureStore is hydrated. */
+  refreshAccessToken: () => Promise<boolean>;
 }
 
 export const useAuthStore = create<AuthState>((set, get) => ({
@@ -54,7 +59,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       user,
       isAuthenticated: true,
       isLoading: false,
+      familyIds: user.familyIds ?? [],
     });
+
+    if (user.familyIds && user.familyIds.length > 0) {
+      useFamilyStore.getState().setActiveFamilyId(user.familyIds[0]);
+    }
   },
 
   /**
@@ -64,6 +74,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   logout: async () => {
     await SecureStore.deleteItemAsync(REFRESH_TOKEN_KEY);
     await SecureStore.deleteItemAsync(USER_DATA_KEY);
+
+    useFamilyStore.getState().clearFamilyContext();
 
     set({
       accessToken: null,
@@ -90,7 +102,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
       if (userData && refreshToken) {
         const user = JSON.parse(userData) as UserProfile;
-        set({ user, isAuthenticated: true });
+        set({ user, isAuthenticated: true, familyIds: user.familyIds ?? [] });
+        if (user.familyIds && user.familyIds.length > 0) {
+          useFamilyStore.getState().setActiveFamilyId(user.familyIds[0]);
+        }
         // Access token will be refreshed by the API interceptor on first request
       }
     } catch {
@@ -104,6 +119,27 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     const current = get().user;
     if (current) {
       set({ user: { ...current, ...updates } });
+    }
+  },
+
+  refreshAccessToken: async () => {
+    const refreshToken = await SecureStore.getItemAsync(REFRESH_TOKEN_KEY);
+    if (!refreshToken) return false;
+    try {
+      const response = await axios.post(`${API_BASE_URL}${API_ENDPOINTS.auth.refresh}`, {
+        refreshToken,
+      });
+      const { accessToken, refreshToken: newRt } = response.data as {
+        accessToken: string;
+        refreshToken?: string;
+      };
+      set({ accessToken });
+      if (newRt) {
+        await SecureStore.setItemAsync(REFRESH_TOKEN_KEY, newRt);
+      }
+      return true;
+    } catch {
+      return false;
     }
   },
 }));

@@ -24,7 +24,7 @@ export function ChildDashboardCard({ child }: ChildDashboardCardProps) {
   return (
     <TouchableOpacity
       style={[styles.card, hasAlerts && styles.cardWithAlert]}
-      onPress={() => router.push(`/(parent)/growth/index`)}
+      onPress={() => router.push(`/(parent)/growth`)}
       activeOpacity={0.85}
     >
       {/* Alert badge */}

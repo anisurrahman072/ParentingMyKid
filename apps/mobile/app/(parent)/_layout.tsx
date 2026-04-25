@@ -2,14 +2,16 @@
  * Parent stack layout.
  * All screens here are gated to UserRole.PARENT.
  * Navigation structure:
- *   - Bottom tabs: Dashboard, Growth, Safety, Memory, Settings
+ *   - Bottom tabs: Dashboard, Chat, Growth, Safety, Memory, Settings
  *   - Each tab has its own nested stack for drilling into details
  */
 
 import { Tabs } from 'expo-router';
-import { Platform } from 'react-native';
-import { BlurView } from 'expo-blur';
+import { View, StyleSheet, Platform, ImageBackground } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS } from '../../src/constants/colors';
+import { DeviceContextBanner } from '../../src/components/parent/DeviceContextBanner';
+import { useThemeStore, GRADIENT_PRESETS } from '../../src/store/theme.store';
 
 const TAB_ICON_SIZE = 24;
 
@@ -21,13 +23,36 @@ function TabBarIcon({ icon, focused }: { icon: string; focused: boolean }) {
 }
 
 export default function ParentLayout() {
+  const { gradientPreset, customBackgroundUri, hydrated } = useThemeStore();
+  const gradient = GRADIENT_PRESETS[gradientPreset];
+
+  if (!hydrated) {
+    return (
+      <View style={{ flex: 1, backgroundColor: gradient[0] }}>
+        <LinearGradient colors={gradient} style={StyleSheet.absoluteFill} />
+      </View>
+    );
+  }
+
   return (
+    <View style={styles.root}>
+      {customBackgroundUri ? (
+        <ImageBackground
+          source={{ uri: customBackgroundUri }}
+          style={StyleSheet.absoluteFill}
+          resizeMode="cover"
+        />
+      ) : (
+        <LinearGradient colors={gradient} style={StyleSheet.absoluteFill} />
+      )}
+      <DeviceContextBanner />
+      <View style={styles.stack}>
     <Tabs
       screenOptions={{
         headerShown: false,
         tabBarStyle: {
-          backgroundColor: COLORS.parent.surface,
-          borderTopColor: 'rgba(255,255,255,0.08)',
+          backgroundColor: 'rgba(15, 15, 26, 0.85)',
+          borderTopColor: 'rgba(255,255,255,0.1)',
           borderTopWidth: 1,
           paddingBottom: Platform.OS === 'ios' ? 24 : 8,
           paddingTop: 8,
@@ -48,6 +73,13 @@ export default function ParentLayout() {
         options={{
           title: 'Home',
           tabBarIcon: ({ focused }) => <TabBarIcon icon="🏠" focused={focused} />,
+        }}
+      />
+      <Tabs.Screen
+        name="chat/index"
+        options={{
+          title: 'Chat',
+          tabBarIcon: ({ focused }) => <TabBarIcon icon="💬" focused={focused} />,
         }}
       />
       <Tabs.Screen
@@ -79,5 +111,12 @@ export default function ParentLayout() {
         }}
       />
     </Tabs>
+      </View>
+    </View>
   );
 }
+
+const styles = StyleSheet.create({
+  root: { flex: 1, backgroundColor: '#0F0F1A' },
+  stack: { flex: 1 },
+});

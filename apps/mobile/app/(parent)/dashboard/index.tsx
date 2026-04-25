@@ -22,7 +22,7 @@ import {
   RefreshControl,
   Dimensions,
 } from 'react-native';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import Animated, { FadeInDown, FadeInRight } from 'react-native-reanimated';
 import { router } from 'expo-router';
 import { Colors } from '../../../src/constants/colors';
@@ -39,6 +39,29 @@ const { width } = Dimensions.get('window');
 export default function ParentDashboard() {
   const { user } = useAuthStore();
   const { activeFamilyId, dashboard, setDashboard, selectChild } = useFamilyStore();
+  const queryClient = useQueryClient();
+
+  const { data: pendingFriendInvites } = useQuery({
+    queryKey: ['friends-pending', activeFamilyId],
+    queryFn: async () => {
+      if (!activeFamilyId) return [] as { id: string; from: { name: string }; to?: { name: string } | null }[];
+      const { data } = await apiClient.get<
+        { id: string; from: { name: string }; to?: { name: string } | null }[]
+      >(API_ENDPOINTS.friends.pending(activeFamilyId));
+      return data;
+    },
+    enabled: !!activeFamilyId,
+  });
+
+  const approveFriend = useMutation({
+    mutationFn: async ({ inviteId, approve }: { inviteId: string; approve: boolean }) => {
+      if (!activeFamilyId) return;
+      await apiClient.post(API_ENDPOINTS.friends.approve(activeFamilyId, inviteId), { approve });
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['friends-pending', activeFamilyId] });
+    },
+  });
 
   const { refetch, isRefetching } = useQuery({
     queryKey: ['family-dashboard', activeFamilyId],
@@ -96,6 +119,36 @@ export default function ParentDashboard() {
           <Animated.View entering={FadeInDown.duration(600).delay(100)} style={styles.alertPanel}>
             <Text style={styles.alertPanelTitle}>⚠️ {urgentAlerts.length} Urgent Alert{urgentAlerts.length > 1 ? 's' : ''}</Text>
             <Text style={styles.alertPanelSub}>Tap to review — action required</Text>
+          </Animated.View>
+        )}
+
+        {(pendingFriendInvites?.length ?? 0) > 0 && (
+          <Animated.View entering={FadeInDown.duration(500).delay(50)} style={styles.friendPendingPanel}>
+            <Text style={styles.friendPendingTitle}>
+              {pendingFriendInvites?.length} friend request{((pendingFriendInvites?.length ?? 0) > 1) ? 's' : ''} to review
+            </Text>
+            {(pendingFriendInvites ?? []).map((inv) => (
+              <View key={inv.id} style={styles.friendPendingRow}>
+                <Text style={styles.friendPendingText} numberOfLines={2}>
+                  {inv.from.name}
+                  {inv.to?.name ? ` ↔ ${inv.to.name}` : ''}
+                </Text>
+                <View style={styles.friendPendingActions}>
+                  <TouchableOpacity
+                    style={styles.friendDecline}
+                    onPress={() => approveFriend.mutate({ inviteId: inv.id, approve: false })}
+                  >
+                    <Text style={styles.friendDeclineText}>Decline</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.friendApprove}
+                    onPress={() => approveFriend.mutate({ inviteId: inv.id, approve: true })}
+                  >
+                    <Text style={styles.friendApproveText}>Approve</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ))}
           </Animated.View>
         )}
 
@@ -320,6 +373,41 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.8)',
     marginTop: 4,
   },
+  friendPendingPanel: {
+    backgroundColor: 'rgba(99, 102, 241, 0.2)',
+    borderWidth: 1,
+    borderColor: 'rgba(99, 102, 241, 0.45)',
+    borderRadius: Spacing.cardBorderRadius,
+    padding: Spacing.base,
+    marginBottom: Spacing.lg,
+    gap: Spacing.md,
+  },
+  friendPendingTitle: {
+    fontFamily: Typography.fonts.bold,
+    fontSize: Typography.parent.bodyLarge,
+    color: Colors.parent.textPrimary,
+  },
+  friendPendingRow: { gap: Spacing.sm },
+  friendPendingText: {
+    fontFamily: Typography.fonts.regular,
+    fontSize: Typography.parent.body,
+    color: Colors.parent.textPrimary,
+  },
+  friendPendingActions: { flexDirection: 'row', gap: Spacing.sm },
+  friendDecline: {
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 10,
+    backgroundColor: 'rgba(0,0,0,0.1)',
+  },
+  friendDeclineText: { color: Colors.parent.textPrimary, fontWeight: '600' },
+  friendApprove: {
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 10,
+    backgroundColor: Colors.parent.primary,
+  },
+  friendApproveText: { color: '#fff', fontWeight: '700' },
   sectionTitle: {
     fontFamily: Typography.fonts.bold,
     fontSize: Typography.parent.subheading,

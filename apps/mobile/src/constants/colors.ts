@@ -45,6 +45,7 @@ export const Colors = {
 
     // Semantic aliases (screens use these shorter names)
     background: '#0F0F1A',
+    surface: '#1E1E2E',
     text: '#F1F5F9',
     textMuted: '#94A3B8',
     card: '#2A2A3E',

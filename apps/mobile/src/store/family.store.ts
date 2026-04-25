@@ -28,6 +28,7 @@ interface FamilyState {
 
   // Actions
   setActiveFamilyId: (id: string) => void;
+  clearFamilyContext: () => void;
   setDashboard: (dashboard: FamilyDashboard) => void;
   selectChild: (childId: string) => void;
   updateChildProfile: (childId: string, profile: ChildProfile) => void;
@@ -47,6 +48,15 @@ export const useFamilyStore = create<FamilyState>((set, get) => ({
   subscription: null,
 
   setActiveFamilyId: (id: string) => set({ activeFamilyId: id }),
+
+  clearFamilyContext: () =>
+    set({
+      activeFamilyId: null,
+      dashboard: null,
+      selectedChildId: null,
+      childProfiles: {},
+      subscription: null,
+    }),
 
   setDashboard: (dashboard: FamilyDashboard) => {
     set({ dashboard });

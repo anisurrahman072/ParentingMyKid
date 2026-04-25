@@ -76,7 +76,11 @@ export const API_ENDPOINTS = {
     location: (childId: string) => `/safety/${childId}/location`,
     geofences: (childId: string) => `/safety/${childId}/geofences`,
     alerts: (childId: string) => `/safety/${childId}/alerts`,
-    screenTime: (childId: string) => `/safety/${childId}/screen-time`,
+    /** Parent: full controls */
+    controls: (childId: string) => `/safety/${childId}/controls`,
+    /** Child: own profile only */
+    controlsSelf: (childId: string) => `/safety/${childId}/controls/self`,
+    screenTime: (childId: string) => `/safety/${childId}/controls`,
     pauseInternet: '/safety/pause-internet',
   },
 
@@ -153,6 +157,20 @@ export const API_ENDPOINTS = {
     forum: '/community/forum',
     webinars: '/community/webinars',
     parentMood: '/community/parent-mood',
+  },
+
+  familyChat: {
+    send: '/family-chat/send',
+    list: (familyId: string) => `/family-chat/${familyId}`,
+    delete: (messageId: string) => `/family-chat/message/${messageId}`,
+  },
+
+  friends: {
+    invite: '/friends/invite',
+    accept: '/friends/accept',
+    approve: (familyId: string, inviteId: string) => `/friends/${familyId}/approve/${inviteId}`,
+    list: (childId: string) => `/friends/list/${childId}`,
+    pending: (familyId: string) => `/friends/pending/${familyId}`,
   },
 
   // ─── Legacy flat names (some screens use these) ─────────────────────────

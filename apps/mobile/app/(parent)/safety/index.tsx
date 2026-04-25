@@ -16,6 +16,7 @@ import {
   TouchableOpacity,
   Switch,
   Alert,
+  TextInput,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -42,8 +43,7 @@ function AlertCard({
   time: string;
 }) {
   const severityColor =
-    severity === 'CRITICAL' ? '#DC2626' :
-    severity === 'HIGH' ? '#EA580C' : '#CA8A04';
+    severity === 'CRITICAL' ? '#DC2626' : severity === 'HIGH' ? '#EA580C' : '#CA8A04';
 
   return (
     <View style={[styles.alertCard, { borderLeftColor: severityColor }]}>
@@ -62,19 +62,17 @@ function AlertCard({
 function ScreenTimeControl({ childId }: { childId: string }) {
   const qc = useQueryClient();
 
-  const { data, isLoading } = useQuery({
+  const { data: controls, isLoading } = useQuery({
     queryKey: ['screen-time-controls', childId],
     queryFn: () =>
-      apiClient.get(`${API_ENDPOINTS.safety.base}/${childId}/screen-time`).then((r) => r.data),
+      apiClient.get(API_ENDPOINTS.safety.controls(childId)).then((r) => r.data),
   });
 
   const pauseMutation = useMutation({
-    mutationFn: (paused: boolean) =>
-      apiClient.post(API_ENDPOINTS.safety.pauseInternet, { childId, paused }),
+    mutationFn: (isPaused: boolean) =>
+      apiClient.patch(API_ENDPOINTS.safety.controls(childId), { isPaused }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['screen-time-controls', childId] }),
   });
-
-  const controls = data?.controls;
 
   return (
     <View style={styles.screenTimeCard}>
@@ -84,7 +82,7 @@ function ScreenTimeControl({ childId }: { childId: string }) {
           <Text style={styles.controlDesc}>Instantly block all online access</Text>
         </View>
         <Switch
-          value={controls?.internetPaused ?? false}
+          value={controls?.isPaused ?? false}
           onValueChange={(val) => pauseMutation.mutate(val)}
           trackColor={{ true: '#DC2626', false: 'rgba(255,255,255,0.2)' }}
           thumbColor="#FFFFFF"
@@ -93,21 +91,19 @@ function ScreenTimeControl({ childId }: { childId: string }) {
 
       <View style={styles.controlRow}>
         <View>
-          <Text style={styles.controlLabel}>Bedtime mode</Text>
+          <Text style={styles.controlLabel}>Bedtime window</Text>
           <Text style={styles.controlDesc}>
             {controls?.bedtimeStart && controls?.bedtimeEnd
               ? `${controls.bedtimeStart} – ${controls.bedtimeEnd}`
               : 'Not configured'}
           </Text>
         </View>
-        <Switch
-          value={controls?.bedtimeEnabled ?? false}
-          onValueChange={() =>
-            Alert.alert('Set Bedtime', 'Configure bedtime in child settings')
-          }
-          trackColor={{ true: COLORS.parent.primary }}
-          thumbColor="#FFFFFF"
-        />
+        <TouchableOpacity
+          style={styles.editButton}
+          onPress={() => Alert.alert('Set Bedtime', 'Configure bedtime in child settings')}
+        >
+          <Text style={styles.editButtonText}>Info</Text>
+        </TouchableOpacity>
       </View>
 
       <View style={styles.controlRow}>
@@ -127,17 +123,98 @@ function ScreenTimeControl({ childId }: { childId: string }) {
   );
 }
 
+function extractYoutubeChannelId(raw: string): string {
+  const m = raw.match(/channel\/(UC[a-zA-Z0-9_-]+)/);
+  if (m) return m[1];
+  const t = raw.trim();
+  if (t.startsWith('UC') && t.length >= 12) return t;
+  return t;
+}
+
+function YoutubeChannelControls({ childId }: { childId: string }) {
+  const qc = useQueryClient();
+  const [input, setInput] = useState('');
+
+  const { data: controls } = useQuery({
+    queryKey: ['screen-time-controls', childId],
+    queryFn: () => apiClient.get(API_ENDPOINTS.safety.controls(childId)).then((r) => r.data),
+  });
+
+  const patch = useMutation({
+    mutationFn: (body: {
+      youtubeAllowedChannelIds?: string[];
+      youtubeBlockedChannelIds?: string[];
+      youtubeAllowlistMode?: boolean;
+    }) => apiClient.patch(API_ENDPOINTS.safety.controls(childId), body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['screen-time-controls', childId] }),
+  });
+
+  const allowed: string[] = controls?.youtubeAllowedChannelIds ?? [];
+
+  return (
+    <View style={styles.sectionCard}>
+      <Text style={styles.sectionTitle}>YouTube channel rules</Text>
+      <Text style={styles.sectionDesc}>
+        Add channel IDs (from URL after /channel/). Allowlist mode restricts viewing to the list
+        you add (in-app and supported devices only).
+      </Text>
+      <View style={styles.controlRow}>
+        <Text style={styles.controlLabel}>Allowlist mode</Text>
+        <Switch
+          value={controls?.youtubeAllowlistMode ?? false}
+          onValueChange={(val) => patch.mutate({ youtubeAllowlistMode: val })}
+          trackColor={{ true: COLORS.parent.primary, false: 'rgba(255,255,255,0.2)' }}
+          thumbColor="#FFFFFF"
+        />
+      </View>
+      <TextInput
+        value={input}
+        onChangeText={setInput}
+        placeholder="Paste YouTube channel URL or UC… id"
+        placeholderTextColor="rgba(255,255,255,0.35)"
+        style={styles.channelInput}
+      />
+      <TouchableOpacity style={styles.addChannelButton} onPress={() => {
+        const id = extractYoutubeChannelId(input);
+        if (!id) {
+          Alert.alert('Invalid', 'Enter a channel URL or a channel id starting with UC');
+          return;
+        }
+        if (allowed.includes(id)) {
+          setInput('');
+          return;
+        }
+        patch.mutate({ youtubeAllowedChannelIds: [...allowed, id] });
+        setInput('');
+      }}
+      >
+        <Text style={styles.addChannelText}>Add channel</Text>
+      </TouchableOpacity>
+      {allowed.map((id) => (
+        <View key={id} style={styles.channelRow}>
+          <Text style={styles.channelIdText} numberOfLines={1}>{id}</Text>
+          <TouchableOpacity
+            onPress={() => patch.mutate({ youtubeAllowedChannelIds: allowed.filter((x) => x !== id) })}
+          >
+            <Text style={styles.removeChannel}>Remove</Text>
+          </TouchableOpacity>
+        </View>
+      ))}
+    </View>
+  );
+}
+
 export default function SafetyScreen() {
-  const { activeChild } = useFamilyStore();
+  const activeChild = useFamilyStore((s) => s.getSelectedChild());
   const [activeTab, setActiveTab] = useState<SafetyTab>('alerts');
 
   const { data: alerts } = useQuery({
-    queryKey: ['safety-alerts', activeChild?.id],
+    queryKey: ['safety-alerts', activeChild?.childId],
     queryFn: () =>
       apiClient
-        .get(`${API_ENDPOINTS.safety.base}/${activeChild?.id}/alerts`)
+        .get(`${API_ENDPOINTS.safety.base}/${activeChild?.childId}/alerts`)
         .then((r) => r.data.alerts ?? []),
-    enabled: !!activeChild?.id,
+    enabled: !!activeChild?.childId,
     refetchInterval: 30_000, // Refresh alerts every 30s
   });
 
@@ -205,7 +282,10 @@ export default function SafetyScreen() {
                   title={alert.alertType?.replace(/_/g, ' ') ?? 'Alert'}
                   description={alert.summary ?? 'Tap to view details'}
                   severity={alert.severity ?? 'MEDIUM'}
-                  time={new Date(alert.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  time={new Date(alert.createdAt).toLocaleTimeString([], {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                  })}
                 />
               ))
             )}
@@ -219,7 +299,8 @@ export default function SafetyScreen() {
               <Text style={styles.locationIcon}>📍</Text>
               <Text style={styles.locationTitle}>Live Location</Text>
               <Text style={styles.locationDesc}>
-                Child location tracking requires the ParentingMyKid app installed on the child's device with location permission enabled.
+                Child location tracking requires the ParentingMyKid app installed on the child's
+                device with location permission enabled.
               </Text>
               <TouchableOpacity style={styles.setupButton}>
                 <Text style={styles.setupButtonText}>Set Up Device Pairing</Text>
@@ -242,7 +323,7 @@ export default function SafetyScreen() {
         {activeTab === 'screentime' && (
           <Animated.View entering={FadeInDown.springify()}>
             {activeChild ? (
-              <ScreenTimeControl childId={activeChild.id} />
+              <ScreenTimeControl childId={activeChild.childId} />
             ) : (
               <Text style={styles.noChild}>Select a child first</Text>
             )}
@@ -252,10 +333,13 @@ export default function SafetyScreen() {
         {/* Content Monitoring Tab */}
         {activeTab === 'content' && (
           <Animated.View entering={FadeInDown.springify()}>
+            {activeChild && <YoutubeChannelControls childId={activeChild.childId} />}
             <View style={styles.sectionCard}>
               <Text style={styles.sectionTitle}>🔍 AI Content Monitoring</Text>
               <Text style={styles.sectionDesc}>
-                AI scans online activity across 29+ harmful content categories including adult content, violence, self-harm, cyberbullying, and predator behaviour — similar to Bark.
+                AI scans online activity across 29+ harmful content categories including adult
+                content, violence, self-harm, cyberbullying, and predator behaviour — similar to
+                Bark.
               </Text>
 
               {[
@@ -547,4 +631,35 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#4ADE80',
   },
+  channelInput: {
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
+    borderRadius: 12,
+    paddingHorizontal: SPACING[4],
+    paddingVertical: SPACING[3],
+    color: COLORS.parent.text,
+    fontSize: 14,
+  },
+  addChannelButton: {
+    backgroundColor: 'rgba(99,102,241,0.3)',
+    borderRadius: 12,
+    paddingVertical: SPACING[3],
+    alignItems: 'center',
+  },
+  addChannelText: {
+    fontSize: 15,
+    fontFamily: 'Inter',
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  channelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: SPACING[2],
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.06)',
+  },
+  channelIdText: { flex: 1, color: COLORS.parent.text, fontSize: 13, fontFamily: 'Inter' },
+  removeChannel: { color: '#F87171', fontWeight: '700', fontSize: 13 },
 });

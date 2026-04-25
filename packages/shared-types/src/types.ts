@@ -86,6 +86,21 @@ export interface UserProfile {
   role: UserRole;
   avatarUrl?: string;
   createdAt: string;
+  /** All family group IDs this user belongs to (set by auth for most roles) */
+  familyIds?: string[];
+  /** Set when role === CHILD — ChildProfile id for API paths */
+  childProfileId?: string;
+  /** Child UI (optional; populated by child auth / profile merges) */
+  firstName?: string;
+  lastName?: string;
+  avatar?: string;
+  level?: number;
+  xp?: number;
+  points?: number;
+  coins?: number;
+  badgesCount?: number;
+  currentStreak?: number;
+  longestStreak?: number;
 }
 
 export interface FamilyGroup {
@@ -321,6 +336,9 @@ export interface SafetyAlert {
   isRead: boolean;
   actionTaken?: string;
   createdAt: string;
+  /** Optional UI hint for legacy / agent alerts */
+  alertType?: string;
+  summary?: string;
 }
 
 export interface ScreenTimeControls {
@@ -328,8 +346,12 @@ export interface ScreenTimeControls {
   dailyLimitMinutes: number;
   socialMediaLimitMinutes: number;
   gamingLimitMinutes: number;
+  youtubeLimitMinutes?: number;
   youtubeRestrictedMode: boolean;
   safeSearchEnabled: boolean;
+  youtubeAllowedChannelIds?: string[];
+  youtubeBlockedChannelIds?: string[];
+  youtubeAllowlistMode?: boolean;
   bedtimeStart: string;  // HH:MM
   bedtimeEnd: string;    // HH:MM
   morningUnlockTime: string; // HH:MM
@@ -339,6 +361,8 @@ export interface ScreenTimeControls {
   isPaused: boolean;     // Emergency internet pause
   blockedApps: string[];
   blockedWebsites: string[];
+  /** Bumped when parent changes controls; child can use for ETag / poll skip */
+  controlsVersion?: number;
 }
 
 // ─── AI & Growth Plan ─────────────────────────────────────────────────────────

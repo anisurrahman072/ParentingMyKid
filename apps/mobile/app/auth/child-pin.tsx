@@ -23,11 +23,13 @@ import Animated, {
   withSequence,
   withTiming,
 } from 'react-native-reanimated';
+import * as SecureStore from 'expo-secure-store';
 import { apiClient } from '../../src/services/api.client';
 import { API_ENDPOINTS } from '../../src/constants/api';
 import { useAuthStore } from '../../src/store/auth.store';
 import { COLORS } from '../../src/constants/colors';
 import { SPACING } from '../../src/constants/spacing';
+import { CHILD_ID_KEY } from '../../src/store/deviceSession.store';
 
 const PIN_LENGTH = 4;
 
@@ -41,19 +43,42 @@ const PAD_BUTTONS = [
 export default function ChildPinScreen() {
   const [pin, setPin] = useState('');
   const [loading, setLoading] = useState(false);
+  const [childId, setChildId] = useState<string | null>(null);
+  const [idLoaded, setIdLoaded] = useState(false);
   const shakeX = useSharedValue(0);
   const { login } = useAuthStore();
 
   useEffect(() => {
-    if (pin.length === PIN_LENGTH) {
-      submitPin();
+    SecureStore.getItemAsync(CHILD_ID_KEY).then((id) => {
+      setChildId(id);
+      setIdLoaded(true);
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!idLoaded || pin.length !== PIN_LENGTH) return;
+    if (!childId) {
+      Vibration.vibrate([0, 50, 50, 50]);
+      setPin('');
+      Alert.alert('Device not linked', 'A parent must pair this device to your profile first, or you can open the link screen.', [
+        { text: 'Link this device', onPress: () => router.push('/auth/link-device') },
+        { text: 'OK', style: 'cancel' },
+      ]);
+      return;
     }
-  }, [pin]);
+    submitPin();
+  }, [pin, childId, idLoaded]);
 
   async function submitPin() {
+    if (!childId) {
+      return;
+    }
     setLoading(true);
     try {
-      const { data } = await apiClient.post(API_ENDPOINTS.auth.childPinLogin, { pin });
+      const { data } = await apiClient.post(API_ENDPOINTS.auth.childPinLogin, {
+        childId,
+        pin,
+      });
       await login(data.accessToken, data.refreshToken, data.user);
     } catch (err: any) {
       // Shake animation + haptic
@@ -138,6 +163,10 @@ export default function ChildPinScreen() {
             </View>
           ))}
         </Animated.View>
+
+        <TouchableOpacity style={styles.linkDeviceLink} onPress={() => router.push('/auth/link-device')}>
+          <Text style={styles.parentLinkText}>First time? Link this device →</Text>
+        </TouchableOpacity>
 
         <TouchableOpacity style={styles.parentLink} onPress={() => router.replace('/auth/login')}>
           <Text style={styles.parentLinkText}>I'm a parent →</Text>
@@ -227,8 +256,13 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
   padButtonDeleteText: { fontSize: 22 },
+  linkDeviceLink: {
+    marginTop: SPACING[6],
+    paddingVertical: SPACING[2],
+    paddingHorizontal: SPACING[5],
+  },
   parentLink: {
-    marginTop: SPACING[8],
+    marginTop: SPACING[4],
     paddingVertical: SPACING[3],
     paddingHorizontal: SPACING[5],
   },

@@ -412,7 +412,7 @@ export default function BaselineAssessmentScreen() {
               </Text>
               <TouchableOpacity
                 style={styles.ctaButton}
-                onPress={() => router.replace('/(parent)/dashboard/index')}
+                onPress={() => router.replace('/(parent)/dashboard')}
               >
                 <Text style={styles.ctaButtonText}>Go to Dashboard →</Text>
               </TouchableOpacity>

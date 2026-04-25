@@ -24,6 +24,11 @@
         "NSPhotoLibraryUsageDescription": "ParentingMyKid allows adding photos to the family memory gallery."
       }
     },
+    "extra": {
+      "eas": {
+        "projectId": "00000000-0000-0000-0000-000000000000"
+      }
+    },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/icons/adaptive-icon.png",

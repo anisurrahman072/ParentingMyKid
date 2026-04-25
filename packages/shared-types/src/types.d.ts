@@ -40,6 +40,18 @@ export interface UserProfile {
     role: UserRole;
     avatarUrl?: string;
     createdAt: string;
+    familyIds?: string[];
+    childProfileId?: string;
+    firstName?: string;
+    lastName?: string;
+    avatar?: string;
+    level?: number;
+    xp?: number;
+    points?: number;
+    coins?: number;
+    badgesCount?: number;
+    currentStreak?: number;
+    longestStreak?: number;
 }
 export interface FamilyGroup {
     id: string;
@@ -237,14 +249,20 @@ export interface SafetyAlert {
     isRead: boolean;
     actionTaken?: string;
     createdAt: string;
+    alertType?: string;
+    summary?: string;
 }
 export interface ScreenTimeControls {
     childId: string;
     dailyLimitMinutes: number;
     socialMediaLimitMinutes: number;
     gamingLimitMinutes: number;
+    youtubeLimitMinutes?: number;
     youtubeRestrictedMode: boolean;
     safeSearchEnabled: boolean;
+    youtubeAllowedChannelIds?: string[];
+    youtubeBlockedChannelIds?: string[];
+    youtubeAllowlistMode?: boolean;
     bedtimeStart: string;
     bedtimeEnd: string;
     morningUnlockTime: string;
@@ -254,6 +272,7 @@ export interface ScreenTimeControls {
     isPaused: boolean;
     blockedApps: string[];
     blockedWebsites: string[];
+    controlsVersion?: number;
 }
 export interface GrowthPlan {
     childId: string;

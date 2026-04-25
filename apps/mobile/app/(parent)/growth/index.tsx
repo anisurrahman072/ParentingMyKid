@@ -22,7 +22,19 @@ import { useFamilyStore } from '../../../src/store/family.store';
 import { COLORS } from '../../../src/constants/colors';
 import { SPACING } from '../../../src/constants/spacing';
 import { WellbeingScoreRing } from '../../../src/components/parent/WellbeingScoreRing';
-import type { AiGrowthPlan, AiRecommendation } from '@parentingmykid/shared-types';
+import type { GrowthPlan } from '@parentingmykid/shared-types';
+
+/** API may return legacy fields alongside `GrowthPlan`. */
+type GrowthPlanUi = GrowthPlan & {
+  weeklyPriorities?: string[];
+  recommendations?: Array<{
+    category: string;
+    priority: string;
+    title: string;
+    description: string;
+  }>;
+  parentNote?: string;
+};
 
 function SectionCard({ title, icon, children }: { title: string; icon: string; children: React.ReactNode }) {
   return (
@@ -48,27 +60,29 @@ function PriorityChip({ label, priority }: { label: string; priority: 'HIGH' | '
 }
 
 export default function GrowthScreen() {
-  const { activeChild } = useFamilyStore();
+  const activeChild = useFamilyStore((s) => s.getSelectedChild());
   const [activeTab, setActiveTab] = useState<'plan' | 'habits' | 'coach'>('plan');
 
-  const { data: growthPlan, isLoading: planLoading } = useQuery({
-    queryKey: ['growth-plan', activeChild?.id],
+  const { data: growthPlan, isLoading: planLoading } = useQuery<GrowthPlanUi>({
+    queryKey: ['growth-plan', activeChild?.childId],
     queryFn: () =>
-      apiClient.post(API_ENDPOINTS.ai.growthPlan, { childId: activeChild?.id }).then((r) => r.data),
-    enabled: !!activeChild?.id && activeTab === 'plan',
+      apiClient
+        .post<GrowthPlanUi>(API_ENDPOINTS.ai.growthPlan, { childId: activeChild?.childId })
+        .then((r) => r.data),
+    enabled: !!activeChild?.childId && activeTab === 'plan',
     staleTime: 1000 * 60 * 60, // 1 hour — plan only regenerates daily
   });
 
   const { data: coachScript, isLoading: coachLoading } = useQuery({
-    queryKey: ['coach-script', activeChild?.id],
+    queryKey: ['coach-script', activeChild?.childId],
     queryFn: () =>
       apiClient
         .post(API_ENDPOINTS.ai.coachScript, {
-          childId: activeChild?.id,
+          childId: activeChild?.childId,
           concern: 'General behaviour and motivation',
         })
         .then((r) => r.data),
-    enabled: !!activeChild?.id && activeTab === 'coach',
+    enabled: !!activeChild?.childId && activeTab === 'coach',
     staleTime: 1000 * 60 * 30,
   });
 
@@ -138,7 +152,7 @@ export default function GrowthScreen() {
                 </SectionCard>
 
                 <SectionCard title="AI Recommendations" icon="💡">
-                  {(growthPlan.recommendations as AiRecommendation[] ?? []).slice(0, 4).map((rec: AiRecommendation, i: number) => (
+                  {(growthPlan.recommendations ?? []).slice(0, 4).map((rec, i: number) => (
                     <View key={i} style={styles.recCard}>
                       <View style={styles.recHeader}>
                         <Text style={styles.recCategory}>{rec.category}</Text>

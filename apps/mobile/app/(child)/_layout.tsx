@@ -10,7 +10,6 @@
 import { Tabs } from 'expo-router';
 import { Platform } from 'react-native';
 import { COLORS } from '../../src/constants/colors';
-import { useFamilyStore } from '../../src/store/family.store';
 
 function TabBarIcon({ icon, focused }: { icon: string; focused: boolean }) {
   const { Text } = require('react-native');
@@ -28,8 +27,8 @@ function TabBarIcon({ icon, focused }: { icon: string; focused: boolean }) {
 }
 
 export default function ChildLayout() {
-  const { activeChild } = useFamilyStore();
-  const islamicEnabled = activeChild?.islamicModuleEnabled ?? false;
+  /** Server still gates Islamic missions; tab visibility is opt-in per child profile when that data is wired. */
+  const islamicEnabled = true;
 
   return (
     <Tabs
@@ -58,6 +57,20 @@ export default function ChildLayout() {
         options={{
           title: 'Missions',
           tabBarIcon: ({ focused }) => <TabBarIcon icon="⚡" focused={focused} />,
+        }}
+      />
+      <Tabs.Screen
+        name="chat/index"
+        options={{
+          title: 'Chat',
+          tabBarIcon: ({ focused }) => <TabBarIcon icon="💬" focused={focused} />,
+        }}
+      />
+      <Tabs.Screen
+        name="friends/index"
+        options={{
+          title: 'Friends',
+          tabBarIcon: ({ focused }) => <TabBarIcon icon="🤝" focused={focused} />,
         }}
       />
       <Tabs.Screen

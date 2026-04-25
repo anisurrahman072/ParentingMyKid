@@ -377,6 +377,15 @@ export class AuthService {
       select: { id: true, email: true, name: true, role: true, avatarUrl: true, createdAt: true },
     });
 
+    let childProfileId: string | undefined;
+    if (role === UserRole.CHILD) {
+      const cp = await this.prisma.childProfile.findUnique({
+        where: { userId },
+        select: { id: true },
+      });
+      childProfileId = cp?.id;
+    }
+
     return {
       accessToken,
       refreshToken,
@@ -387,6 +396,8 @@ export class AuthService {
         role: user.role as UserRole,
         avatarUrl: user.avatarUrl ?? undefined,
         createdAt: user.createdAt.toISOString(),
+        familyIds,
+        childProfileId,
       },
     };
   }

@@ -31,6 +31,7 @@ import {
   ScrollView,
   Alert,
 } from 'react-native';
+import { usePolicyStore } from '../../../src/store/policy.store';
 import { useState, useCallback } from 'react';
 import Animated, {
   useAnimatedStyle,
@@ -77,7 +78,7 @@ const CATEGORY_EMOJIS: Record<MissionCategory, string> = {
 
 export default function MissionsScreen() {
   const { user } = useAuthStore();
-  const childId = user?.sub ?? '';
+  const childId = user?.childProfileId ?? '';
   const queryClient = useQueryClient();
 
   const [currentMissionIndex, setCurrentMissionIndex] = useState(0);
@@ -121,10 +122,13 @@ export default function MissionsScreen() {
   // Show mood check at start of day if not yet done
   if (showMoodCheck) {
     return (
-      <MoodCheckScreen
-        childId={childId}
-        onComplete={() => setShowMoodCheck(false)}
-      />
+      <View style={{ flex: 1 }}>
+        <MoodCheckScreen
+          childId={childId}
+          onComplete={() => setShowMoodCheck(false)}
+        />
+        <PolicyPauseOverlay />
+      </View>
     );
   }
 
@@ -132,18 +136,25 @@ export default function MissionsScreen() {
     return (
       <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
         <Text style={styles.loadingText}>Loading your missions... 🚀</Text>
+        <PolicyPauseOverlay />
       </View>
     );
   }
 
   if (allComplete) {
-    return <AllCompleteCelebration completedCount={completedCount} />;
+    return (
+      <View style={{ flex: 1 }}>
+        <AllCompleteCelebration completedCount={completedCount} />
+        <PolicyPauseOverlay />
+      </View>
+    );
   }
 
   const currentMission = missions[currentMissionIndex] ?? missions.find((m) => !m.isCompleted);
 
   return (
     <View style={styles.container}>
+      <PolicyPauseOverlay />
       {/* Progress bar at top */}
       <View style={styles.progressContainer}>
         <View style={styles.progressHeader}>
@@ -314,6 +325,25 @@ function MissionCard({
   );
 }
 
+function PolicyPauseOverlay() {
+  const paused = usePolicyStore((s) => s.controls?.isPaused);
+  if (!paused) return null;
+  return (
+    <View
+      style={StyleSheet.absoluteFill}
+      pointerEvents="auto"
+      accessibilityRole="alert"
+    >
+      <View style={styles.pauseBackdrop}>
+        <Text style={styles.pauseTitle}>Time out</Text>
+        <Text style={styles.pauseText}>
+          A parent paused this device. Ask them to open Safety and turn the internet back on.
+        </Text>
+      </View>
+    </View>
+  );
+}
+
 // ─── Mood Check Screen ────────────────────────────────────────────────────────
 
 function MoodCheckScreen({ childId, onComplete }: { childId: string; onComplete: () => void }) {
@@ -391,6 +421,27 @@ const styles = StyleSheet.create({
     fontFamily: Typography.fonts.bold,
     fontSize: Typography.kids.heading,
     color: Colors.kids.textPrimary,
+  },
+  pauseBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.72)',
+    justifyContent: 'center',
+    padding: Spacing.lg,
+    zIndex: 50,
+  },
+  pauseTitle: {
+    fontFamily: Typography.fonts.bold,
+    fontSize: 28,
+    color: '#fff',
+    textAlign: 'center',
+    marginBottom: Spacing.md,
+  },
+  pauseText: {
+    fontFamily: Typography.fonts.regular,
+    fontSize: Typography.kids.body,
+    color: 'rgba(255,255,255,0.92)',
+    textAlign: 'center',
+    lineHeight: 24,
   },
   progressContainer: {
     paddingHorizontal: Spacing.screenPadding,

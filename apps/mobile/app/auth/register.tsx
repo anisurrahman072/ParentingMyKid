@@ -72,7 +72,7 @@ export default function RegisterScreen() {
       setStep('success');
 
       // Navigate to baseline assessment (primary conversion hook)
-      setTimeout(() => router.replace('/(parent)/dashboard/index'), 2000);
+      setTimeout(() => router.replace('/(parent)/dashboard'), 2000);
     } catch (err: any) {
       const raw = err.response?.data?.message;
       const fromServer = Array.isArray(raw) ? raw.join('\n') : raw;

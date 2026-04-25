@@ -17,7 +17,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 import { router } from 'expo-router';
+import * as SecureStore from 'expo-secure-store';
 import { useAuthStore } from '../../../src/store/auth.store';
+import { deviceSessionService, CHILD_ID_KEY } from '../../../src/store/deviceSession.store';
 import { COLORS } from '../../../src/constants/colors';
 import { SPACING } from '../../../src/constants/spacing';
 import { XpBar } from '../../../src/components/kids/XpBar';
@@ -37,6 +39,20 @@ export default function ChildProfileScreen() {
         { text: 'Yes, switch', style: 'destructive', onPress: () => logout() },
       ],
     );
+  }
+
+  async function openParentMode() {
+    const onPairedChildDevice = await SecureStore.getItemAsync(CHILD_ID_KEY);
+    if (!onPairedChildDevice) {
+      Alert.alert('Not a child device', 'Use your parent’s phone for parent controls.');
+      return;
+    }
+    const hasSaved = await deviceSessionService.hasParentSession();
+    if (hasSaved) {
+      router.push('/auth/switch-to-parent');
+      return;
+    }
+    router.push('/auth/login');
   }
 
   return (
@@ -106,6 +122,7 @@ export default function ChildProfileScreen() {
           {/* Settings */}
           <Animated.View entering={FadeInDown.delay(350)} style={styles.settingsCard}>
             {[
+              { icon: '👩‍👧', label: 'Parent mode (unlock)', onPress: openParentMode },
               { icon: '🔔', label: 'Notifications', onPress: () => Alert.alert('Notifications', 'Coming soon!') },
               { icon: '🌙', label: 'Theme', onPress: () => Alert.alert('Theme', 'Light/Dark mode coming soon!') },
               { icon: '🌐', label: 'Language', onPress: () => Alert.alert('Language', 'Coming soon!') },

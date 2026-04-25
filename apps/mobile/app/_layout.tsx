@@ -18,6 +18,7 @@
 
 import { useEffect } from 'react';
 import { Stack, router } from 'expo-router';
+import * as SecureStore from 'expo-secure-store';
 import { useFonts } from 'expo-font';
 import {
   Nunito_400Regular,
@@ -43,6 +44,9 @@ import { useAuthStore } from '../src/store/auth.store';
 import { UserRole } from '@parentingmykid/shared-types';
 import { apiClient } from '../src/services/api.client';
 import { API_ENDPOINTS } from '../src/constants/api';
+import { deviceSessionService, CHILD_ID_KEY } from '../src/store/deviceSession.store';
+import { startPolicySync, stopPolicySync } from '../src/services/policySync.service';
+import { useThemeStore } from '../src/store/theme.store';
 
 // Keep splash screen visible while fonts are loading
 SplashScreen.preventAutoHideAsync();
@@ -79,6 +83,7 @@ const queryClient = new QueryClient({
 
 export default function RootLayout() {
   const { loadPersistedAuth, isLoading, isAuthenticated, user } = useAuthStore();
+  const loadTheme = useThemeStore((s) => s.load);
 
   const [fontsLoaded] = useFonts({
     Nunito_400Regular,
@@ -97,6 +102,22 @@ export default function RootLayout() {
   useEffect(() => {
     loadPersistedAuth();
   }, []);
+
+  useEffect(() => {
+    void loadTheme();
+  }, [loadTheme]);
+
+  // Child: poll screen time / pause policy for in-app soft enforcement
+  useEffect(() => {
+    if (isAuthenticated && user?.role === UserRole.CHILD) {
+      startPolicySync();
+    } else {
+      stopPolicySync();
+    }
+    return () => {
+      stopPolicySync();
+    };
+  }, [isAuthenticated, user?.role, user?.childProfileId]);
 
   // Register Expo push token once authenticated
   useEffect(() => {
@@ -121,20 +142,30 @@ export default function RootLayout() {
       return;
     }
 
-    // Role-based routing — each role sees a completely different app experience
-    switch (user?.role) {
-      case UserRole.PARENT:
-        router.replace('/(parent)/dashboard');
-        break;
-      case UserRole.CHILD:
-        router.replace('/(child)/missions');
-        break;
+    void (async () => {
+      if (user?.role === UserRole.PARENT) {
+        const childPaired = await SecureStore.getItemAsync(CHILD_ID_KEY);
+        const hasPin = await deviceSessionService.hasUnlockPin();
+        if (childPaired && !hasPin) {
+          router.replace('/auth/setup-unlock-pin');
+          return;
+        }
+      }
+
+      switch (user?.role) {
+        case UserRole.PARENT:
+          router.replace('/(parent)/dashboard');
+          break;
+        case UserRole.CHILD:
+          router.replace('/(child)/missions');
+          break;
       case UserRole.TUTOR:
-        router.replace('/(tutor)');
+        router.replace('/(tutor)/portal');
         break;
-      default:
-        router.replace('/auth');
-    }
+        default:
+          router.replace('/auth');
+      }
+    })();
   }, [isAuthenticated, isLoading, fontsLoaded, user?.role]);
 
   if (!fontsLoaded || isLoading) {
@@ -165,9 +196,12 @@ async function registerPushNotifications(): Promise<void> {
     const { status } = await Notifications.requestPermissionsAsync();
     if (status !== 'granted') return;
 
-    const token = await Notifications.getExpoPushTokenAsync({
-      projectId: 'your-expo-project-id', // Set in app.json extra.eas.projectId
-    });
+    const projectId =
+      (Constants.expoConfig as { extra?: { eas?: { projectId?: string } } } | undefined)?.extra
+        ?.eas?.projectId;
+    const token = await Notifications.getExpoPushTokenAsync(
+      projectId ? { projectId: String(projectId) } : undefined,
+    );
 
     await apiClient.post(API_ENDPOINTS.notifications.registerToken, {
       expoPushToken: token.data,

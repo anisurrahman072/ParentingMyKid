@@ -17,10 +17,12 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { router } from 'expo-router';
+import * as SecureStore from 'expo-secure-store';
 import { useAuthStore } from '../../../src/store/auth.store';
 import { useFamilyStore } from '../../../src/store/family.store';
 import { COLORS } from '../../../src/constants/colors';
 import { SPACING } from '../../../src/constants/spacing';
+import { CHILD_ID_KEY } from '../../../src/store/deviceSession.store';
 
 interface SettingsRowProps {
   icon: string;
@@ -85,6 +87,22 @@ export default function SettingsScreen() {
     ]);
   }
 
+  function handDeviceToChild() {
+    const go = async () => {
+      const childId = await SecureStore.getItemAsync(CHILD_ID_KEY);
+      if (!childId) {
+        Alert.alert('Pair this device', 'Set up a child profile on this device from Add child device first.');
+        return;
+      }
+      await logout();
+      router.replace('/auth/child-pin');
+    };
+    Alert.alert('Hand to child?', 'You will be signed out so your child can enter their PIN.', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Continue', onPress: () => void go() },
+    ]);
+  }
+
   return (
     <SafeAreaView style={styles.screen} edges={['top']}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
@@ -92,12 +110,12 @@ export default function SettingsScreen() {
         <View style={styles.profileHeader}>
           <View style={styles.avatarPlaceholder}>
             <Text style={styles.avatarInitial}>
-              {user?.firstName?.[0]?.toUpperCase() ?? 'P'}
+              {user?.name?.[0]?.toUpperCase() ?? 'P'}
             </Text>
           </View>
           <View style={styles.profileInfo}>
             <Text style={styles.profileName}>
-              {user?.firstName} {user?.lastName}
+              {user?.name ?? 'Parent'}
             </Text>
             <Text style={styles.profileEmail}>{user?.email}</Text>
             <View style={[styles.planBadge, isPremium ? styles.planBadgePremium : styles.planBadgeFree]}>
@@ -119,6 +137,20 @@ export default function SettingsScreen() {
             <Text style={styles.upgradeArrow}>→</Text>
           </TouchableOpacity>
         )}
+
+        <SettingsSection title="Family & device">
+          <SettingsRow
+            icon="📱"
+            label="Add child device"
+            onPress={() => router.push('/(parent)/settings/add-device')}
+          />
+          <SettingsRow
+            icon="🎨"
+            label="Appearance"
+            onPress={() => router.push('/(parent)/settings/theme-picker')}
+          />
+          <SettingsRow icon="👧" label="Hand device to child" onPress={handDeviceToChild} />
+        </SettingsSection>
 
         {/* Account */}
         <SettingsSection title="Account">

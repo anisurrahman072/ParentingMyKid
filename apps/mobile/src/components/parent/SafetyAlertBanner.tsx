@@ -63,14 +63,16 @@ export function SafetyAlertBanner({ alert, onDismiss }: SafetyAlertBannerProps) 
             {new Date(alert.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
           </Text>
         </View>
-        <Text style={styles.title} numberOfLines={1}>{alert.alertType.replace(/_/g, ' ')}</Text>
+        <Text style={styles.title} numberOfLines={1}>
+          {(alert.alertType ?? alert.title).replace(/_/g, ' ')}
+        </Text>
         {alert.summary && (
           <Text style={styles.summary} numberOfLines={2}>{alert.summary}</Text>
         )}
         <View style={styles.actions}>
           <TouchableOpacity
             style={styles.viewButton}
-            onPress={() => router.push('/(parent)/safety/index')}
+            onPress={() => router.push('/(parent)/safety')}
           >
             <Text style={[styles.viewButtonText, { color: config.border }]}>View details →</Text>
           </TouchableOpacity>

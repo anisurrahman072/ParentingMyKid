@@ -11,8 +11,11 @@
  */
 
 import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
+import * as SecureStore from 'expo-secure-store';
 import { API_BASE_URL, API_ENDPOINTS } from '../constants/api';
 import { useAuthStore, getStoredRefreshToken } from '../store/auth.store';
+
+const REFRESH_TOKEN_KEY = 'pmk_refresh_token';
 
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
@@ -70,8 +73,14 @@ apiClient.interceptors.response.use(
           refreshToken,
         });
 
-        const { accessToken } = response.data as { accessToken: string; refreshToken: string };
+        const { accessToken, refreshToken: newRefreshToken } = response.data as {
+          accessToken: string;
+          refreshToken: string;
+        };
         useAuthStore.getState().setAccessToken(accessToken);
+        if (newRefreshToken) {
+          await SecureStore.setItemAsync(REFRESH_TOKEN_KEY, newRefreshToken);
+        }
 
         // Drain the queue with new token
         refreshQueue.forEach((callback) => callback(accessToken));

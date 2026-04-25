@@ -79,14 +79,14 @@ const MILESTONE_EXAMPLES = [
 
 export default function MemoryScreen() {
   const [activeTab, setActiveTab] = useState<MemoryTab>('gallery');
-  const { activeChild } = useFamilyStore();
+  const activeChild = useFamilyStore((s) => s.getSelectedChild());
   const qc = useQueryClient();
 
   const { data: memoriesData } = useQuery({
-    queryKey: ['memories', activeChild?.id],
+    queryKey: ['memories', activeChild?.childId],
     queryFn: () =>
-      apiClient.get(`/memory/${activeChild?.id}`).then((r) => r.data.memories ?? []),
-    enabled: !!activeChild?.id,
+      apiClient        .get(`/memory/${activeChild?.childId}`).then((r) => r.data.memories ?? []),
+    enabled: !!activeChild?.childId,
   });
 
   const memories: MemoryItem[] = memoriesData ?? [];
@@ -95,13 +95,13 @@ export default function MemoryScreen() {
     mutationFn: async (imageUri: string) => {
       const formData = new FormData();
       formData.append('file', { uri: imageUri, type: 'image/jpeg', name: 'memory.jpg' } as any);
-      formData.append('childId', activeChild?.id ?? '');
+      formData.append('childId', activeChild?.childId ?? '');
       return apiClient.post('/memory/upload', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['memories', activeChild?.id] });
+      qc.invalidateQueries({ queryKey: ['memories', activeChild?.childId] });
     },
   });
 
