@@ -56,7 +56,9 @@
         {
           "icon": "./assets/icons/notification-icon.png",
           "color": "#059669",
-          "sounds": ["./assets/sounds/notification.wav"]
+          "sounds": [
+            "./assets/sounds/notification.wav"
+          ]
         }
       ],
       [
@@ -71,7 +73,8 @@
         {
           "cameraPermission": "Allow ParentingMyKid to access your camera for mission photo proof."
         }
-      ]
+      ],
+      "@react-native-community/datetimepicker"
     ],
     "experiments": {
       "typedRoutes": true

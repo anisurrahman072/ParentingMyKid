@@ -13,6 +13,7 @@
  *         Never overwhelming — only show what matters RIGHT NOW.
  */
 
+import { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -21,6 +22,7 @@ import {
   TouchableOpacity,
   RefreshControl,
   Dimensions,
+  AppState,
 } from 'react-native';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import Animated, { FadeInDown, FadeInRight } from 'react-native-reanimated';
@@ -33,11 +35,65 @@ import { useAuthStore } from '../../../src/store/auth.store';
 import { apiClient } from '../../../src/services/api.client';
 import { API_ENDPOINTS } from '../../../src/constants/api';
 import { FamilyDashboard, ChildDashboardCard } from '@parentingmykid/shared-types';
+import { ParentHomeEngagementCard } from '../../../src/components/parent/ParentHomeEngagementCard';
+import { ParentHomeSetupTiles } from '../../../src/components/parent/ParentHomeSetupTiles';
+import { ParentPairedDevicesCard } from '../../../src/components/parent/ParentPairedDevicesCard';
 
 const { width } = Dimensions.get('window');
 
+/** Header clock ticks every second so the line matches the system clock; only this subtree re-renders. */
+function ParentDashboardGreetingHeader({ firstName }: { firstName: string }) {
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const tick = () => setNow(new Date());
+    tick();
+    const id = setInterval(tick, 1000);
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') tick();
+    });
+    return () => {
+      clearInterval(id);
+      sub.remove();
+    };
+  }, []);
+
+  const greetingHour = now.getHours();
+  const greeting =
+    greetingHour < 12 ? 'Good morning' : greetingHour < 17 ? 'Good afternoon' : 'Good evening';
+
+  const dateSubtitle = now.toLocaleDateString(undefined, {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+  });
+  const timeSubtitle = now.toLocaleTimeString(undefined, {
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+
+  return (
+    <Animated.View entering={FadeInDown.duration(600)} style={styles.header}>
+      <View>
+        <Text style={styles.greeting}>
+          {greeting}, {firstName}!
+        </Text>
+        <Text style={styles.date}>
+          {dateSubtitle} · {timeSubtitle}
+        </Text>
+      </View>
+      <TouchableOpacity
+        style={styles.settingsButton}
+        onPress={() => router.push('/(parent)/settings')}
+        accessibilityLabel="Open settings"
+      >
+        <Text style={styles.settingsIcon}>⚙️</Text>
+      </TouchableOpacity>
+    </Animated.View>
+  );
+}
+
 export default function ParentDashboard() {
-  const { user } = useAuthStore();
+  const { user, familyIds } = useAuthStore();
   const { activeFamilyId, dashboard, setDashboard, selectChild } = useFamilyStore();
   const queryClient = useQueryClient();
 
@@ -78,12 +134,10 @@ export default function ParentDashboard() {
     refetchInterval: 5 * 60 * 1000, // Refresh every 5 minutes
   });
 
-  const greetingHour = new Date().getHours();
-  const greeting =
-    greetingHour < 12 ? 'Good morning' : greetingHour < 17 ? 'Good afternoon' : 'Good evening';
-
   const firstName = user?.name.split(' ')[0] ?? 'Parent';
   const urgentAlerts = dashboard?.urgentAlerts ?? [];
+  const pairedDevices = dashboard?.pairedDevices ?? [];
+  const children = dashboard?.children ?? [];
 
   return (
     <View style={styles.container}>
@@ -98,24 +152,7 @@ export default function ParentDashboard() {
           />
         }
       >
-        {/* Header */}
-        <Animated.View entering={FadeInDown.duration(600)} style={styles.header}>
-          <View>
-            <Text style={styles.greeting}>
-              {greeting}, {firstName}! 👋
-            </Text>
-            <Text style={styles.date}>
-              {new Date().toLocaleDateString('en-US', {
-                weekday: 'long',
-                month: 'long',
-                day: 'numeric',
-              })}
-            </Text>
-          </View>
-          <TouchableOpacity style={styles.settingsButton}>
-            <Text style={styles.settingsIcon}>⚙️</Text>
-          </TouchableOpacity>
-        </Animated.View>
+        <ParentDashboardGreetingHeader firstName={firstName} />
 
         {/* Urgent Safety Alerts */}
         {urgentAlerts.length > 0 && (
@@ -161,9 +198,27 @@ export default function ParentDashboard() {
           </Animated.View>
         )}
 
-        {/* Children Cards */}
-        <Text style={styles.sectionTitle}>Your Children Today</Text>
-        {(dashboard?.children ?? []).map((child, index) => (
+        {dashboard && (
+          <>
+            <ParentHomeSetupTiles
+              familyName={dashboard.familyName}
+              familyGroupsCount={familyIds.length}
+              childCount={dashboard.children.length}
+              onOpenFamily={() => router.push('/(parent)/family-space')}
+              onAddKids={() => router.push('/(parent)/add-child')}
+            />
+            <ParentHomeEngagementCard
+              dashboard={dashboard}
+              onPairDevice={() => router.push('/(parent)/settings/add-device')}
+              onNoUsageCta={() => router.push('/(parent)/chat')}
+            />
+          </>
+        )}
+
+        <Text style={styles.sectionTitle}>Your children</Text>
+        <Text style={styles.sectionSubtitle}>Today at a glance</Text>
+
+        {children.map((child, index) => (
           <Animated.View
             key={child.childId}
             entering={FadeInRight.duration(600).delay(index * 100)}
@@ -178,8 +233,18 @@ export default function ParentDashboard() {
           </Animated.View>
         ))}
 
-        {/* Quick Actions */}
-        <Text style={styles.sectionTitle}>Quick Actions</Text>
+        {dashboard && (
+          <ParentPairedDevicesCard
+            devices={pairedDevices}
+            onAddDevice={() => router.push('/(parent)/settings/add-device')}
+          />
+        )}
+
+        <Text style={styles.sectionTitle}>Quick actions</Text>
+        <Text style={styles.sectionSubtitle}>
+          Location, screen-time controls, and growth — the main ways you manage your kid&apos;s
+          device from the parent app.
+        </Text>
         <View style={styles.quickActions}>
           <QuickActionButton
             icon="📍"
@@ -254,6 +319,9 @@ function ChildDashboardCardView({
         ? Colors.wellbeing.okay
         : Colors.wellbeing.poor;
 
+  const linkedCount = child.linkedDeviceCount ?? 0;
+  const hasUsageToday = child.hasScreenUsageToday ?? false;
+
   return (
     <TouchableOpacity style={styles.childCard} onPress={onPress} activeOpacity={0.8}>
       <View style={styles.childCardHeader}>
@@ -279,6 +347,18 @@ function ChildDashboardCardView({
         <View style={styles.progressBar}>
           <View style={[styles.progressFill, { width: `${missionProgress}%` }]} />
         </View>
+      </View>
+
+      <View style={styles.deviceHint}>
+        <Text style={styles.deviceHintText} numberOfLines={2}>
+          {linkedCount > 0
+            ? `${linkedCount} device${linkedCount === 1 ? '' : 's'} linked · ${
+                hasUsageToday
+                  ? 'We’ve seen screen activity today'
+                  : 'No screen activity logged yet today'
+              }`
+            : 'No device linked — add a child device to track usage and controls'}
+        </Text>
       </View>
 
       {/* Bottom stats */}
@@ -443,8 +523,28 @@ const styles = StyleSheet.create({
     fontFamily: Typography.fonts.bold,
     fontSize: Typography.parent.subheading,
     color: Colors.parent.textPrimary,
-    marginBottom: Spacing.md,
+    marginBottom: 6,
     marginTop: Spacing.lg,
+  },
+  sectionSubtitle: {
+    fontFamily: Typography.fonts.regular,
+    fontSize: Typography.parent.small,
+    lineHeight: 20,
+    color: Colors.parent.textSecondary,
+    marginBottom: Spacing.md,
+  },
+  deviceHint: {
+    marginBottom: Spacing.md,
+    backgroundColor: 'rgba(59, 130, 246, 0.08)',
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: Spacing.md,
+  },
+  deviceHintText: {
+    fontFamily: Typography.fonts.regular,
+    fontSize: Typography.parent.caption,
+    lineHeight: 18,
+    color: Colors.parent.textPrimary,
   },
   childCard: {
     backgroundColor: Colors.parent.cardDark,

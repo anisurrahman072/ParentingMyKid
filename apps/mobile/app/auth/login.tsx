@@ -17,7 +17,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { router } from 'expo-router';
+import { Redirect, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 import { useAuthStore } from '../../src/store/auth.store';
@@ -25,6 +25,7 @@ import { apiClient } from '../../src/services/api.client';
 import { API_ENDPOINTS } from '../../src/constants/api';
 import { COLORS } from '../../src/constants/colors';
 import { SPACING } from '../../src/constants/spacing';
+import { getRoleHomeHref } from '../../src/utils/roleHomeHref';
 
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
@@ -33,7 +34,14 @@ export default function LoginScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const passwordRef = useRef<TextInput>(null);
 
-  const { login } = useAuthStore();
+  const { login, isLoading: authLoading, isAuthenticated, user } = useAuthStore();
+
+  if (!authLoading && isAuthenticated && user) {
+    const href = getRoleHomeHref(user.role);
+    if (href) {
+      return <Redirect href={href} />;
+    }
+  }
 
   async function handleLogin() {
     if (!email.trim() || !password) {

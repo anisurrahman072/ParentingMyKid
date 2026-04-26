@@ -20,7 +20,7 @@ import {
   Switch,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { router } from 'expo-router';
+import { Redirect, router } from 'expo-router';
 import Animated, { FadeInDown, FadeInUp, FadeOutUp } from 'react-native-reanimated';
 import { useAuthStore } from '../../src/store/auth.store';
 import { apiClient } from '../../src/services/api.client';
@@ -29,6 +29,7 @@ import { COLORS } from '../../src/constants/colors';
 import { SPACING } from '../../src/constants/spacing';
 import { AppLogoMark } from '../../src/components/branding/AppLogoMark';
 import { LOGO_PNG, APP_DISPLAY_NAME } from '../../src/constants/branding';
+import { getRoleHomeHref } from '../../src/utils/roleHomeHref';
 
 type Step = 'personal' | 'consent' | 'success';
 
@@ -46,7 +47,14 @@ export default function RegisterScreen() {
   const [consentToTerms, setConsentToTerms] = useState(false);
   const [consentToDataProcessing, setConsentToDataProcessing] = useState(false);
 
-  const { login } = useAuthStore();
+  const { login, isLoading: authLoading, isAuthenticated, user } = useAuthStore();
+
+  if (step !== 'success' && !authLoading && isAuthenticated && user) {
+    const href = getRoleHomeHref(user.role);
+    if (href) {
+      return <Redirect href={href} />;
+    }
+  }
 
   function validatePersonal(): boolean {
     if (!firstName.trim()) { Alert.alert('Required', 'Please enter your first name.'); return false; }

@@ -17,6 +17,41 @@ import { useAuthStore, getStoredRefreshToken } from '../store/auth.store';
 
 const REFRESH_TOKEN_KEY = 'pmk_refresh_token';
 
+/** Single flight so parallel requests don’t all hit /auth/refresh at once. */
+let ensureTokenPromise: Promise<void> | null = null;
+
+function isPublicUnauthenticatedPath(url: string | undefined) {
+  if (!url) return false;
+  return (
+    url.includes('/auth/login') ||
+    url.includes('/auth/register') ||
+    url.includes('/auth/refresh') ||
+    url.includes('/auth/child-login') ||
+    url.includes('pair-device/confirm')
+  );
+}
+
+async function ensureAccessTokenInMemory(requestUrl: string | undefined) {
+  if (isPublicUnauthenticatedPath(requestUrl)) {
+    return;
+  }
+  if (useAuthStore.getState().accessToken) {
+    return;
+  }
+  if (!ensureTokenPromise) {
+    ensureTokenPromise = (async () => {
+      const rt = await getStoredRefreshToken();
+      if (!rt) {
+        return;
+      }
+      await useAuthStore.getState().revalidateFromSecureStore();
+    })().finally(() => {
+      ensureTokenPromise = null;
+    });
+  }
+  await ensureTokenPromise;
+}
+
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
   timeout: 30000, // 30 second timeout — AI endpoints can be slow
@@ -28,7 +63,8 @@ const apiClient = axios.create({
 // ─── Request Interceptor — Attach JWT ─────────────────────────────────────────
 
 apiClient.interceptors.request.use(
-  (config: InternalAxiosRequestConfig) => {
+  async (config: InternalAxiosRequestConfig) => {
+    await ensureAccessTokenInMemory(config.url);
     const { accessToken } = useAuthStore.getState();
     if (accessToken) {
       config.headers.Authorization = `Bearer ${accessToken}`;
@@ -89,9 +125,14 @@ apiClient.interceptors.response.use(
         // Retry the original request
         originalRequest.headers.Authorization = `Bearer ${accessToken}`;
         return apiClient(originalRequest);
-      } catch {
-        // Refresh failed — session is truly expired
-        await useAuthStore.getState().logout();
+      } catch (refreshErr) {
+        // Only clear the session when the server rejects the refresh token — not on network blips
+        if (
+          axios.isAxiosError(refreshErr) &&
+          (refreshErr.response?.status === 401 || refreshErr.response?.status === 403)
+        ) {
+          await useAuthStore.getState().logout();
+        }
         return Promise.reject(error);
       } finally {
         isRefreshing = false;

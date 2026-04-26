@@ -6,7 +6,7 @@
  */
 
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { router } from 'expo-router';
+import { Redirect, router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 import { Colors } from '../../src/constants/colors';
@@ -14,8 +14,18 @@ import { Typography } from '../../src/constants/typography';
 import { Spacing } from '../../src/constants/spacing';
 import { AppLogoMark } from '../../src/components/branding/AppLogoMark';
 import { AppDisplayNameGradient } from '../../src/components/branding/AppDisplayNameGradient';
+import { useAuthStore } from '../../src/store/auth.store';
+import { getRoleHomeHref } from '../../src/utils/roleHomeHref';
 
 export default function WelcomeScreen() {
+  const { isLoading, isAuthenticated, user } = useAuthStore();
+  if (!isLoading && isAuthenticated && user) {
+    const href = getRoleHomeHref(user.role);
+    if (href) {
+      return <Redirect href={href} />;
+    }
+  }
+
   return (
     <LinearGradient
       colors={Colors.parent.gradientHero as [string, string]}

@@ -19,6 +19,43 @@ import { API_BASE_URL, API_ENDPOINTS } from '../constants/api';
 const REFRESH_TOKEN_KEY = 'pmk_refresh_token';
 const USER_DATA_KEY = 'pmk_user_data';
 
+type RefreshOutcome = 'success' | 'unauthorized' | 'offline';
+
+/** Single-flight refresh so parallel callers don’t rotate the same refresh token twice. */
+let refreshFlight: Promise<RefreshOutcome> | null = null;
+
+async function runTokenRefresh(): Promise<RefreshOutcome> {
+  if (refreshFlight) return refreshFlight;
+  refreshFlight = (async (): Promise<RefreshOutcome> => {
+    try {
+      const refreshToken = await SecureStore.getItemAsync(REFRESH_TOKEN_KEY);
+      if (!refreshToken) return 'unauthorized';
+      try {
+        const response = await axios.post(`${API_BASE_URL}${API_ENDPOINTS.auth.refresh}`, {
+          refreshToken,
+        });
+        const { accessToken, refreshToken: newRt } = response.data as {
+          accessToken: string;
+          refreshToken?: string;
+        };
+        useAuthStore.getState().setAccessToken(accessToken);
+        if (newRt) {
+          await SecureStore.setItemAsync(REFRESH_TOKEN_KEY, newRt);
+        }
+        return 'success';
+      } catch (e) {
+        if (axios.isAxiosError(e) && (e.response?.status === 401 || e.response?.status === 403)) {
+          return 'unauthorized';
+        }
+        return 'offline';
+      }
+    } finally {
+      refreshFlight = null;
+    }
+  })();
+  return refreshFlight;
+}
+
 interface AuthState {
   // Current state
   accessToken: string | null;
@@ -31,7 +68,12 @@ interface AuthState {
   login: (accessToken: string, refreshToken: string, user: UserProfile) => Promise<void>;
   logout: () => Promise<void>;
   setAccessToken: (token: string) => void;
-  loadPersistedAuth: () => Promise<void>;
+  loadPersistedAuth: (opts?: { silent?: boolean }) => Promise<void>;
+  /**
+   * Re-apply user + access token from SecureStore (no full loading screen).
+   * Use after Fast Refresh or when the zustand store was reset in memory but the device still has a session.
+   */
+  revalidateFromSecureStore: () => Promise<void>;
   updateUser: (user: Partial<UserProfile>) => void;
   /** Sets access (and optional rotated refresh) from refresh token — used when only SecureStore is hydrated. */
   refreshAccessToken: () => Promise<boolean>;
@@ -92,10 +134,14 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   /**
    * Called on app startup to restore auth state from SecureStore.
-   * If refresh token exists, triggers a silent token refresh.
+   * Fetches a new access token so requests don’t 401 and trigger accidental logout.
+   * @param silent - if true, does not flip `isLoading` (e.g. background revalidation)
    */
-  loadPersistedAuth: async () => {
-    set({ isLoading: true });
+  loadPersistedAuth: async (opts?: { silent?: boolean }) => {
+    const silent = opts?.silent === true;
+    if (!silent) {
+      set({ isLoading: true });
+    }
     try {
       const userData = await SecureStore.getItemAsync(USER_DATA_KEY);
       const refreshToken = await SecureStore.getItemAsync(REFRESH_TOKEN_KEY);
@@ -106,12 +152,40 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         if (user.familyIds && user.familyIds.length > 0) {
           useFamilyStore.getState().setActiveFamilyId(user.familyIds[0]);
         }
-        // Access token will be refreshed by the API interceptor on first request
+        const outcome = await runTokenRefresh();
+        if (outcome === 'unauthorized') {
+          await get().logout();
+        }
       }
     } catch {
-      // SecureStore read failed — user needs to log in again
+      if (!silent) {
+        // SecureStore read failed — clear stuck loading only when not silent
+      }
     } finally {
-      set({ isLoading: false });
+      if (!silent) {
+        set({ isLoading: false });
+      }
+    }
+  },
+
+  revalidateFromSecureStore: async () => {
+    const refreshToken = await SecureStore.getItemAsync(REFRESH_TOKEN_KEY);
+    const userData = await SecureStore.getItemAsync(USER_DATA_KEY);
+    if (!refreshToken || !userData) {
+      return;
+    }
+    try {
+      const user = JSON.parse(userData) as UserProfile;
+      set({ user, isAuthenticated: true, familyIds: user.familyIds ?? [] });
+      if (user.familyIds && user.familyIds.length > 0) {
+        useFamilyStore.getState().setActiveFamilyId(user.familyIds[0]);
+      }
+      const outcome = await runTokenRefresh();
+      if (outcome === 'unauthorized') {
+        await get().logout();
+      }
+    } catch {
+      // ignore
     }
   },
 
@@ -122,26 +196,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     }
   },
 
-  refreshAccessToken: async () => {
-    const refreshToken = await SecureStore.getItemAsync(REFRESH_TOKEN_KEY);
-    if (!refreshToken) return false;
-    try {
-      const response = await axios.post(`${API_BASE_URL}${API_ENDPOINTS.auth.refresh}`, {
-        refreshToken,
-      });
-      const { accessToken, refreshToken: newRt } = response.data as {
-        accessToken: string;
-        refreshToken?: string;
-      };
-      set({ accessToken });
-      if (newRt) {
-        await SecureStore.setItemAsync(REFRESH_TOKEN_KEY, newRt);
-      }
-      return true;
-    } catch {
-      return false;
-    }
-  },
+  refreshAccessToken: async () => (await runTokenRefresh()) === 'success',
 }));
 
 // Helper to get the stored refresh token (used by API interceptor)
