@@ -18,6 +18,9 @@ export const Colors = {
     gradientCtaBlue: ['#3B82F6', '#0EA5E9'] as const,
     gradientCtaBlue3: ['#2563EB', '#3B82F6', '#0EA5E9'] as const,
 
+    /** Family Space “Create new family” pill — peach → rose → lilac → mint (brown text stays AA on stops) */
+    gradientCreateFamilyCta: ['#FFE8D6', '#FFD6E4', '#E4DCFF', '#CFF0E8'] as const,
+
     // Primary / blue (replaces legacy indigo #6366F1)
     primary: '#3B82F6',
     primaryLight: '#60A5FA',

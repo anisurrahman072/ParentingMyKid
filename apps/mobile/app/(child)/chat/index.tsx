@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -8,9 +8,12 @@ import {
   FlatList,
   KeyboardAvoidingView,
   Platform,
+  Keyboard,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { router } from 'expo-router';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { Ionicons } from '@expo/vector-icons';
 import { useAuthStore } from '../../../src/store/auth.store';
 import { useFamilyStore } from '../../../src/store/family.store';
 import { apiClient } from '../../../src/services/api.client';
@@ -27,12 +30,21 @@ interface ChatRow {
 }
 
 export default function ChildFamilyChat() {
+  const insets = useSafeAreaInsets();
   const { user } = useAuthStore();
   const { activeFamilyId } = useFamilyStore();
   const [text, setText] = useState('');
   const listRef = useRef<FlatList<ChatRow>>(null);
   const queryClient = useQueryClient();
   const familyId = activeFamilyId ?? user?.familyIds?.[0] ?? '';
+
+  useEffect(() => {
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const sub = Keyboard.addListener(showEvent, () => {
+      requestAnimationFrame(() => listRef.current?.scrollToEnd({ animated: true }));
+    });
+    return () => sub.remove();
+  }, []);
 
   const { data, isLoading } = useQuery({
     queryKey: ['family-chat', familyId, 'child'],
@@ -59,31 +71,66 @@ export default function ChildFamilyChat() {
 
   const messages = data?.messages ?? [];
   const childUserId = user?.id;
+  const keyboardOffset = 0;
+
+  const goBack = useCallback(() => {
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace('/(child)/missions');
+    }
+  }, []);
 
   if (!familyId) {
     return (
-      <SafeAreaView style={styles.screen} edges={['top']}>
+      <SafeAreaView style={styles.screen} edges={['top', 'left', 'right']}>
+        <View style={styles.topBar}>
+          <TouchableOpacity
+            onPress={goBack}
+            style={styles.backBtn}
+            hitSlop={12}
+            accessibilityLabel="Back"
+          >
+            <Ionicons name="chevron-back" size={26} color={COLORS.kids.textOnGradient} />
+          </TouchableOpacity>
+          <View style={styles.topTitleBlock} />
+          <View style={styles.backBtn} />
+        </View>
         <Text style={styles.empty}>We could not find your family. Try signing in again.</Text>
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView style={styles.screen} edges={['top']}>
-      <View style={styles.top}>
-        <Text style={styles.title}>Family chat</Text>
-        <Text style={styles.sub}>Chat with your parents in one place.</Text>
+    <SafeAreaView style={styles.screen} edges={['top', 'left', 'right']}>
+      <View style={styles.topBar}>
+        <TouchableOpacity
+          onPress={goBack}
+          style={styles.backBtn}
+          hitSlop={12}
+          accessibilityLabel="Back"
+        >
+          <Ionicons name="chevron-back" size={26} color={COLORS.kids.textOnGradient} />
+        </TouchableOpacity>
+        <View style={styles.topTitleBlock}>
+          <Text style={styles.title}>Family chat</Text>
+          <Text style={styles.sub}>Chat with your parents in one place.</Text>
+        </View>
+        <View style={styles.backBtn} />
       </View>
       <KeyboardAvoidingView
         style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 8 : 0}
+        behavior="padding"
+        keyboardVerticalOffset={keyboardOffset}
       >
         <FlatList
           ref={listRef}
+          style={styles.flex}
           data={messages}
           keyExtractor={(m) => m.id}
           contentContainerStyle={styles.list}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="interactive"
           onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: true })}
           ListEmptyComponent={
             isLoading ? (
@@ -105,7 +152,7 @@ export default function ChildFamilyChat() {
             );
           }}
         />
-        <View style={styles.inputRow}>
+        <View style={[styles.inputRow, { paddingBottom: Math.max(insets.bottom, 8) }]}>
           <TextInput
             value={text}
             onChangeText={setText}
@@ -114,6 +161,7 @@ export default function ChildFamilyChat() {
             style={styles.input}
             multiline
             maxLength={2000}
+            {...(Platform.OS === 'android' ? { textAlignVertical: 'top' as const } : {})}
           />
           <TouchableOpacity
             style={[styles.send, (!text.trim() || send.isPending) && styles.sendOff]}
@@ -131,7 +179,15 @@ export default function ChildFamilyChat() {
 const styles = StyleSheet.create({
   flex: { flex: 1 },
   screen: { flex: 1, backgroundColor: 'transparent' },
-  top: { paddingHorizontal: SPACING[4], marginBottom: 6, paddingTop: 8 },
+  topBar: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    paddingHorizontal: SPACING[3],
+    marginBottom: 6,
+    paddingTop: 4,
+  },
+  backBtn: { width: 40, height: 40, justifyContent: 'center' },
+  topTitleBlock: { flex: 1, minWidth: 0, paddingHorizontal: 4 },
   title: { fontSize: 22, fontWeight: '900', color: COLORS.kids.textOnGradient, fontFamily: 'Nunito_800ExtraBold' },
   sub: { color: COLORS.kids.textOnGradientMuted, marginTop: 4, fontFamily: 'Nunito_500Medium' },
   list: { padding: SPACING[3], gap: 10, paddingBottom: 60 },

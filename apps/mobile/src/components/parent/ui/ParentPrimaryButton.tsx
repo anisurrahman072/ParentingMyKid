@@ -4,6 +4,7 @@ import {
   Text,
   StyleSheet,
   ActivityIndicator,
+  View,
   ViewStyle,
   StyleProp,
 } from 'react-native';
@@ -13,6 +14,8 @@ import { SPACING } from '../../../constants/spacing';
 
 type Props = {
   label: string;
+  /** Shown next to spinner when `loading` (defaults to "Saving…"). */
+  loadingLabel?: string;
   onPress: () => void;
   loading?: boolean;
   disabled?: boolean;
@@ -22,7 +25,14 @@ type Props = {
 /**
  * Main parent-app CTA — blue gradient, white label (design system).
  */
-export function ParentPrimaryButton({ label, onPress, loading, disabled, style }: Props) {
+export function ParentPrimaryButton({
+  label,
+  loadingLabel = 'Saving…',
+  onPress,
+  loading,
+  disabled,
+  style,
+}: Props) {
   return (
     <TouchableOpacity
       onPress={onPress}
@@ -37,7 +47,10 @@ export function ParentPrimaryButton({ label, onPress, loading, disabled, style }
         style={styles.gradient}
       >
         {loading ? (
-          <ActivityIndicator color="#FFFFFF" />
+          <View style={styles.loadingRow}>
+            <ActivityIndicator color="#FFFFFF" size="small" />
+            <Text style={styles.label}>{loadingLabel}</Text>
+          </View>
         ) : (
           <Text style={styles.label}>{label}</Text>
         )}
@@ -54,6 +67,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingVertical: 14,
     paddingHorizontal: SPACING[6],
+  },
+  loadingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
   },
   label: {
     color: '#FFFFFF',

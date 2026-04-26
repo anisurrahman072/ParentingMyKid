@@ -171,8 +171,7 @@ export default function ParentLayout() {
           <Tabs.Screen name="settings/add-device" options={{ href: null }} />
           <Tabs.Screen name="settings/appearance" options={{ href: null }} />
           <Tabs.Screen name="settings/theme-picker" options={{ href: null }} />
-          <Tabs.Screen name="family-space/index" options={{ href: null }} />
-          <Tabs.Screen name="add-child/index" options={{ href: null }} />
+          <Tabs.Screen name="family-space" options={{ href: null }} />
         </Tabs>
         </View>
       </ThemeProvider>

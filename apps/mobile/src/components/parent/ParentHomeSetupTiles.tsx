@@ -6,26 +6,32 @@ import { COLORS } from '../../constants/colors';
 import { Spacing, Shadow } from '../../constants/spacing';
 import { Typography } from '../../constants/typography';
 import { colorWithAlpha } from '../../utils/colorAlpha';
+import { possessiveShortFamilyTitle } from '../../utils/familyTitle';
 
 const GAP = Spacing.md;
 const PAD = Spacing.screenPadding * 2;
 const PREMIUM_RADIUS = 22;
 
+/**
+ * Height of one tile when kicker text is a single line each (icon + title + hint + CTA).
+ * Matches `LoadingComponent` `setupTile`. Tiles grow if title/hint wrap to two lines.
+ */
+export const PARENT_HOME_SETUP_TILE_MIN_HEIGHT =
+  12 + // cardInner paddingTop
+  48 + // heroIcon
+  2 + // heroIcon marginBottom
+  6 + // gap
+  21 + // title lineHeight (one line)
+  6 +
+  16 + // hint lineHeight (one line)
+  6 +
+  (8 + 18 + 8) + // ctaGrad paddingVertical + label line ~18 + paddingVertical
+  12; // cardInner paddingBottom
+
 const ACCENT = {
   family: COLORS.parent.primary,
   kids: COLORS.parent.gold,
 } as const;
-
-/** e.g. "Anis Rahman" → "Anis's Family" */
-function possessiveShortFamilyTitle(familyName: string): string {
-  const t = familyName.trim();
-  if (!t) return "Your family";
-  const firstWord = t.split(/\s+/)[0] ?? t;
-  const first = firstWord.length
-    ? firstWord[0]!.toUpperCase() + firstWord.slice(1)
-    : firstWord;
-  return `${first}'s Family`;
-}
 
 type Props = {
   familyName: string;

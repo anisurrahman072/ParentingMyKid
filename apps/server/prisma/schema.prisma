@@ -1052,14 +1052,24 @@ model FamilyCalendarEvent {
   title       String
   type        String    // 'EXAM' | 'APPOINTMENT' | 'BIRTHDAY' | 'TRIP' | 'SCHOOL' | 'SPORTS' | 'TUITION' | 'EID' | 'CUSTOM'
   description String?
+  location    String?   // optional place / address text
   startAt     DateTime
   endAt       DateTime?
   reminderDays Int?     // Reminder sent X days before
+  /// NONE = one-off; WEEKLY = same time each week (0=Sun..6=Sat)
+  recurrenceKind       String @default("NONE")
+  recurrenceByWeekday  Int? // legacy: first day; used when recurrenceByWeekdays is empty
+  recurrenceByWeekdays Int[] @default([]) // when non-empty, weekly repeats on these weekdays
+  /// Family users (parents) this event applies to — shown on week grid avatars
+  assigneeUserIds  String[] @default([])
+  /// Child profiles this event applies to (in addition to legacy childId)
+  assigneeChildIds String[] @default([])
   createdBy   String    // User ID
   createdAt   DateTime  @default(now())
 
   family FamilyGroup @relation(fields: [familyId], references: [id], onDelete: Cascade)
 
+  @@index([familyId, startAt])
   @@map("family_calendar_events")
 }
 

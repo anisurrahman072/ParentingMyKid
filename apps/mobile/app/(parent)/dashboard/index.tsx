@@ -36,7 +36,9 @@ import { apiClient } from '../../../src/services/api.client';
 import { API_ENDPOINTS } from '../../../src/constants/api';
 import { FamilyDashboard, ChildDashboardCard } from '@parentingmykid/shared-types';
 import { ParentHomeEngagementCard } from '../../../src/components/parent/ParentHomeEngagementCard';
+import { ParentHomeScheduleCard } from '../../../src/components/parent/ParentHomeScheduleCard';
 import { ParentHomeSetupTiles } from '../../../src/components/parent/ParentHomeSetupTiles';
+import { ParentHomeSetupTilesLoadingRow } from '../../../src/components/parent/ui/LoadingComponent';
 import { ParentPairedDevicesCard } from '../../../src/components/parent/ParentPairedDevicesCard';
 
 const { width } = Dimensions.get('window');
@@ -120,17 +122,18 @@ export default function ParentDashboard() {
     },
   });
 
-  const { refetch, isRefetching } = useQuery({
-    queryKey: ['family-dashboard', activeFamilyId],
+  const { refetch, isRefetching, isPending, isError } = useQuery({
+    queryKey: ['family-home', activeFamilyId],
     queryFn: async () => {
       if (!activeFamilyId) return null;
       const response = await apiClient.get<FamilyDashboard>(
-        API_ENDPOINTS.children.dashboard(activeFamilyId),
+        API_ENDPOINTS.children.home(activeFamilyId),
       );
       setDashboard(response.data);
       return response.data;
     },
     enabled: !!activeFamilyId,
+    staleTime: 60_000,
     refetchInterval: 5 * 60 * 1000, // Refresh every 5 minutes
   });
 
@@ -153,6 +156,8 @@ export default function ParentDashboard() {
         }
       >
         <ParentDashboardGreetingHeader firstName={firstName} />
+
+        {activeFamilyId ? <ParentHomeScheduleCard enteringDelay={100} /> : null}
 
         {/* Urgent Safety Alerts */}
         {urgentAlerts.length > 0 && (
@@ -198,6 +203,8 @@ export default function ParentDashboard() {
           </Animated.View>
         )}
 
+        {activeFamilyId && isPending && !dashboard && <ParentHomeSetupTilesLoadingRow />}
+
         {dashboard && (
           <>
             <ParentHomeSetupTiles
@@ -205,18 +212,29 @@ export default function ParentDashboard() {
               familyGroupsCount={familyIds.length}
               childCount={dashboard.children.length}
               onOpenFamily={() => router.push('/(parent)/family-space')}
-              onAddKids={() => router.push('/(parent)/add-child')}
+              onAddKids={() =>
+                router.push({
+                  pathname: '/(parent)/family-space/add-child',
+                  params: { from: 'home' },
+                })
+              }
             />
             <ParentHomeEngagementCard
               dashboard={dashboard}
               onPairDevice={() => router.push('/(parent)/settings/add-device')}
-              onNoUsageCta={() => router.push('/(parent)/chat')}
+              onNoUsageCta={() =>
+                router.push({ pathname: '/(parent)/chat', params: { from: 'dashboard' } })
+              }
             />
           </>
         )}
 
         <Text style={styles.sectionTitle}>Your children</Text>
         <Text style={styles.sectionSubtitle}>Today at a glance</Text>
+
+        {isError && !dashboard && (
+          <Text style={styles.homeErrorText}>We couldn’t load this family. Pull to try again.</Text>
+        )}
 
         {children.map((child, index) => (
           <Animated.View
@@ -531,6 +549,12 @@ const styles = StyleSheet.create({
     fontSize: Typography.parent.small,
     lineHeight: 20,
     color: Colors.parent.textSecondary,
+    marginBottom: Spacing.md,
+  },
+  homeErrorText: {
+    fontFamily: Typography.fonts.regular,
+    fontSize: Typography.parent.body,
+    color: Colors.parent.warning,
     marginBottom: Spacing.md,
   },
   deviceHint: {

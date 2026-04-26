@@ -1,8 +1,9 @@
 /**
- * Add child — create a new child profile for the active family (POST /children).
+ * Add child — in the family-space stack so Back uses real navigation history (not tab “pop to Home”).
+ * When opened from the Home tab, pass `?from=home` so back returns to the dashboard.
  */
 
-import React, { useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
   View,
   Text,
@@ -15,8 +16,9 @@ import {
   Platform,
   ActivityIndicator,
 } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { isAxiosError } from 'axios';
 import { Ionicons } from '@expo/vector-icons';
@@ -29,10 +31,16 @@ import { Spacing } from '../../../src/constants/spacing';
 import { Typography } from '../../../src/constants/typography';
 import { ParentPrimaryButton } from '../../../src/components/parent/ui/ParentPrimaryButton';
 import { ParentDateOfBirthPicker } from '../../../src/components/parent/ui/ParentDateOfBirthPicker';
+import { ParentHouseholdSwitcherCard } from '../../../src/components/parent/ParentHouseholdSwitcherCard';
 
 const DOB_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 export default function AddChildScreen() {
+  const navigation = useNavigation();
+  const params = useLocalSearchParams<{ from?: string | string[] }>();
+  const fromRaw = params.from;
+  const from = Array.isArray(fromRaw) ? fromRaw[0] : fromRaw;
+
   const queryClient = useQueryClient();
   const activeFamilyId = useFamilyStore((s) => s.activeFamilyId);
 
@@ -41,6 +49,18 @@ export default function AddChildScreen() {
   const [grade, setGrade] = useState('');
   const [school, setSchool] = useState('');
   const [initialPin, setInitialPin] = useState('');
+
+  const goBack = useCallback(() => {
+    if (from === 'home') {
+      router.replace('/(parent)/dashboard');
+      return;
+    }
+    if (navigation.canGoBack()) {
+      navigation.goBack();
+    } else {
+      router.replace('/(parent)/family-space');
+    }
+  }, [from, navigation]);
 
   const createMutation = useMutation({
     mutationFn: async () => {
@@ -77,10 +97,12 @@ export default function AddChildScreen() {
       }
     },
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['family-dashboard', activeFamilyId] });
-      Alert.alert('Child added', 'You can hand them a device and pair it from Family space or Settings.', [
-        { text: 'OK', onPress: () => router.back() },
-      ]);
+      void queryClient.invalidateQueries({ queryKey: ['family-home', activeFamilyId] });
+      Alert.alert(
+        'Child added',
+        'You can hand them a device and pair it from Family space or Settings.',
+        [{ text: 'OK', onPress: goBack }],
+      );
     },
     onError: (e: Error) => {
       Alert.alert('Could not add child', e?.message ?? 'Please try again.');
@@ -91,7 +113,7 @@ export default function AddChildScreen() {
     <SafeAreaView style={styles.screen} edges={['top']}>
       <View style={styles.topBar}>
         <TouchableOpacity
-          onPress={() => router.back()}
+          onPress={goBack}
           style={styles.backBtn}
           hitSlop={12}
           accessibilityLabel="Back"
@@ -104,6 +126,15 @@ export default function AddChildScreen() {
         <View style={styles.backBtn} />
       </View>
 
+      <Text style={styles.lead}>
+        Create a profile for your child. They’ll use a PIN to open the kid app on their device.
+      </Text>
+
+      <ParentHouseholdSwitcherCard
+        invalidateQueryKeysAfterSwitch={[['family-home']]}
+        containerStyle={styles.householdCardSpacing}
+      />
+
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -114,12 +145,8 @@ export default function AddChildScreen() {
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
-          <Text style={styles.lead}>
-            Create a profile for your child. They’ll use a PIN to open the kid app on their device.
-          </Text>
-
           <View style={styles.field}>
-            <Text style={styles.label}>Name</Text>
+            <Text style={styles.label}>Child Name</Text>
             <TextInput
               value={name}
               onChangeText={setName}
@@ -201,14 +228,16 @@ const styles = StyleSheet.create({
     fontSize: 18,
     color: COLORS.parent.textPrimary,
   },
-  scroll: { paddingHorizontal: Spacing.screenPadding, paddingBottom: 40 },
+  scroll: { paddingHorizontal: Spacing.screenPadding, paddingTop: 0, paddingBottom: 40 },
   lead: {
     fontFamily: Typography.fonts.interRegular,
     fontSize: 15,
     lineHeight: 22,
     color: COLORS.parent.textSecondary,
-    marginBottom: Spacing.lg,
+    paddingHorizontal: Spacing.screenPadding,
+    marginBottom: Spacing.base,
   },
+  householdCardSpacing: { marginBottom: Spacing.md },
   field: { marginBottom: Spacing.md },
   label: {
     fontFamily: Typography.fonts.interMedium,

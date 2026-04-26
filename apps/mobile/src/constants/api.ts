@@ -85,16 +85,23 @@ export const API_ENDPOINTS = {
     login: '/auth/login',
     childPinLogin: '/auth/child-login',
     refresh: '/auth/refresh',
+    me: '/auth/me',
     logout: '/auth/logout',
     generatePairingCode: '/auth/pair-device/generate',
     confirmPairing: '/auth/pair-device/confirm',
   },
 
   // ─── Families & Children ─────────────────────────────────────────────────
+  families: {
+    mine: '/families',
+  },
   children: {
     base: '/children',
     profile: (id: string) => `/children/${id}`,
     baselineAssessment: '/children/baseline-assessment',
+    /** Fast parent home snapshot (server-optimized; same JSON as dashboard) */
+    home: (familyId: string) => `/families/${familyId}/home`,
+    /** Legacy alias; prefer `home` for the parent home tab */
     dashboard: (familyId: string) => `/families/${familyId}/dashboard`,
   },
 
@@ -216,11 +223,19 @@ export const API_ENDPOINTS = {
     pending: (familyId: string) => `/friends/pending/${familyId}`,
   },
 
+  // ─── Family calendar (parent schedule) ───────────────────────────────────
+  calendar: {
+    events: (familyId: string) => `/families/${familyId}/calendar/events`,
+    event: (familyId: string, eventId: string) =>
+      `/families/${familyId}/calendar/events/${eventId}`,
+  },
+
   // ─── Legacy flat names (some screens use these) ─────────────────────────
   REFRESH: '/auth/refresh',
   REGISTER_PUSH_TOKEN: '/notifications/expo-token',
   MISSIONS_TODAY: (childId: string) => `/missions/today/${childId}`,
   COMPLETE_MISSION: (missionId: string, childId: string) =>
     `/missions/${missionId}/complete/${childId}`,
+  FAMILY_HOME: (familyId: string) => `/families/${familyId}/home`,
   FAMILY_DASHBOARD: (familyId: string) => `/families/${familyId}/dashboard`,
 } as const;

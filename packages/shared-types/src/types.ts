@@ -112,6 +112,65 @@ export interface FamilyGroup {
   createdAt: string;
 }
 
+/** Minimal child id + name for family roster lists (e.g. multi-household picker). */
+export interface FamilyChildNameRef {
+  id: string;
+  name: string;
+}
+
+/**
+ * One of the current user’s household groups, with members and children for
+ * the family space / divorced multi-family UX.
+ */
+export interface MyFamilyListItem {
+  id: string;
+  name: string;
+  myRole: FamilyMemberRole;
+  members: FamilyMemberSummary[];
+  children: FamilyChildNameRef[];
+}
+
+export type FamilyCalendarRecurrenceKind = 'NONE' | 'WEEKLY';
+
+/** Resolved person on a calendar instance (week grid avatars). */
+export interface FamilyCalendarEventAssignee {
+  kind: 'user' | 'child';
+  id: string;
+  displayName: string;
+  avatarUrl: string | null;
+}
+
+/** One occurrence (weekly rows are expanded in range by the server). */
+export interface FamilyCalendarEventInstance {
+  id: string;
+  baseEventId: string;
+  familyId: string;
+  childId: string | null;
+  title: string;
+  type: string;
+  description: string | null;
+  /** Optional place or address */
+  location: string | null;
+  startAt: string;
+  endAt: string | null;
+  reminderDays: number | null;
+  recurrenceKind: FamilyCalendarRecurrenceKind;
+  /** First weekday when weekly (legacy); use `recurrenceByWeekdays` for full set. */
+  recurrenceByWeekday: number | null;
+  /** 0=Sun … 6=Sat; empty when not weekly. */
+  recurrenceByWeekdays: number[];
+  /** Who this event is for (users + children); empty if none linked. */
+  assignees: FamilyCalendarEventAssignee[];
+  createdBy: string;
+  createdAt: string;
+  isRecurringInstance: boolean;
+}
+
+export interface CreateFamilyRequest {
+  /** Display name for the new household (e.g. “Summer with kids”). */
+  name: string;
+}
+
 export interface FamilyMemberSummary {
   userId: string;
   name: string;
@@ -174,7 +233,8 @@ export interface ChildSummary {
 // ─── Child Dashboard ─────────────────────────────────────────────────────────
 
 /**
- * The data shape returned by GET /families/:id/dashboard
+ * The data shape returned by GET /families/:id/home and GET /families/:id/dashboard
+ * (identical; home is the preferred fast parent-shell endpoint).
  * This is the main API call the parent dashboard makes on load.
  */
 /** A child’s phone/tablet linked for monitoring (parent home “paired devices” list). */
@@ -545,6 +605,7 @@ export interface CalendarEvent {
   type: string;        // 'EXAM' | 'APPOINTMENT' | 'BIRTHDAY' | 'TRIP' etc.
   startAt: string;
   endAt?: string;
+  location?: string;
   note?: string;
   childId?: string;    // Linked to specific child if applicable
   reminderDays?: number; // Send reminder X days before

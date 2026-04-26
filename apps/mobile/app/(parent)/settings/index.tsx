@@ -24,6 +24,7 @@ import { COLORS } from '../../../src/constants/colors';
 import { SPACING } from '../../../src/constants/spacing';
 import { LOGO_PNG, APP_DISPLAY_NAME } from '../../../src/constants/branding';
 import { CHILD_ID_KEY } from '../../../src/store/deviceSession.store';
+import { ParentHouseholdSwitcherCard } from '../../../src/components/parent/ParentHouseholdSwitcherCard';
 
 interface SettingsRowProps {
   icon: string;
@@ -117,6 +118,8 @@ export default function SettingsScreen() {
             <Text style={styles.brandSub}>Family app</Text>
           </View>
         </View>
+
+        <ParentHouseholdSwitcherCard invalidateQueryKeysAfterSwitch={[['family-home']]} />
 
         <View style={styles.profileHeader}>
           <View style={styles.avatarPlaceholder}>

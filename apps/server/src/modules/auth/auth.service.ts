@@ -47,6 +47,7 @@ import {
   AuthTokenPayload,
   AuthResponse,
   PairingCodeResponse,
+  UserProfile,
 } from '@parentingmykid/shared-types';
 
 /** Stable Redis session key suffix for a refresh JWT (bcrypt is non-deterministic per call). */
@@ -278,6 +279,51 @@ export class AuthService {
     );
 
     return { accessToken, refreshToken: newRefreshToken };
+  }
+
+  /**
+   * Rehydrate user for client cold start (SecureStore can lose user JSON, token refresh cannot return user).
+   */
+  async getCurrentUserProfile(userId: string, role: UserRole): Promise<UserProfile> {
+    const user = await this.prisma.user.findUniqueOrThrow({
+      where: { id: userId },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        role: true,
+        avatarUrl: true,
+        createdAt: true,
+        phone: true,
+      },
+    });
+
+    const memberships = await this.prisma.familyMember.findMany({
+      where: { userId },
+      select: { familyId: true },
+    });
+    const familyIds = memberships.map((m) => m.familyId);
+
+    let childProfileId: string | undefined;
+    if (role === UserRole.CHILD) {
+      const cp = await this.prisma.childProfile.findUnique({
+        where: { userId },
+        select: { id: true },
+      });
+      childProfileId = cp?.id;
+    }
+
+    return {
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      role: user.role as UserRole,
+      avatarUrl: user.avatarUrl ?? undefined,
+      phone: user.phone ?? undefined,
+      createdAt: user.createdAt.toISOString(),
+      familyIds,
+      childProfileId,
+    };
   }
 
   // ─── Device Pairing ────────────────────────────────────────────────────────

@@ -13,6 +13,7 @@ import {
   SubscriptionPlan,
   SubscriptionStatus,
 } from '@parentingmykid/shared-types';
+import { schedulePersistActiveFamilyId, clearPersistedActiveFamilyId } from './activeFamily.persistence';
 
 interface FamilyState {
   // Active family data
@@ -47,20 +48,41 @@ export const useFamilyStore = create<FamilyState>((set, get) => ({
   childProfiles: {},
   subscription: null,
 
-  setActiveFamilyId: (id: string) => set({ activeFamilyId: id }),
+  setActiveFamilyId: (id: string) => {
+    let didChange = false;
+    set((state) => {
+      if (state.activeFamilyId === id) {
+        return {};
+      }
+      didChange = true;
+      return {
+        activeFamilyId: id,
+        dashboard: null,
+        selectedChildId: null,
+      };
+    });
+    if (didChange) {
+      schedulePersistActiveFamilyId(id);
+    }
+  },
 
-  clearFamilyContext: () =>
+  clearFamilyContext: () => {
+    void clearPersistedActiveFamilyId();
     set({
       activeFamilyId: null,
       dashboard: null,
       selectedChildId: null,
       childProfiles: {},
       subscription: null,
-    }),
+    });
+  },
 
   setDashboard: (dashboard: FamilyDashboard) => {
+    const { activeFamilyId: aid } = get();
+    if (aid && dashboard.familyId !== aid) {
+      return;
+    }
     set({ dashboard });
-    // Auto-select first child if none selected
     if (!get().selectedChildId && dashboard.children.length > 0) {
       set({ selectedChildId: dashboard.children[0].childId });
     }

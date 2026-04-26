@@ -4,8 +4,10 @@
  *              Persists tokens securely using Expo SecureStore (device keychain).
  *
  * @business-rule Token persistence is critical:
- *   - Access token: kept in memory (Zustand state) — short-lived (15 min)
+ *   - Access token: Zustand + SecureStore (short-lived; restored on launch so we don't depend on
+ *     refresh succeeding before first paint — key for cold start and flaky networks)
  *   - Refresh token: stored in SecureStore — long-lived (7 days), rotated on use
+ *   - Cached user profile JSON: SecureStore; if missing, GET /auth/me with access token
  *   - User role: determines which UI the user sees (parent vs child vs tutor)
  */
 
@@ -14,10 +16,21 @@ import * as SecureStore from 'expo-secure-store';
 import axios from 'axios';
 import { UserProfile } from '@parentingmykid/shared-types';
 import { useFamilyStore } from './family.store';
+import { getResolvedActiveFamilyId } from './activeFamily.persistence';
 import { API_BASE_URL, API_ENDPOINTS } from '../constants/api';
+import { isAccessTokenUsable } from '../utils/jwtExpiry';
 
 const REFRESH_TOKEN_KEY = 'pmk_refresh_token';
 const USER_DATA_KEY = 'pmk_user_data';
+const ACCESS_TOKEN_KEY = 'pmk_access_token';
+
+async function fetchUserProfileWithBearer(bearer: string): Promise<UserProfile> {
+  const { data } = await axios.get<UserProfile>(`${API_BASE_URL}${API_ENDPOINTS.auth.me}`, {
+    headers: { Authorization: `Bearer ${bearer}` },
+    timeout: 20_000,
+  });
+  return data;
+}
 
 type RefreshOutcome = 'success' | 'unauthorized' | 'offline';
 
@@ -75,6 +88,11 @@ interface AuthState {
    */
   revalidateFromSecureStore: () => Promise<void>;
   updateUser: (user: Partial<UserProfile>) => void;
+  /**
+   * After creating a new household, merge the id into the cached profile + SecureStore
+   * and make it the active family. Call `refreshAccessToken` after so the JWT includes it.
+   */
+  appendFamilyId: (familyId: string) => Promise<void>;
   /** Sets access (and optional rotated refresh) from refresh token — used when only SecureStore is hydrated. */
   refreshAccessToken: () => Promise<boolean>;
 }
@@ -91,10 +109,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
    * Stores refresh token securely, keeps access token in memory.
    */
   login: async (accessToken: string, refreshToken: string, user: UserProfile) => {
-    // Store refresh token securely in device keychain
     await SecureStore.setItemAsync(REFRESH_TOKEN_KEY, refreshToken);
-    // Cache user data for faster re-login
     await SecureStore.setItemAsync(USER_DATA_KEY, JSON.stringify(user));
+    await SecureStore.setItemAsync(ACCESS_TOKEN_KEY, accessToken);
 
     set({
       accessToken,
@@ -104,8 +121,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       familyIds: user.familyIds ?? [],
     });
 
-    if (user.familyIds && user.familyIds.length > 0) {
-      useFamilyStore.getState().setActiveFamilyId(user.familyIds[0]);
+    const fids = user.familyIds ?? [];
+    if (fids.length > 0) {
+      const toActivate = await getResolvedActiveFamilyId(fids);
+      if (toActivate) {
+        useFamilyStore.getState().setActiveFamilyId(toActivate);
+      }
     }
   },
 
@@ -116,6 +137,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   logout: async () => {
     await SecureStore.deleteItemAsync(REFRESH_TOKEN_KEY);
     await SecureStore.deleteItemAsync(USER_DATA_KEY);
+    try {
+      await SecureStore.deleteItemAsync(ACCESS_TOKEN_KEY);
+    } catch {
+      // ignore
+    }
 
     useFamilyStore.getState().clearFamilyContext();
 
@@ -130,6 +156,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   setAccessToken: (token: string) => {
     set({ accessToken: token });
+    void SecureStore.setItemAsync(ACCESS_TOKEN_KEY, token);
   },
 
   /**
@@ -143,24 +170,90 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       set({ isLoading: true });
     }
     try {
-      const userData = await SecureStore.getItemAsync(USER_DATA_KEY);
-      const refreshToken = await SecureStore.getItemAsync(REFRESH_TOKEN_KEY);
+      const [userJson, refresh, accessStored] = await Promise.all([
+        SecureStore.getItemAsync(USER_DATA_KEY),
+        SecureStore.getItemAsync(REFRESH_TOKEN_KEY),
+        SecureStore.getItemAsync(ACCESS_TOKEN_KEY),
+      ]);
 
-      if (userData && refreshToken) {
-        const user = JSON.parse(userData) as UserProfile;
-        set({ user, isAuthenticated: true, familyIds: user.familyIds ?? [] });
-        if (user.familyIds && user.familyIds.length > 0) {
-          useFamilyStore.getState().setActiveFamilyId(user.familyIds[0]);
+      if (!refresh) {
+        if (userJson) await SecureStore.deleteItemAsync(USER_DATA_KEY);
+        if (accessStored) await SecureStore.deleteItemAsync(ACCESS_TOKEN_KEY);
+        return;
+      }
+
+      let user: UserProfile | null = null;
+      if (userJson) {
+        try {
+          user = JSON.parse(userJson) as UserProfile;
+        } catch {
+          user = null;
         }
+      }
+
+      let hadUsableCachedAccess = false;
+      let haveAccess = false;
+
+      if (accessStored && isAccessTokenUsable(accessStored)) {
+        set({ accessToken: accessStored });
+        hadUsableCachedAccess = true;
+        haveAccess = true;
+      } else {
         const outcome = await runTokenRefresh();
         if (outcome === 'unauthorized') {
           await get().logout();
+          return;
+        }
+        haveAccess = useAuthStore.getState().accessToken != null;
+      }
+
+      if (!user) {
+        if (!haveAccess) {
+          await get().logout();
+          return;
+        }
+        const at = get().accessToken;
+        if (!at) {
+          await get().logout();
+          return;
+        }
+        try {
+          const profile = await fetchUserProfileWithBearer(at);
+          user = profile;
+          await SecureStore.setItemAsync(USER_DATA_KEY, JSON.stringify(user));
+        } catch (e) {
+          if (axios.isAxiosError(e) && (e.response?.status === 401 || e.response?.status === 403)) {
+            await get().logout();
+            return;
+          }
+          // Network/5xx: keep tokens in SecureStore; clear in-memory so we don't use APIs without a user row
+          set({ accessToken: null, user: null, isAuthenticated: false, familyIds: [] });
+          return;
         }
       }
-    } catch {
-      if (!silent) {
-        // SecureStore read failed — clear stuck loading only when not silent
+
+      set({ user, isAuthenticated: true, familyIds: user.familyIds ?? [] });
+      const fids = user.familyIds ?? [];
+      if (fids.length > 0) {
+        const toActivate = await getResolvedActiveFamilyId(fids);
+        if (toActivate) {
+          useFamilyStore.getState().setActiveFamilyId(toActivate);
+        }
       }
+
+      if (hadUsableCachedAccess) {
+        void (async () => {
+          const o = await runTokenRefresh();
+          if (o === 'unauthorized' && isAccessTokenUsable(useAuthStore.getState().accessToken)) {
+            return;
+          }
+          if (o === 'unauthorized') {
+            await get().logout();
+          }
+        })();
+      }
+    } catch {
+      // SecureStore or network: avoid leaving user stuck in loading when not silent
     } finally {
       if (!silent) {
         set({ isLoading: false });
@@ -169,24 +262,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   revalidateFromSecureStore: async () => {
-    const refreshToken = await SecureStore.getItemAsync(REFRESH_TOKEN_KEY);
-    const userData = await SecureStore.getItemAsync(USER_DATA_KEY);
-    if (!refreshToken || !userData) {
-      return;
-    }
-    try {
-      const user = JSON.parse(userData) as UserProfile;
-      set({ user, isAuthenticated: true, familyIds: user.familyIds ?? [] });
-      if (user.familyIds && user.familyIds.length > 0) {
-        useFamilyStore.getState().setActiveFamilyId(user.familyIds[0]);
-      }
-      const outcome = await runTokenRefresh();
-      if (outcome === 'unauthorized') {
-        await get().logout();
-      }
-    } catch {
-      // ignore
-    }
+    await get().loadPersistedAuth({ silent: true });
   },
 
   updateUser: (updates: Partial<UserProfile>) => {
@@ -194,6 +270,19 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     if (current) {
       set({ user: { ...current, ...updates } });
     }
+  },
+
+  appendFamilyId: async (familyId: string) => {
+    const u = get().user;
+    if (!u) {
+      return;
+    }
+    const existing = u.familyIds ?? [];
+    const familyIds = existing.includes(familyId) ? existing : [...existing, familyId];
+    const user: UserProfile = { ...u, familyIds };
+    await SecureStore.setItemAsync(USER_DATA_KEY, JSON.stringify(user));
+    set({ user, familyIds });
+    useFamilyStore.getState().setActiveFamilyId(familyId);
   },
 
   refreshAccessToken: async () => (await runTokenRefresh()) === 'success',

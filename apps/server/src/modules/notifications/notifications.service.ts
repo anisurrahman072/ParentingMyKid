@@ -41,7 +41,11 @@ export class NotificationsService {
    * Sends a push notification to all active devices registered to a user.
    * SAFETY_ALERT and SOS notifications bypass all throttling.
    */
-  async sendToUser(userId: string, payload: PushNotificationPayload): Promise<void> {
+  async sendToUser(
+    userId: string,
+    payload: PushNotificationPayload,
+    options?: { skipDedup?: boolean },
+  ): Promise<void> {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
       select: { expoPushToken: true, id: true },
@@ -52,7 +56,7 @@ export class NotificationsService {
     // Skip deduplication for safety-critical notifications
     const isCritical = [NotificationType.SAFETY_ALERT, NotificationType.SOS].includes(payload.type);
 
-    if (!isCritical) {
+    if (!isCritical && !options?.skipDedup) {
       // Check if same notification type was sent recently (dedup window: 1 hour)
       const dedupKey = `${userId}:${payload.type}`;
       const alreadySent = await this.redis.wasNotificationSent(userId, dedupKey);

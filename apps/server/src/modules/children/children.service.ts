@@ -126,7 +126,9 @@ export class ChildrenService {
 
   /**
    * Returns the complete family dashboard for the parent app's home screen.
-   * Called once on app load — aggregates all children's status in one query.
+   * Uses small parallel queries (counts, latest mood, one daily row per child) instead of
+   * deep `include`s that loaded every unread safety alert — much faster for real DB sizes.
+   * Same response shape is served by GET .../home and GET .../dashboard.
    */
   async getFamilyDashboard(parentId: string, familyId: string): Promise<FamilyDashboard> {
     const membership = await this.prisma.familyMember.findUnique({
@@ -135,20 +137,13 @@ export class ChildrenService {
         family: {
           include: {
             children: {
-              include: {
-                moodLogs: { orderBy: { loggedAt: 'desc' }, take: 1 },
-                safetyAlerts: { where: { isRead: false } },
-                dailyMissions: {
-                  where: { date: new Date().toISOString().split('T')[0] },
-                  take: 1,
-                },
-                devices: { where: { isActive: true } },
+              select: {
+                id: true,
+                name: true,
+                avatarUrl: true,
+                currentStreak: true,
+                wellbeingScore: true,
               },
-            },
-            calendarEvents: {
-              where: { startAt: { gte: new Date() } },
-              orderBy: { startAt: 'asc' },
-              take: 5,
             },
           },
         },
@@ -162,23 +157,87 @@ export class ChildrenService {
     const { family } = membership;
     const childIds = family.children.map((c) => c.id);
     const today = new Date().toISOString().split('T')[0];
+    const now = new Date();
+
+    const [alertGroups, latestMoods, todayMissionRows, activeDevices, usageGroups, calendarEvents] =
+      await Promise.all([
+        childIds.length
+          ? this.prisma.safetyAlert.groupBy({
+              by: ['childId'],
+              where: { childId: { in: childIds }, isRead: false },
+              _count: { _all: true },
+            })
+          : Promise.resolve(
+              [] as { childId: string; _count: { _all: number } }[],
+            ),
+        childIds.length
+          ? Promise.all(
+              childIds.map((childId) =>
+                this.prisma.moodLog.findFirst({
+                  where: { childId },
+                  orderBy: { loggedAt: 'desc' },
+                }),
+              ),
+            )
+          : Promise.resolve([]),
+        childIds.length
+          ? this.prisma.dailyMission.findMany({
+              where: { childId: { in: childIds }, date: today },
+            })
+          : Promise.resolve([]),
+        childIds.length
+          ? this.prisma.childDevice.findMany({
+              where: { childId: { in: childIds }, isActive: true },
+            })
+          : Promise.resolve([]),
+        childIds.length
+          ? this.prisma.screenUsageLog.groupBy({
+              by: ['childId'],
+              where: { childId: { in: childIds }, date: today },
+              _sum: { durationSeconds: true },
+            })
+          : Promise.resolve(
+              [] as { childId: string; _sum: { durationSeconds: number | null } }[],
+            ),
+        this.prisma.familyCalendarEvent.findMany({
+          where: { familyId, startAt: { gte: now } },
+          orderBy: { startAt: 'asc' },
+          take: 5,
+        }),
+      ]);
+
+    const alertCountByChild = new Map<string, number>();
+    for (const row of alertGroups) {
+      alertCountByChild.set(row.childId, row._count._all);
+    }
+
+    const latestMoodByChild = new Map<string, (typeof latestMoods)[0]>();
+    childIds.forEach((id, i) => {
+      const m = latestMoods[i];
+      if (m) latestMoodByChild.set(id, m);
+    });
+
+    const missionByChild = new Map<string, (typeof todayMissionRows)[0]>();
+    for (const m of todayMissionRows) {
+      missionByChild.set(m.childId, m);
+    }
 
     const usageByChildId = new Map<string, number>();
-    if (childIds.length > 0) {
-      const usageGroups = await this.prisma.screenUsageLog.groupBy({
-        by: ['childId'],
-        where: { childId: { in: childIds }, date: today },
-        _sum: { durationSeconds: true },
-      });
-      for (const row of usageGroups) {
-        usageByChildId.set(row.childId, row._sum.durationSeconds ?? 0);
-      }
+    for (const row of usageGroups) {
+      usageByChildId.set(row.childId, row._sum.durationSeconds ?? 0);
+    }
+
+    const devicesByChild = new Map<string, typeof activeDevices>();
+    for (const d of activeDevices) {
+      const list = devicesByChild.get(d.childId) ?? [];
+      list.push(d);
+      devicesByChild.set(d.childId, list);
     }
 
     const childCards: ChildDashboardCard[] = family.children.map((child) => {
-      const todayMissions = child.dailyMissions[0];
-      const latestMood = child.moodLogs[0];
-      const devices = child.devices;
+      const todayMissions = missionByChild.get(child.id);
+      const latestMood = latestMoodByChild.get(child.id);
+      const devices = devicesByChild.get(child.id) ?? [];
       const linked = devices.length;
       const seenSeconds = usageByChildId.get(child.id) ?? 0;
       const hasScreenUsageToday = seenSeconds > 0;
@@ -189,50 +248,52 @@ export class ChildrenService {
       const lastDeviceActivityAt =
         lastDeviceMs > 0 ? new Date(lastDeviceMs).toISOString() : undefined;
 
+      const missionsJson = todayMissions?.missionsJson as { total?: number } | null | undefined;
+      const missionTotal = missionsJson?.total ?? 0;
+
       return {
         childId: child.id,
         name: child.name,
         avatarUrl: child.avatarUrl ?? undefined,
-        todayMissionsTotal: todayMissions
-          ? (todayMissions.missionsJson as { total: number }).total ?? 0
-          : 0,
+        todayMissionsTotal: todayMissions ? missionTotal : 0,
         todayMissionsCompleted: Math.round(
-          ((todayMissions?.completionPct ?? 0) / 100) *
-            ((todayMissions?.missionsJson as { total: number })?.total ?? 0),
+          ((todayMissions?.completionPct ?? 0) / 100) * (missionsJson?.total ?? 0),
         ),
         currentMood: latestMood?.moodScore ?? undefined,
         currentStreak: child.currentStreak,
-        wellbeingScore: child.wellbeingScore ?? undefined,
-        activeAlerts: child.safetyAlerts.length,
+        wellbeingScore: child.wellbeingScore != null ? Math.round(child.wellbeingScore) : undefined,
+        activeAlerts: alertCountByChild.get(child.id) ?? 0,
         linkedDeviceCount: linked,
         hasScreenUsageToday,
         lastDeviceActivityAt,
       };
     });
 
-    const pairedDevices: PairedDeviceSummary[] = family.children.flatMap((child) =>
-      child.devices.map((d) => ({
+    const pairedDevices: PairedDeviceSummary[] = family.children.flatMap((child) => {
+      const devices = devicesByChild.get(child.id) ?? [];
+      return devices.map((d) => ({
         id: d.id,
         childId: child.id,
         childName: child.name,
         deviceName: d.deviceName,
         platform: d.platform,
         lastActiveAt: d.lastActiveAt?.toISOString() ?? null,
-      })),
-    );
+      }));
+    });
 
     return {
       familyId: family.id,
       familyName: family.name,
       children: childCards,
       urgentAlerts: [],
-      upcomingEvents: family.calendarEvents.map((e) => ({
+      upcomingEvents: calendarEvents.map((e) => ({
         id: e.id,
         familyId: e.familyId,
         title: e.title,
         type: e.type,
         startAt: e.startAt.toISOString(),
         endAt: e.endAt?.toISOString(),
+        location: e.location ?? undefined,
         childId: e.childId ?? undefined,
       })),
       weeklyHighlights: [],

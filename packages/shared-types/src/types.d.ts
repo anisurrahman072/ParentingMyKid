@@ -61,6 +61,47 @@ export interface FamilyGroup {
     subscription: SubscriptionInfo;
     createdAt: string;
 }
+export interface FamilyChildNameRef {
+    id: string;
+    name: string;
+}
+export interface MyFamilyListItem {
+    id: string;
+    name: string;
+    myRole: FamilyMemberRole;
+    members: FamilyMemberSummary[];
+    children: FamilyChildNameRef[];
+}
+export type FamilyCalendarRecurrenceKind = 'NONE' | 'WEEKLY';
+export interface FamilyCalendarEventAssignee {
+    kind: 'user' | 'child';
+    id: string;
+    displayName: string;
+    avatarUrl: string | null;
+}
+export interface FamilyCalendarEventInstance {
+    id: string;
+    baseEventId: string;
+    familyId: string;
+    childId: string | null;
+    title: string;
+    type: string;
+    description: string | null;
+    location: string | null;
+    startAt: string;
+    endAt: string | null;
+    reminderDays: number | null;
+    recurrenceKind: FamilyCalendarRecurrenceKind;
+    recurrenceByWeekday: number | null;
+    recurrenceByWeekdays: number[];
+    assignees: FamilyCalendarEventAssignee[];
+    createdBy: string;
+    createdAt: string;
+    isRecurringInstance: boolean;
+}
+export interface CreateFamilyRequest {
+    name: string;
+}
 export interface FamilyMemberSummary {
     userId: string;
     name: string;
@@ -422,6 +463,7 @@ export interface CalendarEvent {
     type: string;
     startAt: string;
     endAt?: string;
+    location?: string;
     note?: string;
     childId?: string;
     reminderDays?: number;

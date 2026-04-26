@@ -16,6 +16,7 @@ import { API_ENDPOINTS } from '../../../src/constants/api';
 import { useFamilyStore } from '../../../src/store/family.store';
 import { COLORS } from '../../../src/constants/colors';
 import { SPACING } from '../../../src/constants/spacing';
+import { ParentHouseholdSwitcherCard } from '../../../src/components/parent/ParentHouseholdSwitcherCard';
 
 export default function AddDeviceScreen() {
   const { dashboard } = useFamilyStore();
@@ -60,6 +61,9 @@ export default function AddDeviceScreen() {
         <Text style={styles.title}>Add child device</Text>
         <View style={styles.backBtn} />
       </View>
+
+      <ParentHouseholdSwitcherCard invalidateQueryKeysAfterSwitch={[['pairing-code']]} />
+
       <ScrollView contentContainerStyle={styles.content}>
         <Text style={styles.help}>
           Show this 6-digit code (or QR) on your phone. On the child device, open

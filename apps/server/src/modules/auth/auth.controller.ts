@@ -6,8 +6,8 @@
 
 import { Controller, Post, Body, UseGuards, Get, Param } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
-import { AuthService } from './auth.service';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
+import { AuthService } from './auth.service';
 import { CurrentUser } from './decorators/current-user.decorator';
 import { Roles } from './decorators/roles.decorator';
 import { RolesGuard } from './guards/roles.guard';
@@ -19,7 +19,13 @@ import {
   ConfirmPairingDto,
   SetChildPinDto,
 } from './dto/register.dto';
-import { UserRole, AuthResponse, PairingCodeResponse, AuthTokenPayload } from '@parentingmykid/shared-types';
+import {
+  UserRole,
+  AuthResponse,
+  PairingCodeResponse,
+  AuthTokenPayload,
+  UserProfile,
+} from '@parentingmykid/shared-types';
 
 @ApiTags('Authentication')
 @Controller('auth')
@@ -48,6 +54,14 @@ export class AuthController {
   @Post('refresh')
   refresh(@Body() dto: RefreshTokenDto): Promise<Omit<AuthResponse, 'user'>> {
     return this.authService.refreshTokens(dto.refreshToken);
+  }
+
+  @ApiOperation({ summary: 'Current user profile (restore session / validate access token)' })
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
+  @Get('me')
+  getMe(@CurrentUser() user: AuthTokenPayload): Promise<UserProfile> {
+    return this.authService.getCurrentUserProfile(user.sub, user.role);
   }
 
   @ApiOperation({ summary: 'Generate 6-digit pairing code for child device' })

@@ -4,7 +4,7 @@
  * sleep tracker, vaccination reminders, medication log.
  */
 
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -13,12 +13,21 @@ import {
   TouchableOpacity,
   Alert,
 } from 'react-native';
+import { router, useLocalSearchParams } from 'expo-router';
+import { useNavigation } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, { FadeInDown } from 'react-native-reanimated';
+import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../../../src/constants/colors';
 import { SPACING } from '../../../src/constants/spacing';
+import { ParentHouseholdSwitcherCard } from '../../../src/components/parent/ParentHouseholdSwitcherCard';
 
 type NutritionTab = 'today' | 'sleep' | 'health' | 'growth';
+
+function nutritionEntryFrom(raw: string | string[] | undefined): string | undefined {
+  if (raw == null) return undefined;
+  return Array.isArray(raw) ? raw[0] : raw;
+}
 
 function MacroBar({ label, value, max, color }: { label: string; value: number; max: number; color: string }) {
   const pct = Math.min((value / max) * 100, 100);
@@ -45,13 +54,46 @@ function StatCard({ icon, value, label, subtext }: { icon: string; value: string
 }
 
 export default function NutritionScreen() {
+  const navigation = useNavigation();
+  const { from: fromRaw } = useLocalSearchParams<{ from?: string | string[] }>();
+  const entryFrom = nutritionEntryFrom(fromRaw);
   const [activeTab, setActiveTab] = useState<NutritionTab>('today');
+
+  const goBack = useCallback(() => {
+    if (entryFrom === 'family-space') {
+      router.replace('/(parent)/family-space');
+      return;
+    }
+    if (navigation.canGoBack()) {
+      navigation.goBack();
+      return;
+    }
+    router.replace('/(parent)/dashboard');
+  }, [navigation, entryFrom]);
 
   return (
     <SafeAreaView style={styles.screen} edges={['top']}>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>🥗 Health & Nutrition</Text>
+        <TouchableOpacity
+          onPress={goBack}
+          style={styles.backBtn}
+          hitSlop={12}
+          accessibilityRole="button"
+          accessibilityLabel="Back"
+        >
+          <Ionicons name="chevron-back" size={26} color={COLORS.parent.text} />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle} numberOfLines={2}>
+          Health & Nutrition
+        </Text>
+        <View style={styles.headerTrail}>
+          <Text style={styles.headerSaladEmoji} accessibilityLabel="Nutrition">
+            🥗
+          </Text>
+        </View>
       </View>
+
+      <ParentHouseholdSwitcherCard />
 
       {/* Tabs */}
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tabScroll} contentContainerStyle={styles.tabScrollContent}>
@@ -245,14 +287,25 @@ export default function NutritionScreen() {
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: COLORS.parent.background },
   header: {
-    paddingHorizontal: SPACING[5],
+    paddingLeft: SPACING[3],
+    paddingRight: SPACING[4],
     paddingVertical: SPACING[4],
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
   },
+  backBtn: { width: 32, height: 40, justifyContent: 'center', alignItems: 'center' },
   headerTitle: {
+    flex: 1,
     fontSize: 22,
     fontFamily: 'Inter',
     fontWeight: '700',
     color: COLORS.parent.text,
+  },
+  headerTrail: { width: 32, alignItems: 'center', justifyContent: 'center' },
+  headerSaladEmoji: {
+    fontSize: 26,
+    lineHeight: 30,
   },
   tabScroll: { maxHeight: 48 },
   tabScrollContent: {
