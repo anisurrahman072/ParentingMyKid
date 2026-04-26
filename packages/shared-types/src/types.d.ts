@@ -109,6 +109,14 @@ export interface ChildSummary {
     lastSeenAt?: string;
     islamicModuleEnabled?: boolean;
 }
+export interface PairedDeviceSummary {
+    id: string;
+    childId: string;
+    childName: string;
+    deviceName: string | null;
+    platform: string;
+    lastActiveAt: string | null;
+}
 export interface FamilyDashboard {
     familyId: string;
     familyName: string;
@@ -116,6 +124,7 @@ export interface FamilyDashboard {
     urgentAlerts: SafetyAlert[];
     upcomingEvents: CalendarEvent[];
     weeklyHighlights: string[];
+    pairedDevices: PairedDeviceSummary[];
 }
 export interface ChildDashboardCard {
     childId: string;
@@ -129,6 +138,9 @@ export interface ChildDashboardCard {
     lastLocationAt?: string;
     lastSeenAt?: string;
     activeAlerts: number;
+    linkedDeviceCount: number;
+    hasScreenUsageToday: boolean;
+    lastDeviceActivityAt?: string;
 }
 export interface Mission {
     id: string;

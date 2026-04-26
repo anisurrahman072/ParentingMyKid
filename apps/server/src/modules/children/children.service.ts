@@ -14,7 +14,13 @@ import * as bcrypt from 'bcrypt';
 import { v4 as uuidv4 } from 'uuid';
 import { PrismaService } from '../../database/prisma.service';
 import { CreateChildDto, SubmitBaselineDto } from './dto/create-child.dto';
-import { UserRole, ChildProfile, FamilyDashboard, ChildDashboardCard } from '@parentingmykid/shared-types';
+import {
+  UserRole,
+  ChildProfile,
+  FamilyDashboard,
+  ChildDashboardCard,
+  PairedDeviceSummary,
+} from '@parentingmykid/shared-types';
 
 @Injectable()
 export class ChildrenService {
@@ -136,6 +142,7 @@ export class ChildrenService {
                   where: { date: new Date().toISOString().split('T')[0] },
                   take: 1,
                 },
+                devices: { where: { isActive: true } },
               },
             },
             calendarEvents: {
@@ -153,10 +160,34 @@ export class ChildrenService {
     }
 
     const { family } = membership;
+    const childIds = family.children.map((c) => c.id);
+    const today = new Date().toISOString().split('T')[0];
+
+    const usageByChildId = new Map<string, number>();
+    if (childIds.length > 0) {
+      const usageGroups = await this.prisma.screenUsageLog.groupBy({
+        by: ['childId'],
+        where: { childId: { in: childIds }, date: today },
+        _sum: { durationSeconds: true },
+      });
+      for (const row of usageGroups) {
+        usageByChildId.set(row.childId, row._sum.durationSeconds ?? 0);
+      }
+    }
 
     const childCards: ChildDashboardCard[] = family.children.map((child) => {
       const todayMissions = child.dailyMissions[0];
       const latestMood = child.moodLogs[0];
+      const devices = child.devices;
+      const linked = devices.length;
+      const seenSeconds = usageByChildId.get(child.id) ?? 0;
+      const hasScreenUsageToday = seenSeconds > 0;
+
+      const lastDeviceMs = devices
+        .map((d) => (d.lastActiveAt ? d.lastActiveAt.getTime() : 0))
+        .reduce((a, b) => Math.max(a, b), 0);
+      const lastDeviceActivityAt =
+        lastDeviceMs > 0 ? new Date(lastDeviceMs).toISOString() : undefined;
 
       return {
         childId: child.id,
@@ -173,8 +204,22 @@ export class ChildrenService {
         currentStreak: child.currentStreak,
         wellbeingScore: child.wellbeingScore ?? undefined,
         activeAlerts: child.safetyAlerts.length,
+        linkedDeviceCount: linked,
+        hasScreenUsageToday,
+        lastDeviceActivityAt,
       };
     });
+
+    const pairedDevices: PairedDeviceSummary[] = family.children.flatMap((child) =>
+      child.devices.map((d) => ({
+        id: d.id,
+        childId: child.id,
+        childName: child.name,
+        deviceName: d.deviceName,
+        platform: d.platform,
+        lastActiveAt: d.lastActiveAt?.toISOString() ?? null,
+      })),
+    );
 
     return {
       familyId: family.id,
@@ -191,6 +236,7 @@ export class ChildrenService {
         childId: e.childId ?? undefined,
       })),
       weeklyHighlights: [],
+      pairedDevices,
     };
   }
 

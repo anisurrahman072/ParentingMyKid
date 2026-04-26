@@ -13,6 +13,10 @@
  *   - Refresh tokens are rotated on each use (prevent token theft)
  *   - Pairing codes expire in 5 minutes
  *   - Parental consent is required and stored for legal compliance (COPPA)
+ *
+ * @note Refresh sessions in Redis use SHA-256(refreshToken) as the key suffix.
+ *       bcrypt.hash() is unsuitable here: each call yields a different salt/hash,
+ *       so lookup on refresh would never match the stored session.
  */
 
 import {
@@ -25,6 +29,7 @@ import {
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
+import { createHash } from 'node:crypto';
 import * as bcrypt from 'bcrypt';
 import * as QRCode from 'qrcode';
 import { v4 as uuidv4 } from 'uuid';
@@ -43,6 +48,11 @@ import {
   AuthResponse,
   PairingCodeResponse,
 } from '@parentingmykid/shared-types';
+
+/** Stable Redis session key suffix for a refresh JWT (bcrypt is non-deterministic per call). */
+function refreshTokenRedisFingerprint(refreshToken: string): string {
+  return createHash('sha256').update(refreshToken).digest('hex');
+}
 
 @Injectable()
 export class AuthService {
@@ -242,8 +252,8 @@ export class AuthService {
       throw new UnauthorizedException('Invalid or expired refresh token');
     }
 
-    const tokenHash = await bcrypt.hash(refreshToken, 8);
-    const exists = await this.redis.sessionExists(payload.sub, tokenHash);
+    const tokenFingerprint = refreshTokenRedisFingerprint(refreshToken);
+    const exists = await this.redis.sessionExists(payload.sub, tokenFingerprint);
     if (!exists) {
       // Token has already been used or revoked — possible theft attempt
       await this.redis.revokeAllSessions(payload.sub);
@@ -251,7 +261,7 @@ export class AuthService {
     }
 
     // Revoke old refresh token
-    await this.redis.deleteSession(payload.sub, tokenHash);
+    await this.redis.deleteSession(payload.sub, tokenFingerprint);
 
     // Issue new token pair
     const memberships = await this.prisma.familyMember.findMany({
@@ -335,8 +345,8 @@ export class AuthService {
   // ─── Logout ───────────────────────────────────────────────────────────────
 
   async logout(userId: string, refreshToken: string): Promise<void> {
-    const tokenHash = await bcrypt.hash(refreshToken, 8);
-    await this.redis.deleteSession(userId, tokenHash);
+    const tokenFingerprint = refreshTokenRedisFingerprint(refreshToken);
+    await this.redis.deleteSession(userId, tokenFingerprint);
   }
 
   // ─── Internal Helpers ─────────────────────────────────────────────────────
@@ -368,9 +378,9 @@ export class AuthService {
       expiresIn: this.config.get('JWT_REFRESH_EXPIRES_IN', '7d'),
     });
 
-    // Store hashed refresh token in Redis (7 day TTL)
-    const tokenHash = await bcrypt.hash(refreshToken, 8);
-    await this.redis.setSession(userId, tokenHash, 7 * 24 * 60 * 60);
+    // Store refresh token fingerprint in Redis (7 day TTL)
+    const tokenFingerprint = refreshTokenRedisFingerprint(refreshToken);
+    await this.redis.setSession(userId, tokenFingerprint, 7 * 24 * 60 * 60);
 
     const user = await this.prisma.user.findUniqueOrThrow({
       where: { id: userId },

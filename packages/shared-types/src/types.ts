@@ -177,6 +177,16 @@ export interface ChildSummary {
  * The data shape returned by GET /families/:id/dashboard
  * This is the main API call the parent dashboard makes on load.
  */
+/** A child’s phone/tablet linked for monitoring (parent home “paired devices” list). */
+export interface PairedDeviceSummary {
+  id: string;
+  childId: string;
+  childName: string;
+  deviceName: string | null;
+  platform: string;
+  lastActiveAt: string | null;
+}
+
 export interface FamilyDashboard {
   familyId: string;
   familyName: string;
@@ -184,6 +194,8 @@ export interface FamilyDashboard {
   urgentAlerts: SafetyAlert[];
   upcomingEvents: CalendarEvent[];
   weeklyHighlights: string[]; // AI-generated summary sentences
+  /** Active paired devices for all children in this family (safety, screen time, push). */
+  pairedDevices: PairedDeviceSummary[];
 }
 
 export interface ChildDashboardCard {
@@ -198,6 +210,12 @@ export interface ChildDashboardCard {
   lastLocationAt?: string;
   lastSeenAt?: string;
   activeAlerts: number; // count of unread safety alerts
+  /** Child devices still marked active in this family. */
+  linkedDeviceCount: number;
+  /** True if any screen-usage was logged for this child for today (UTC date, same as missions). */
+  hasScreenUsageToday: boolean;
+  /** Latest activity time across the child’s linked devices, if any. */
+  lastDeviceActivityAt?: string;
 }
 
 // ─── Missions & Habits ────────────────────────────────────────────────────────
