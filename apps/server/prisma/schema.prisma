@@ -286,8 +286,25 @@ model FamilyGroup {
   financeEntries   FamilyFinanceEntry[]
   savingsGoals     SavingsGoal[]
   communityGroups  CommunityGroup[]      @relation("FamilyGroups")
+  chatMessages     FamilyChatMessage[]
 
   @@map("family_groups")
+}
+
+model FamilyChatMessage {
+  id         String   @id @default(uuid())
+  familyId   String
+  senderId   String
+  senderName String
+  senderRole String
+  content    String
+  mediaUrl   String?
+  createdAt  DateTime @default(now())
+
+  family FamilyGroup @relation(fields: [familyId], references: [id], onDelete: Cascade)
+
+  @@index([familyId, createdAt])
+  @@map("family_chat_messages")
 }
 
 /// Join table: user ↔ family with role.
@@ -333,6 +350,8 @@ model ChildProfile {
   // Child's PIN (4-digit, bcrypt hashed) for app login
   // PIN login is age-appropriate and doesn't require typing an email
   pinHash String?
+  /// AES-GCM ciphertext (base64) so parents can see digits after reinstall; use CHILD_PIN_ENCRYPTION_KEY
+  pinEnc String?
 
   // Profile personalization
   languagePreference String   @default("en")
@@ -402,8 +421,42 @@ model ChildProfile {
   flashcardSets       FlashcardSet[]
   allowance           ChildAllowance?
   tuitionRecords      TuitionRecord[]
+  friendInvitesSent   FriendInvite[]  @relation("FriendInvitesSent")
+  friendInvitesTo     FriendInvite[]  @relation("FriendInvitesTo")
+  friendsA            ChildFriend[]   @relation("FriendsA")
+  friendsB            ChildFriend[]   @relation("FriendsB")
 
   @@map("child_profiles")
+}
+
+model FriendInvite {
+  id             String   @id @default(uuid())
+  fromChildId    String
+  toChildId      String?
+  inviteCode     String   @unique
+  status         String   @default("PENDING")
+  parentApproved Boolean  @default(false)
+  expiresAt      DateTime
+  createdAt      DateTime @default(now())
+
+  fromChild ChildProfile  @relation("FriendInvitesSent", fields: [fromChildId], references: [id], onDelete: Cascade)
+  toChild   ChildProfile? @relation("FriendInvitesTo", fields: [toChildId], references: [id], onDelete: SetNull)
+
+  @@index([fromChildId])
+  @@map("friend_invites")
+}
+
+model ChildFriend {
+  id       String   @id @default(uuid())
+  childAId String
+  childBId String
+  since    DateTime @default(now())
+
+  childA ChildProfile @relation("FriendsA", fields: [childAId], references: [id], onDelete: Cascade)
+  childB ChildProfile @relation("FriendsB", fields: [childBId], references: [id], onDelete: Cascade)
+
+  @@unique([childAId, childBId])
+  @@map("child_friends")
 }
 
 /// Paired child devices — monitored for safety and screen time.
@@ -708,6 +761,10 @@ model ScreenTimeControls {
   blockedWebsiteCategories String[]
   blockedWebsites        String[]
   appDownloadApproval    Boolean @default(true) // Require parent approval for new apps
+  youtubeAllowedChannelIds  String[] @default([])
+  youtubeBlockedChannelIds  String[] @default([])
+  youtubeAllowlistMode        Boolean  @default(false)
+  controlsVersion             Int      @default(1)
   updatedAt              DateTime @updatedAt
 
   @@map("screen_time_controls")
@@ -997,14 +1054,24 @@ model FamilyCalendarEvent {
   title       String
   type        String    // 'EXAM' | 'APPOINTMENT' | 'BIRTHDAY' | 'TRIP' | 'SCHOOL' | 'SPORTS' | 'TUITION' | 'EID' | 'CUSTOM'
   description String?
+  location    String?   // optional place / address text
   startAt     DateTime
   endAt       DateTime?
   reminderDays Int?     // Reminder sent X days before
+  /// NONE = one-off; WEEKLY = same time each week (0=Sun..6=Sat)
+  recurrenceKind       String @default("NONE")
+  recurrenceByWeekday  Int? // legacy: first day; used when recurrenceByWeekdays is empty
+  recurrenceByWeekdays Int[] @default([]) // when non-empty, weekly repeats on these weekdays
+  /// Family users (parents) this event applies to — shown on week grid avatars
+  assigneeUserIds  String[] @default([])
+  /// Child profiles this event applies to (in addition to legacy childId)
+  assigneeChildIds String[] @default([])
   createdBy   String    // User ID
   createdAt   DateTime  @default(now())
 
   family FamilyGroup @relation(fields: [familyId], references: [id], onDelete: Cascade)
 
+  @@index([familyId, startAt])
   @@map("family_calendar_events")
 }
 

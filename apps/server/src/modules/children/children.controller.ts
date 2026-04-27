@@ -39,7 +39,17 @@ export class ChildrenController {
     return this.childrenService.getChildProfile(user.sub, childId);
   }
 
-  @ApiOperation({ summary: 'Get full family dashboard' })
+  @ApiOperation({ summary: 'Parent home: family + children summary (fast path; same payload as dashboard)' })
+  @Roles(UserRole.PARENT)
+  @Get('families/:familyId/home')
+  getFamilyHome(
+    @CurrentUser() user: AuthTokenPayload,
+    @Param('familyId') familyId: string,
+  ): Promise<FamilyDashboard> {
+    return this.childrenService.getFamilyDashboard(user.sub, familyId);
+  }
+
+  @ApiOperation({ summary: 'Get full family dashboard (alias of home; same response)' })
   @Roles(UserRole.PARENT)
   @Get('families/:familyId/dashboard')
   getFamilyDashboard(

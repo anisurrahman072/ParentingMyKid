@@ -63,12 +63,24 @@ export class RedisService {
    * Stores a 6-digit device pairing code.
    * Code expires in 5 minutes — prevents stale codes from being used.
    */
-  async setPairingCode(code: string, parentId: string): Promise<void> {
-    await this.client.setex(`pair:${code}`, 300, parentId); // 5 minute TTL
+  async setPairingCode(code: string, payload: { parentId: string; childId: string }): Promise<void> {
+    await this.client.setex(`pair:${code}`, 300, JSON.stringify(payload)); // 5 minute TTL
   }
 
-  async getPairingCode(code: string): Promise<string | null> {
-    return this.client.get<string>(`pair:${code}`);
+  async getPairingCode(code: string): Promise<{ parentId: string; childId: string } | null> {
+    const raw = await this.client.get<string>(`pair:${code}`);
+    if (!raw) {
+      return null;
+    }
+    try {
+      const parsed = JSON.parse(raw) as { parentId?: string; childId?: string };
+      if (!parsed.parentId || !parsed.childId) {
+        return null;
+      }
+      return { parentId: parsed.parentId, childId: parsed.childId };
+    } catch {
+      return null;
+    }
   }
 
   async deletePairingCode(code: string): Promise<void> {

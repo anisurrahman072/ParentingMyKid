@@ -11,6 +11,7 @@ import {
   IsDateString,
   MinLength,
   IsEnum,
+  Matches,
 } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
@@ -63,10 +64,10 @@ export class CreateChildDto {
   @IsBoolean()
   islamicModuleEnabled?: boolean;
 
-  @ApiProperty({ required: false, description: 'Initial 4-digit PIN for child login' })
-  @IsOptional()
+  @ApiProperty({ description: '4-digit PIN for child app login (required)' })
   @IsString()
-  initialPin?: string;
+  @Matches(/^\d{4}$/, { message: 'initialPin must be exactly 4 digits' })
+  initialPin!: string;
 
   @ApiProperty({ required: false })
   @IsOptional()

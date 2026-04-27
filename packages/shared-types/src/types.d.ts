@@ -40,6 +40,18 @@ export interface UserProfile {
     role: UserRole;
     avatarUrl?: string;
     createdAt: string;
+    familyIds?: string[];
+    childProfileId?: string;
+    firstName?: string;
+    lastName?: string;
+    avatar?: string;
+    level?: number;
+    xp?: number;
+    points?: number;
+    coins?: number;
+    badgesCount?: number;
+    currentStreak?: number;
+    longestStreak?: number;
 }
 export interface FamilyGroup {
     id: string;
@@ -48,6 +60,47 @@ export interface FamilyGroup {
     children: ChildProfileSummary[];
     subscription: SubscriptionInfo;
     createdAt: string;
+}
+export interface FamilyChildNameRef {
+    id: string;
+    name: string;
+}
+export interface MyFamilyListItem {
+    id: string;
+    name: string;
+    myRole: FamilyMemberRole;
+    members: FamilyMemberSummary[];
+    children: FamilyChildNameRef[];
+}
+export type FamilyCalendarRecurrenceKind = 'NONE' | 'WEEKLY';
+export interface FamilyCalendarEventAssignee {
+    kind: 'user' | 'child';
+    id: string;
+    displayName: string;
+    avatarUrl: string | null;
+}
+export interface FamilyCalendarEventInstance {
+    id: string;
+    baseEventId: string;
+    familyId: string;
+    childId: string | null;
+    title: string;
+    type: string;
+    description: string | null;
+    location: string | null;
+    startAt: string;
+    endAt: string | null;
+    reminderDays: number | null;
+    recurrenceKind: FamilyCalendarRecurrenceKind;
+    recurrenceByWeekday: number | null;
+    recurrenceByWeekdays: number[];
+    assignees: FamilyCalendarEventAssignee[];
+    createdBy: string;
+    createdAt: string;
+    isRecurringInstance: boolean;
+}
+export interface CreateFamilyRequest {
+    name: string;
 }
 export interface FamilyMemberSummary {
     userId: string;
@@ -97,6 +150,14 @@ export interface ChildSummary {
     lastSeenAt?: string;
     islamicModuleEnabled?: boolean;
 }
+export interface PairedDeviceSummary {
+    id: string;
+    childId: string;
+    childName: string;
+    deviceName: string | null;
+    platform: string;
+    lastActiveAt: string | null;
+}
 export interface FamilyDashboard {
     familyId: string;
     familyName: string;
@@ -104,6 +165,7 @@ export interface FamilyDashboard {
     urgentAlerts: SafetyAlert[];
     upcomingEvents: CalendarEvent[];
     weeklyHighlights: string[];
+    pairedDevices: PairedDeviceSummary[];
 }
 export interface ChildDashboardCard {
     childId: string;
@@ -117,6 +179,9 @@ export interface ChildDashboardCard {
     lastLocationAt?: string;
     lastSeenAt?: string;
     activeAlerts: number;
+    linkedDeviceCount: number;
+    hasScreenUsageToday: boolean;
+    lastDeviceActivityAt?: string;
 }
 export interface Mission {
     id: string;
@@ -237,14 +302,20 @@ export interface SafetyAlert {
     isRead: boolean;
     actionTaken?: string;
     createdAt: string;
+    alertType?: string;
+    summary?: string;
 }
 export interface ScreenTimeControls {
     childId: string;
     dailyLimitMinutes: number;
     socialMediaLimitMinutes: number;
     gamingLimitMinutes: number;
+    youtubeLimitMinutes?: number;
     youtubeRestrictedMode: boolean;
     safeSearchEnabled: boolean;
+    youtubeAllowedChannelIds?: string[];
+    youtubeBlockedChannelIds?: string[];
+    youtubeAllowlistMode?: boolean;
     bedtimeStart: string;
     bedtimeEnd: string;
     morningUnlockTime: string;
@@ -254,6 +325,7 @@ export interface ScreenTimeControls {
     isPaused: boolean;
     blockedApps: string[];
     blockedWebsites: string[];
+    controlsVersion?: number;
 }
 export interface GrowthPlan {
     childId: string;
@@ -391,6 +463,7 @@ export interface CalendarEvent {
     type: string;
     startAt: string;
     endAt?: string;
+    location?: string;
     note?: string;
     childId?: string;
     reminderDays?: number;

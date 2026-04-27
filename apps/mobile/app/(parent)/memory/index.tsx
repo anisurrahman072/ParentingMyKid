@@ -4,7 +4,7 @@
  * One of the highest-retention features — parents love preserving memories.
  */
 
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -13,10 +13,12 @@ import {
   TouchableOpacity,
   Image,
   Alert,
-  FlatList,
   Dimensions,
 } from 'react-native';
+import { router, useLocalSearchParams } from 'expo-router';
+import { useNavigation } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import * as ImagePicker from 'expo-image-picker';
 import Animated, { FadeInDown, ZoomIn } from 'react-native-reanimated';
@@ -24,6 +26,7 @@ import { apiClient } from '../../../src/services/api.client';
 import { useFamilyStore } from '../../../src/store/family.store';
 import { COLORS } from '../../../src/constants/colors';
 import { SPACING } from '../../../src/constants/spacing';
+import { ParentHouseholdSwitcherCard } from '../../../src/components/parent/ParentHouseholdSwitcherCard';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const PHOTO_SIZE = (SCREEN_WIDTH - SPACING[5] * 2 - SPACING[2] * 2) / 3;
@@ -70,6 +73,11 @@ function PhotoGrid({ memories }: { memories: MemoryItem[] }) {
   );
 }
 
+function memoryEntryFrom(raw: string | string[] | undefined): string | undefined {
+  if (raw == null) return undefined;
+  return Array.isArray(raw) ? raw[0] : raw;
+}
+
 const MILESTONE_EXAMPLES = [
   { date: '2024-09-01', emoji: '🎒', title: 'First day of Grade 4', child: 'Amir' },
   { date: '2024-07-15', emoji: '🏊', title: 'Learned to swim!', child: 'Amir' },
@@ -78,15 +86,30 @@ const MILESTONE_EXAMPLES = [
 ];
 
 export default function MemoryScreen() {
+  const navigation = useNavigation();
+  const { from: fromRaw } = useLocalSearchParams<{ from?: string | string[] }>();
+  const entryFrom = memoryEntryFrom(fromRaw);
   const [activeTab, setActiveTab] = useState<MemoryTab>('gallery');
-  const { activeChild } = useFamilyStore();
+  const activeChild = useFamilyStore((s) => s.getSelectedChild());
   const qc = useQueryClient();
 
+  const goBack = useCallback(() => {
+    if (entryFrom === 'family-space') {
+      router.replace('/(parent)/family-space');
+      return;
+    }
+    if (navigation.canGoBack()) {
+      navigation.goBack();
+      return;
+    }
+    router.replace('/(parent)/dashboard');
+  }, [navigation, entryFrom]);
+
   const { data: memoriesData } = useQuery({
-    queryKey: ['memories', activeChild?.id],
+    queryKey: ['memories', activeChild?.childId],
     queryFn: () =>
-      apiClient.get(`/memory/${activeChild?.id}`).then((r) => r.data.memories ?? []),
-    enabled: !!activeChild?.id,
+      apiClient        .get(`/memory/${activeChild?.childId}`).then((r) => r.data.memories ?? []),
+    enabled: !!activeChild?.childId,
   });
 
   const memories: MemoryItem[] = memoriesData ?? [];
@@ -95,13 +118,13 @@ export default function MemoryScreen() {
     mutationFn: async (imageUri: string) => {
       const formData = new FormData();
       formData.append('file', { uri: imageUri, type: 'image/jpeg', name: 'memory.jpg' } as any);
-      formData.append('childId', activeChild?.id ?? '');
+      formData.append('childId', activeChild?.childId ?? '');
       return apiClient.post('/memory/upload', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['memories', activeChild?.id] });
+      qc.invalidateQueries({ queryKey: ['memories', activeChild?.childId] });
     },
   });
 
@@ -125,11 +148,29 @@ export default function MemoryScreen() {
 
   return (
     <SafeAreaView style={styles.screen} edges={['top']}>
-      {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>📸 Memories</Text>
-        {activeChild && <Text style={styles.childName}>{activeChild.name}'s Journey</Text>}
+        <TouchableOpacity
+          onPress={goBack}
+          style={styles.backBtn}
+          hitSlop={12}
+          accessibilityRole="button"
+          accessibilityLabel="Back"
+        >
+          <Ionicons name="chevron-back" size={26} color={COLORS.parent.text} />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle} numberOfLines={1}>
+          Memories
+        </Text>
+        {activeChild ? (
+          <Text style={styles.childName} numberOfLines={1}>
+            {`${activeChild.name}'s Journey`}
+          </Text>
+        ) : (
+          <View style={styles.backBtn} />
+        )}
       </View>
+
+      <ParentHouseholdSwitcherCard />
 
       {/* Tabs */}
       <View style={styles.tabs}>
@@ -237,23 +278,29 @@ export default function MemoryScreen() {
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: COLORS.parent.background },
   header: {
-    paddingHorizontal: SPACING[5],
+    paddingLeft: SPACING[3],
+    paddingRight: SPACING[4],
     paddingVertical: SPACING[4],
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    gap: 4,
   },
+  backBtn: { width: 32, height: 40, justifyContent: 'center', alignItems: 'center' },
   headerTitle: {
+    flex: 1,
     fontSize: 22,
     fontFamily: 'Inter',
     fontWeight: '700',
     color: COLORS.parent.text,
   },
   childName: {
+    flexShrink: 0,
+    maxWidth: '42%',
     fontSize: 13,
     fontFamily: 'Inter',
     color: COLORS.parent.primary,
     fontWeight: '600',
+    textAlign: 'right',
   },
   tabs: {
     flexDirection: 'row',

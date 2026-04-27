@@ -6,8 +6,8 @@
 
 import { Controller, Post, Body, UseGuards, Get, Param } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
-import { AuthService } from './auth.service';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
+import { AuthService } from './auth.service';
 import { CurrentUser } from './decorators/current-user.decorator';
 import { Roles } from './decorators/roles.decorator';
 import { RolesGuard } from './guards/roles.guard';
@@ -18,8 +18,17 @@ import {
   RefreshTokenDto,
   ConfirmPairingDto,
   SetChildPinDto,
+  GeneratePairingCodeDto,
+  AutoPairDeviceDto,
+  PairDeviceStatusDto,
 } from './dto/register.dto';
-import { UserRole, AuthResponse, PairingCodeResponse, AuthTokenPayload } from '@parentingmykid/shared-types';
+import {
+  UserRole,
+  AuthResponse,
+  PairingCodeResponse,
+  AuthTokenPayload,
+  UserProfile,
+} from '@parentingmykid/shared-types';
 
 @ApiTags('Authentication')
 @Controller('auth')
@@ -50,19 +59,51 @@ export class AuthController {
     return this.authService.refreshTokens(dto.refreshToken);
   }
 
+  @ApiOperation({ summary: 'Current user profile (restore session / validate access token)' })
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
+  @Get('me')
+  getMe(@CurrentUser() user: AuthTokenPayload): Promise<UserProfile> {
+    return this.authService.getCurrentUserProfile(user.sub, user.role);
+  }
+
   @ApiOperation({ summary: 'Generate 6-digit pairing code for child device' })
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.PARENT)
   @Post('pair-device/generate')
-  generatePairingCode(@CurrentUser() user: AuthTokenPayload): Promise<PairingCodeResponse> {
-    return this.authService.generatePairingCode(user.sub);
+  generatePairingCode(
+    @CurrentUser() user: AuthTokenPayload,
+    @Body() dto: GeneratePairingCodeDto,
+  ): Promise<PairingCodeResponse> {
+    return this.authService.generatePairingCode(user.sub, dto.childId);
   }
 
   @ApiOperation({ summary: 'Confirm device pairing with code from parent device' })
   @Post('pair-device/confirm')
   confirmPairing(@Body() dto: ConfirmPairingDto): Promise<AuthResponse> {
     return this.authService.confirmDevicePairing(dto);
+  }
+
+  @ApiOperation({ summary: 'Auto-pair this device from parent session on same phone' })
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.PARENT)
+  @Post('pair-device/auto')
+  autoPairDevice(@CurrentUser() user: AuthTokenPayload, @Body() dto: AutoPairDeviceDto): Promise<void> {
+    return this.authService.autoPairDeviceForParent(user.sub, dto);
+  }
+
+  @ApiOperation({ summary: 'List child profile(s) this device is paired to (Expo token match)' })
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.PARENT)
+  @Post('pair-device/status')
+  pairDeviceStatus(
+    @CurrentUser() user: AuthTokenPayload,
+    @Body() dto: PairDeviceStatusDto,
+  ): Promise<{ pairs: { childId: string; name: string }[] }> {
+    return this.authService.getPairingStatusForDevice(user.sub, dto);
   }
 
   @ApiOperation({ summary: 'Parent sets child PIN for app login' })

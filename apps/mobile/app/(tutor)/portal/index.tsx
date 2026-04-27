@@ -38,7 +38,7 @@ export default function TutorPortalScreen() {
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.greeting}>Welcome,</Text>
-        <Text style={styles.name}>{user?.firstName ?? 'Tutor'}</Text>
+        <Text style={styles.name}>{user?.name?.split(' ')[0] ?? 'Tutor'}</Text>
         <View style={styles.roleBadge}>
           <Text style={styles.roleBadgeText}>🎓 Tutor Portal</Text>
         </View>

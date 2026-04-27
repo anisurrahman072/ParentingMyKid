@@ -5,12 +5,24 @@
 
 import { Controller, Get, Post, Patch, Body, Param, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
-import { SafetyService, LogLocationDto, CreateGeofenceDto, UpdateScreenTimeDto } from './safety.service';
+import {
+  SafetyService,
+  LogLocationDto,
+  CreateGeofenceDto,
+  UpdateScreenTimeDto,
+} from './safety.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
-import { UserRole, AuthTokenPayload, ChildLocation, Geofence, SafetyAlert, ScreenTimeControls } from '@parentingmykid/shared-types';
+import {
+  UserRole,
+  AuthTokenPayload,
+  ChildLocation,
+  Geofence,
+  SafetyAlert,
+  ScreenTimeControls,
+} from '@parentingmykid/shared-types';
 
 @ApiTags('Safety')
 @ApiBearerAuth()
@@ -32,10 +44,7 @@ export class SafetyController {
   @ApiOperation({ summary: 'Child device logs a location ping' })
   @Roles(UserRole.CHILD)
   @Post(':childId/location')
-  logLocation(
-    @Param('childId') childId: string,
-    @Body() dto: LogLocationDto,
-  ): Promise<void> {
+  logLocation(@Param('childId') childId: string, @Body() dto: LogLocationDto): Promise<void> {
     return this.safetyService.logLocation(childId, dto);
   }
 
@@ -65,6 +74,16 @@ export class SafetyController {
     @Param('childId') childId: string,
   ): Promise<ScreenTimeControls> {
     return this.safetyService.getScreenTimeControls(user.sub, childId);
+  }
+
+  @ApiOperation({ summary: "Get screen time controls — child's own device (read-only for policy sync)" })
+  @Roles(UserRole.CHILD)
+  @Get(':childId/controls/self')
+  getControlsSelf(
+    @CurrentUser() user: AuthTokenPayload,
+    @Param('childId') childId: string,
+  ): Promise<ScreenTimeControls> {
+    return this.safetyService.getScreenTimeControlsForChild(user.sub, childId);
   }
 
   @ApiOperation({ summary: 'Update screen time rules (includes pause internet)' })

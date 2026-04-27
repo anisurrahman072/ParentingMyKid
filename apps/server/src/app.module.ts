@@ -41,6 +41,8 @@ import { FinanceModule } from './modules/finance/finance.module';
 import { CommunityModule } from './modules/community/community.module';
 import { AnalyticsModule } from './modules/analytics/analytics.module';
 import { LeadsModule } from './modules/leads/leads.module';
+import { FamilyChatModule } from './modules/family-chat/family-chat.module';
+import { FriendsModule } from './modules/friends/friends.module';
 
 @Module({
   imports: [
@@ -99,6 +101,8 @@ import { LeadsModule } from './modules/leads/leads.module';
     CommunityModule,
     AnalyticsModule,
     LeadsModule,
+    FamilyChatModule,
+    FriendsModule,
   ],
 })
 export class AppModule {}

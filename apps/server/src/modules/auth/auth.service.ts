@@ -8,11 +8,16 @@
  *   5. Device pairing via 6-digit code or QR
  *
  * @business-rule Security is critical in a children's app:
- *   - All passwords and PINs are bcrypt-hashed (never stored raw)
+ *   - Passwords and child PIN login use bcrypt (`pinHash`); a separate AES-GCM field (`pinEnc`)
+ *     lets parents see digits after reinstall — protect `CHILD_PIN_ENCRYPTION_KEY` like DB creds.
  *   - Access tokens are short-lived (15 minutes)
  *   - Refresh tokens are rotated on each use (prevent token theft)
  *   - Pairing codes expire in 5 minutes
  *   - Parental consent is required and stored for legal compliance (COPPA)
+ *
+ * @note Refresh sessions in Redis use SHA-256(refreshToken) as the key suffix.
+ *       bcrypt.hash() is unsuitable here: each call yields a different salt/hash,
+ *       so lookup on refresh would never match the stored session.
  */
 
 import {
@@ -25,24 +30,34 @@ import {
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
+import { createHash } from 'node:crypto';
 import * as bcrypt from 'bcrypt';
 import * as QRCode from 'qrcode';
 import { v4 as uuidv4 } from 'uuid';
 import { PrismaService } from '../../database/prisma.service';
 import { RedisService } from '../../common/redis/redis.service';
+import { ChildPinCryptoService } from '../../common/child-pin-crypto/child-pin-crypto.service';
 import {
   RegisterParentDto,
   LoginDto,
   ChildPinLoginDto,
   ConfirmPairingDto,
   SetChildPinDto,
+  AutoPairDeviceDto,
+  PairDeviceStatusDto,
 } from './dto/register.dto';
 import {
   UserRole,
   AuthTokenPayload,
   AuthResponse,
   PairingCodeResponse,
+  UserProfile,
 } from '@parentingmykid/shared-types';
+
+/** Stable Redis session key suffix for a refresh JWT (bcrypt is non-deterministic per call). */
+function refreshTokenRedisFingerprint(refreshToken: string): string {
+  return createHash('sha256').update(refreshToken).digest('hex');
+}
 
 @Injectable()
 export class AuthService {
@@ -54,6 +69,7 @@ export class AuthService {
     private readonly redis: RedisService,
     private readonly jwt: JwtService,
     private readonly config: ConfigService,
+    private readonly childPinCrypto: ChildPinCryptoService,
   ) {}
 
   // ─── Parent Registration ───────────────────────────────────────────────────
@@ -218,9 +234,10 @@ export class AuthService {
     }
 
     const pinHash = await bcrypt.hash(dto.pin, this.BCRYPT_ROUNDS);
+    const pinEnc = this.childPinCrypto.encryptPin(dto.pin);
     await this.prisma.childProfile.update({
       where: { id: childId },
-      data: { pinHash },
+      data: { pinHash, pinEnc },
     });
   }
 
@@ -242,8 +259,8 @@ export class AuthService {
       throw new UnauthorizedException('Invalid or expired refresh token');
     }
 
-    const tokenHash = await bcrypt.hash(refreshToken, 8);
-    const exists = await this.redis.sessionExists(payload.sub, tokenHash);
+    const tokenFingerprint = refreshTokenRedisFingerprint(refreshToken);
+    const exists = await this.redis.sessionExists(payload.sub, tokenFingerprint);
     if (!exists) {
       // Token has already been used or revoked — possible theft attempt
       await this.redis.revokeAllSessions(payload.sub);
@@ -251,7 +268,7 @@ export class AuthService {
     }
 
     // Revoke old refresh token
-    await this.redis.deleteSession(payload.sub, tokenHash);
+    await this.redis.deleteSession(payload.sub, tokenFingerprint);
 
     // Issue new token pair
     const memberships = await this.prisma.familyMember.findMany({
@@ -270,6 +287,51 @@ export class AuthService {
     return { accessToken, refreshToken: newRefreshToken };
   }
 
+  /**
+   * Rehydrate user for client cold start (SecureStore can lose user JSON, token refresh cannot return user).
+   */
+  async getCurrentUserProfile(userId: string, role: UserRole): Promise<UserProfile> {
+    const user = await this.prisma.user.findUniqueOrThrow({
+      where: { id: userId },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        role: true,
+        avatarUrl: true,
+        createdAt: true,
+        phone: true,
+      },
+    });
+
+    const memberships = await this.prisma.familyMember.findMany({
+      where: { userId },
+      select: { familyId: true },
+    });
+    const familyIds = memberships.map((m) => m.familyId);
+
+    let childProfileId: string | undefined;
+    if (role === UserRole.CHILD) {
+      const cp = await this.prisma.childProfile.findUnique({
+        where: { userId },
+        select: { id: true },
+      });
+      childProfileId = cp?.id;
+    }
+
+    return {
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      role: user.role as UserRole,
+      avatarUrl: user.avatarUrl ?? undefined,
+      phone: user.phone ?? undefined,
+      createdAt: user.createdAt.toISOString(),
+      familyIds,
+      childProfileId,
+    };
+  }
+
   // ─── Device Pairing ────────────────────────────────────────────────────────
 
   /**
@@ -277,16 +339,24 @@ export class AuthService {
    * The parent shows this (or the QR code) to their child's device to link it.
    * Code expires in 5 minutes via Redis TTL.
    */
-  async generatePairingCode(parentId: string): Promise<PairingCodeResponse> {
+  async generatePairingCode(parentId: string, childId: string): Promise<PairingCodeResponse> {
+    const child = await this.prisma.childProfile.findFirst({
+      where: { id: childId, parentId },
+      select: { id: true },
+    });
+    if (!child) {
+      throw new ForbiddenException('Child profile not found for this parent');
+    }
+
     // Generate cryptographically random 6-digit code
     const code = Math.floor(100000 + Math.random() * 900000).toString();
 
-    await this.redis.setPairingCode(code, parentId);
+    await this.redis.setPairingCode(code, { parentId, childId });
 
     const expiresAt = new Date(Date.now() + 5 * 60 * 1000).toISOString();
 
-    // Generate QR code that encodes {code, parentId, appScheme}
-    const qrData = Buffer.from(JSON.stringify({ code, parentId })).toString('base64');
+    // QR encodes one-time token only; the child profile is resolved server-side from Redis mapping.
+    const qrData = Buffer.from(JSON.stringify({ code })).toString('base64');
     const qrImage = await QRCode.toDataURL(qrData);
 
     return { code, expiresAt, qrData: qrImage };
@@ -297,46 +367,89 @@ export class AuthService {
    * On success, creates a ChildDevice record and issues child JWT.
    */
   async confirmDevicePairing(dto: ConfirmPairingDto): Promise<AuthResponse> {
-    const parentId = await this.redis.getPairingCode(dto.code);
+    const parsedQrPayload = this.parseQrPayload(dto.qrToken);
+    const code = dto.code ?? parsedQrPayload?.code;
+    if (!code) {
+      throw new BadRequestException('Pairing data is missing. Please scan the parent QR again.');
+    }
 
-    if (!parentId) {
+    const pairingData = await this.redis.getPairingCode(code);
+
+    if (!pairingData) {
       throw new BadRequestException(
         'Pairing code is invalid or has expired. Please generate a new code.',
       );
     }
 
-    // Verify the child belongs to this parent
+    const parentId = pairingData.parentId;
+    const linkedChildId = pairingData.childId;
+    const childId = dto.childId ?? linkedChildId;
+    if (childId !== linkedChildId) {
+      throw new ForbiddenException('This QR code is not valid for that child profile');
+    }
+
+    // Verify the child belongs to this parent and has a user row for child login
     const child = await this.prisma.childProfile.findFirst({
-      where: { id: dto.childId, parentId },
+      where: { id: childId, parentId },
+      include: { user: true },
     });
 
     if (!child) {
       throw new ForbiddenException('Child profile not found for this parent');
     }
 
-    // Register the paired device
-    await this.prisma.childDevice.create({
-      data: {
-        childId: dto.childId,
-        deviceToken: dto.expoPushToken,
-        platform: dto.platform,
-        deviceName: dto.deviceName,
-        pairedAt: new Date(),
-        isActive: true,
-      },
+    await this.upsertChildDevice({
+      childId,
+      expoPushToken: dto.expoPushToken,
+      platform: dto.platform,
+      deviceName: dto.deviceName,
     });
 
     // Invalidate the pairing code — one-time use only
-    await this.redis.deletePairingCode(dto.code);
+    await this.redis.deletePairingCode(code);
 
-    return this.issueTokens(child.userId, '', UserRole.CHILD, [child.familyId]);
+    return this.issueTokens(child.userId, child.user.email, UserRole.CHILD, [child.familyId]);
+  }
+
+  async autoPairDeviceForParent(parentId: string, dto: AutoPairDeviceDto): Promise<void> {
+    const child = await this.prisma.childProfile.findFirst({
+      where: { id: dto.childId, parentId },
+      select: { id: true },
+    });
+    if (!child) {
+      throw new ForbiddenException('Child profile not found for this parent');
+    }
+    await this.upsertChildDevice(dto);
+  }
+
+  /**
+   * Returns which of the parent's child profiles are linked to this physical device
+   * (Expo token match on `child_devices`). Used so the parent app can show "this phone is set up" UX.
+   */
+  async getPairingStatusForDevice(
+    parentId: string,
+    dto: PairDeviceStatusDto,
+  ): Promise<{ pairs: { childId: string; name: string }[] }> {
+    const devices = await this.prisma.childDevice.findMany({
+      where: {
+        deviceToken: dto.expoPushToken,
+        isActive: true,
+        child: { parentId },
+      },
+      include: {
+        child: { select: { id: true, name: true } },
+      },
+    });
+    return {
+      pairs: devices.map((d) => ({ childId: d.child.id, name: d.child.name })),
+    };
   }
 
   // ─── Logout ───────────────────────────────────────────────────────────────
 
   async logout(userId: string, refreshToken: string): Promise<void> {
-    const tokenHash = await bcrypt.hash(refreshToken, 8);
-    await this.redis.deleteSession(userId, tokenHash);
+    const tokenFingerprint = refreshTokenRedisFingerprint(refreshToken);
+    await this.redis.deleteSession(userId, tokenFingerprint);
   }
 
   // ─── Internal Helpers ─────────────────────────────────────────────────────
@@ -368,14 +481,23 @@ export class AuthService {
       expiresIn: this.config.get('JWT_REFRESH_EXPIRES_IN', '7d'),
     });
 
-    // Store hashed refresh token in Redis (7 day TTL)
-    const tokenHash = await bcrypt.hash(refreshToken, 8);
-    await this.redis.setSession(userId, tokenHash, 7 * 24 * 60 * 60);
+    // Store refresh token fingerprint in Redis (7 day TTL)
+    const tokenFingerprint = refreshTokenRedisFingerprint(refreshToken);
+    await this.redis.setSession(userId, tokenFingerprint, 7 * 24 * 60 * 60);
 
     const user = await this.prisma.user.findUniqueOrThrow({
       where: { id: userId },
       select: { id: true, email: true, name: true, role: true, avatarUrl: true, createdAt: true },
     });
+
+    let childProfileId: string | undefined;
+    if (role === UserRole.CHILD) {
+      const cp = await this.prisma.childProfile.findUnique({
+        where: { userId },
+        select: { id: true },
+      });
+      childProfileId = cp?.id;
+    }
 
     return {
       accessToken,
@@ -387,7 +509,57 @@ export class AuthService {
         role: user.role as UserRole,
         avatarUrl: user.avatarUrl ?? undefined,
         createdAt: user.createdAt.toISOString(),
+        familyIds,
+        childProfileId,
       },
     };
+  }
+
+  private parseQrPayload(qrToken?: string): { code?: string } | null {
+    if (!qrToken) {
+      return null;
+    }
+    try {
+      const decoded = Buffer.from(qrToken, 'base64').toString('utf8');
+      const parsed = JSON.parse(decoded) as { code?: string };
+      return parsed;
+    } catch {
+      return null;
+    }
+  }
+
+  private async upsertChildDevice(input: {
+    childId: string;
+    expoPushToken: string;
+    platform: string;
+    deviceName?: string;
+  }): Promise<void> {
+    const existing = await this.prisma.childDevice.findFirst({
+      where: { childId: input.childId, deviceToken: input.expoPushToken },
+      select: { id: true },
+    });
+    if (existing) {
+      await this.prisma.childDevice.update({
+        where: { id: existing.id },
+        data: {
+          platform: input.platform,
+          deviceName: input.deviceName,
+          isActive: true,
+          lastActiveAt: new Date(),
+        },
+      });
+      return;
+    }
+    await this.prisma.childDevice.create({
+      data: {
+        childId: input.childId,
+        deviceToken: input.expoPushToken,
+        platform: input.platform,
+        deviceName: input.deviceName,
+        pairedAt: new Date(),
+        isActive: true,
+        lastActiveAt: new Date(),
+      },
+    });
   }
 }

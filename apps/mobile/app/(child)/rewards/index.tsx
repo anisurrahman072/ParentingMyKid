@@ -271,7 +271,7 @@ export default function RewardsScreen() {
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: '#FFF8F0' },
+  screen: { flex: 1, backgroundColor: 'transparent' },
   scrollContent: { paddingBottom: SPACING[10] },
   statsHeader: {
     flexDirection: 'row',
@@ -321,14 +321,14 @@ const styles = StyleSheet.create({
     paddingVertical: SPACING[3],
     alignItems: 'center',
     borderRadius: 12,
-    backgroundColor: 'rgba(0,0,0,0.05)',
+    backgroundColor: 'rgba(255,255,255,0.2)',
   },
   tabActive: { backgroundColor: COLORS.kids.primary },
   tabText: {
     fontSize: 13,
     fontFamily: 'Nunito_400Regular',
     fontWeight: '700',
-    color: '#888',
+    color: 'rgba(255,255,255,0.75)',
   },
   tabTextActive: { color: '#FFFFFF' },
   badgeGrid: {
@@ -339,7 +339,7 @@ const styles = StyleSheet.create({
   },
   badgeCard: {
     width: '30%',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: 'rgba(255,255,255,0.88)',
     borderRadius: 16,
     padding: SPACING[3],
     alignItems: 'center',
@@ -387,7 +387,7 @@ const styles = StyleSheet.create({
   },
   rewardCard: {
     width: '47%',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: 'rgba(255,255,255,0.88)',
     borderRadius: 16,
     padding: SPACING[4],
     alignItems: 'center',
@@ -461,7 +461,7 @@ const styles = StyleSheet.create({
   },
   sectionCard: {
     marginHorizontal: SPACING[5],
-    backgroundColor: '#FFFFFF',
+    backgroundColor: 'rgba(255,255,255,0.88)',
     borderRadius: 16,
     padding: SPACING[4],
     gap: SPACING[3],

@@ -57,7 +57,7 @@ export function WellbeingScoreRing({
           cx={size / 2}
           cy={size / 2}
           r={radius}
-          stroke="rgba(255,255,255,0.1)"
+          stroke="rgba(0,0,0,0.08)"
           strokeWidth={strokeWidth}
           fill="none"
         />
@@ -107,7 +107,7 @@ const styles = StyleSheet.create({
     fontSize: 9,
     fontFamily: 'Inter',
     fontWeight: '600',
-    color: 'rgba(255,255,255,0.5)',
+    color: COLORS.parent.textMuted,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },

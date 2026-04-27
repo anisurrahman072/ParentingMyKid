@@ -17,10 +17,14 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { router } from 'expo-router';
+import * as SecureStore from 'expo-secure-store';
 import { useAuthStore } from '../../../src/store/auth.store';
 import { useFamilyStore } from '../../../src/store/family.store';
 import { COLORS } from '../../../src/constants/colors';
 import { SPACING } from '../../../src/constants/spacing';
+import { LOGO_PNG, APP_DISPLAY_NAME } from '../../../src/constants/branding';
+import { CHILD_ID_KEY } from '../../../src/store/deviceSession.store';
+import { ParentHouseholdSwitcherCard } from '../../../src/components/parent/ParentHouseholdSwitcherCard';
 
 interface SettingsRowProps {
   icon: string;
@@ -85,19 +89,47 @@ export default function SettingsScreen() {
     ]);
   }
 
+  function handDeviceToChild() {
+    const go = async () => {
+      const childId = await SecureStore.getItemAsync(CHILD_ID_KEY);
+      if (!childId) {
+        Alert.alert('Pair this device', 'Link a child to this device first (More → Kids Login).');
+        return;
+      }
+      await logout();
+      router.replace('/auth/child-pin');
+    };
+    Alert.alert('Hand to child?', 'You will be signed out so your child can enter their PIN.', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Continue', onPress: () => void go() },
+    ]);
+  }
+
   return (
     <SafeAreaView style={styles.screen} edges={['top']}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
         {/* Profile header */}
+        <View style={styles.brandRow}>
+          <View style={styles.brandLogoHalo}>
+            <Image source={LOGO_PNG} style={styles.brandLogo} resizeMode="cover" />
+          </View>
+          <View>
+            <Text style={styles.brandName}>{APP_DISPLAY_NAME}</Text>
+            <Text style={styles.brandSub}>Family app</Text>
+          </View>
+        </View>
+
+        <ParentHouseholdSwitcherCard invalidateQueryKeysAfterSwitch={[['family-home']]} />
+
         <View style={styles.profileHeader}>
           <View style={styles.avatarPlaceholder}>
             <Text style={styles.avatarInitial}>
-              {user?.firstName?.[0]?.toUpperCase() ?? 'P'}
+              {user?.name?.[0]?.toUpperCase() ?? 'P'}
             </Text>
           </View>
           <View style={styles.profileInfo}>
             <Text style={styles.profileName}>
-              {user?.firstName} {user?.lastName}
+              {user?.name ?? 'Parent'}
             </Text>
             <Text style={styles.profileEmail}>{user?.email}</Text>
             <View style={[styles.planBadge, isPremium ? styles.planBadgePremium : styles.planBadgeFree]}>
@@ -119,6 +151,20 @@ export default function SettingsScreen() {
             <Text style={styles.upgradeArrow}>→</Text>
           </TouchableOpacity>
         )}
+
+        <SettingsSection title="Family & device">
+          <SettingsRow
+            icon="📱"
+            label="Kids Login"
+            onPress={() => router.push('/(parent)/settings/add-device')}
+          />
+          <SettingsRow
+            icon="🎨"
+            label="Appearance"
+            onPress={() => router.push('/(parent)/settings/theme-picker')}
+          />
+          <SettingsRow icon="👧" label="Hand device to child" onPress={handDeviceToChild} />
+        </SettingsSection>
 
         {/* Account */}
         <SettingsSection title="Account">
@@ -171,7 +217,7 @@ export default function SettingsScreen() {
 
         {/* App info */}
         <View style={styles.appInfo}>
-          <Text style={styles.appVersion}>ParentingMyKid v1.0.0</Text>
+          <Text style={styles.appVersion}>{APP_DISPLAY_NAME} · v1.0.0</Text>
           <Text style={styles.appTagline}>Building better families, one day at a time 💙</Text>
         </View>
 
@@ -187,6 +233,43 @@ export default function SettingsScreen() {
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: COLORS.parent.background },
   scrollContent: { paddingBottom: SPACING[10] },
+  brandRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING[4],
+    marginHorizontal: SPACING[5],
+    marginTop: SPACING[2],
+    marginBottom: SPACING[2],
+    padding: SPACING[4],
+    backgroundColor: COLORS.parent.surface,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: COLORS.parent.surfaceBorder,
+  },
+  brandLogoHalo: {
+    padding: 4,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255,255,255,0.9)',
+    shadowColor: 'rgba(5, 60, 40, 0.15)',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 1,
+    shadowRadius: 10,
+    elevation: 4,
+  },
+  brandLogo: { width: 52, height: 52, borderRadius: 12 },
+  brandName: {
+    fontSize: 17,
+    fontFamily: 'Inter',
+    fontWeight: '800',
+    color: COLORS.parent.text,
+    letterSpacing: 0.2,
+  },
+  brandSub: {
+    fontSize: 12,
+    fontFamily: 'Inter',
+    color: COLORS.parent.textMuted,
+    marginTop: 2,
+  },
   profileHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -227,7 +310,7 @@ const styles = StyleSheet.create({
     paddingVertical: 3,
     marginTop: 4,
   },
-  planBadgePremium: { backgroundColor: 'rgba(99,102,241,0.2)' },
+  planBadgePremium: { backgroundColor: 'rgba(59,130,246,0.15)' },
   planBadgeFree: { backgroundColor: 'rgba(255,255,255,0.08)' },
   planBadgeText: {
     fontSize: 12,
@@ -239,13 +322,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: SPACING[3],
-    backgroundColor: 'rgba(99,102,241,0.15)',
+    backgroundColor: 'rgba(59,130,246,0.12)',
     borderRadius: 14,
     marginHorizontal: SPACING[5],
     marginBottom: SPACING[4],
     padding: SPACING[4],
     borderWidth: 1,
-    borderColor: 'rgba(99,102,241,0.3)',
+    borderColor: 'rgba(59,130,246,0.28)',
   },
   upgradeIcon: { fontSize: 28 },
   upgradeText: { flex: 1 },

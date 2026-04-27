@@ -3,7 +3,7 @@
  * Budget overview, kids allowance, tuition tracker, savings goals, Zakat calculator.
  */
 
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -12,21 +12,63 @@ import {
   TouchableOpacity,
   Alert,
 } from 'react-native';
+import { router, useLocalSearchParams } from 'expo-router';
+import { useNavigation } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, { FadeInDown } from 'react-native-reanimated';
+import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../../../src/constants/colors';
 import { SPACING } from '../../../src/constants/spacing';
+import { ParentHouseholdSwitcherCard } from '../../../src/components/parent/ParentHouseholdSwitcherCard';
 
 type FinanceTab = 'overview' | 'allowance' | 'tuition' | 'savings' | 'zakat';
 
+function financeEntryFrom(raw: string | string[] | undefined): string | undefined {
+  if (raw == null) return undefined;
+  return Array.isArray(raw) ? raw[0] : raw;
+}
+
 export default function FinanceScreen() {
+  const navigation = useNavigation();
+  const { from: fromRaw } = useLocalSearchParams<{ from?: string | string[] }>();
+  const entryFrom = financeEntryFrom(fromRaw);
   const [activeTab, setActiveTab] = useState<FinanceTab>('overview');
+
+  const goBack = useCallback(() => {
+    if (entryFrom === 'family-space') {
+      router.replace('/(parent)/family-space');
+      return;
+    }
+    if (navigation.canGoBack()) {
+      navigation.goBack();
+      return;
+    }
+    router.replace('/(parent)/dashboard');
+  }, [navigation, entryFrom]);
 
   return (
     <SafeAreaView style={styles.screen} edges={['top']}>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>💰 Family Finance</Text>
+        <TouchableOpacity
+          onPress={goBack}
+          style={styles.backBtn}
+          hitSlop={12}
+          accessibilityRole="button"
+          accessibilityLabel="Back"
+        >
+          <Ionicons name="chevron-back" size={26} color={COLORS.parent.text} />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle} numberOfLines={1}>
+          Family Finance
+        </Text>
+        <View style={styles.headerTrail}>
+          <Text style={styles.headerMoneyEmoji} accessibilityLabel="Finance">
+            💰
+          </Text>
+        </View>
       </View>
+
+      <ParentHouseholdSwitcherCard />
 
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tabScroll} contentContainerStyle={styles.tabScrollContent}>
         {[
@@ -236,8 +278,27 @@ export default function FinanceScreen() {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: COLORS.parent.background },
-  header: { paddingHorizontal: SPACING[5], paddingVertical: SPACING[4] },
-  headerTitle: { fontSize: 22, fontFamily: 'Inter', fontWeight: '700', color: COLORS.parent.text },
+  header: {
+    paddingLeft: SPACING[3],
+    paddingRight: SPACING[4],
+    paddingVertical: SPACING[4],
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  backBtn: { width: 32, height: 40, justifyContent: 'center', alignItems: 'center' },
+  headerTitle: {
+    flex: 1,
+    fontSize: 22,
+    fontFamily: 'Inter',
+    fontWeight: '700',
+    color: COLORS.parent.text,
+  },
+  headerTrail: { width: 32, alignItems: 'center', justifyContent: 'center' },
+  headerMoneyEmoji: {
+    fontSize: 26,
+    lineHeight: 30,
+  },
   tabScroll: { maxHeight: 48 },
   tabScrollContent: { paddingHorizontal: SPACING[5], gap: SPACING[2], alignItems: 'center' },
   tab: { paddingVertical: SPACING[2], paddingHorizontal: SPACING[4], borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.06)' },
@@ -300,8 +361,8 @@ const styles = StyleSheet.create({
   zakatDivider: { height: 1, backgroundColor: 'rgba(255,255,255,0.15)', marginVertical: SPACING[2] },
   zakatResultRow: { flexDirection: 'row', justifyContent: 'space-between' },
   zakatResultLabel: { fontSize: 16, fontFamily: 'Inter', fontWeight: '700', color: COLORS.parent.text },
-  zakatResultValue: { fontSize: 22, fontFamily: 'Inter', fontWeight: '800', color: '#2D6A4F' },
-  zakatButton: { backgroundColor: '#2D6A4F', borderRadius: 12, paddingVertical: SPACING[3], alignItems: 'center' },
+  zakatResultValue: { fontSize: 22, fontFamily: 'Inter', fontWeight: '800', color: COLORS.parent.success },
+  zakatButton: { backgroundColor: COLORS.parent.primary, borderRadius: 12, paddingVertical: SPACING[3], alignItems: 'center' },
   zakatButtonText: { fontSize: 15, fontFamily: 'Inter', fontWeight: '700', color: '#FFFFFF' },
   zakatRecord: { flexDirection: 'row', alignItems: 'center', gap: SPACING[3], paddingVertical: SPACING[2], borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.05)' },
   zakatRecordYear: { flex: 1, fontSize: 14, fontFamily: 'Inter', color: COLORS.parent.text },

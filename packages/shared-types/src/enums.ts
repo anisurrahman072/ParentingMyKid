@@ -275,4 +275,6 @@ export enum NotificationType {
   PAYMENT_REMINDER = 'PAYMENT_REMINDER', // Tuition/subscription due
   VACATION_NUDGE = 'VACATION_NUDGE',   // "You haven't taken a trip this year"
   DAILY_TIP = 'DAILY_TIP',             // Parenting tip of the day
+  /** Family calendar plan assignees updated — notify involved parents */
+  CALENDAR_PLAN_UPDATED = 'CALENDAR_PLAN_UPDATED',
 }

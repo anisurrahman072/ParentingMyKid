@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "ParentingMyKid",
+    "name": "Parenting My Kid",
     "slug": "parentingmykid",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -10,7 +10,7 @@
     "splash": {
       "image": "./assets/icons/splash.png",
       "resizeMode": "contain",
-      "backgroundColor": "#6366F1"
+      "backgroundColor": "#FCE8F0"
     },
     "ios": {
       "supportsTablet": false,
@@ -24,10 +24,16 @@
         "NSPhotoLibraryUsageDescription": "ParentingMyKid allows adding photos to the family memory gallery."
       }
     },
+    "extra": {
+      "eas": {
+        "projectId": "fb14eec0-ddb3-446f-917d-2e51f5ba1778"
+      }
+    },
     "android": {
+      "softwareKeyboardLayoutMode": "resize",
       "adaptiveIcon": {
         "foregroundImage": "./assets/icons/adaptive-icon.png",
-        "backgroundColor": "#6366F1"
+        "backgroundColor": "#FCE8F0"
       },
       "package": "com.parentingmykid.app",
       "versionCode": 1,
@@ -50,8 +56,10 @@
         "expo-notifications",
         {
           "icon": "./assets/icons/notification-icon.png",
-          "color": "#6366F1",
-          "sounds": ["./assets/sounds/notification.wav"]
+          "color": "#059669",
+          "sounds": [
+            "./assets/sounds/notification.wav"
+          ]
         }
       ],
       [
@@ -66,7 +74,8 @@
         {
           "cameraPermission": "Allow ParentingMyKid to access your camera for mission photo proof."
         }
-      ]
+      ],
+      "@react-native-community/datetimepicker"
     ],
     "experiments": {
       "typedRoutes": true

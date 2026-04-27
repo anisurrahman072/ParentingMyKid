@@ -5,17 +5,27 @@
  *              Uses premium gradient background with animated elements.
  */
 
-import { View, Text, StyleSheet, TouchableOpacity, Dimensions } from 'react-native';
-import { router } from 'expo-router';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { Redirect, router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 import { Colors } from '../../src/constants/colors';
 import { Typography } from '../../src/constants/typography';
 import { Spacing } from '../../src/constants/spacing';
-
-const { width } = Dimensions.get('window');
+import { AppLogoMark } from '../../src/components/branding/AppLogoMark';
+import { AppDisplayNameGradient } from '../../src/components/branding/AppDisplayNameGradient';
+import { useAuthStore } from '../../src/store/auth.store';
+import { getRoleHomeHref } from '../../src/utils/roleHomeHref';
 
 export default function WelcomeScreen() {
+  const { isLoading, isAuthenticated, user } = useAuthStore();
+  if (!isLoading && isAuthenticated && user) {
+    const href = getRoleHomeHref(user.role);
+    if (href) {
+      return <Redirect href={href} />;
+    }
+  }
+
   return (
     <LinearGradient
       colors={Colors.parent.gradientHero as [string, string]}
@@ -23,17 +33,15 @@ export default function WelcomeScreen() {
     >
       {/* Logo and tagline */}
       <Animated.View entering={FadeInDown.duration(800).delay(200)} style={styles.hero}>
-        <View style={styles.logoContainer}>
-          <Text style={styles.logoEmoji}>🌟</Text>
-        </View>
-        <Text style={styles.appName}>ParentingMyKid</Text>
-        <Text style={styles.tagline}>Grow Together. Every Day.</Text>
+        <AppLogoMark size={128} showWordmark={false} />
+        <AppDisplayNameGradient style={styles.heroTitle} />
+        <Text style={styles.tagline}>Grow together. Every day.</Text>
       </Animated.View>
 
       {/* Value propositions */}
       <Animated.View entering={FadeInUp.duration(800).delay(400)} style={styles.valueProps}>
         <ValueProp icon="🛡️" text="Keep your child safe — online and offline" />
-        <ValueProp icon="📈" text="Track real growth across every dimension" />
+        <ValueProp icon="📈" text="Track real growth in every area" />
         <ValueProp icon="🎮" text="Kids LOVE the missions and reward system" />
         <ValueProp icon="🤖" text="AI parenting coach — knows your child" />
       </Animated.View>
@@ -50,11 +58,12 @@ export default function WelcomeScreen() {
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={styles.secondaryButton}
+          style={styles.secondaryLink}
           onPress={() => router.push('/auth/login')}
-          activeOpacity={0.8}
+          activeOpacity={0.65}
+          hitSlop={{ top: 14, bottom: 14, left: 20, right: 20 }}
         >
-          <Text style={styles.secondaryButtonText}>I already have an account</Text>
+          <Text style={styles.secondaryLinkText}>I already have an account</Text>
         </TouchableOpacity>
       </Animated.View>
 
@@ -86,29 +95,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: Spacing.sm,
   },
-  logoContainer: {
-    width: 80,
-    height: 80,
-    borderRadius: 24,
-    backgroundColor: Colors.parent.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: Spacing.sm,
-  },
-  logoEmoji: {
-    fontSize: 40,
-  },
-  appName: {
-    fontFamily: Typography.fonts.black,
-    fontSize: Typography.parent.displayLarge,
-    color: Colors.white,
-    textAlign: 'center',
+  heroTitle: {
+    marginTop: Spacing.md,
   },
   tagline: {
-    fontFamily: Typography.fonts.medium,
+    fontFamily: Typography.fonts.semiBold,
     fontSize: Typography.parent.bodyLarge,
     color: Colors.parent.textSecondary,
     textAlign: 'center',
+    marginTop: Spacing.md,
   },
   valueProps: {
     gap: Spacing.md,
@@ -129,7 +124,8 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   buttons: {
-    gap: Spacing.md,
+    gap: Spacing.sm,
+    alignItems: 'center',
   },
   primaryButton: {
     backgroundColor: Colors.parent.primary,
@@ -149,17 +145,17 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.7)',
     marginTop: 2,
   },
-  secondaryButton: {
-    borderRadius: Spacing.cardBorderRadius,
-    paddingVertical: Spacing.base,
+  /** Text-style secondary action — tight vertical hit area to save screen height */
+  secondaryLink: {
+    paddingVertical: 4,
+    paddingHorizontal: Spacing.sm,
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.2)',
+    justifyContent: 'center',
   },
-  secondaryButtonText: {
-    fontFamily: Typography.fonts.semiBold,
-    fontSize: Typography.parent.body,
-    color: Colors.parent.textSecondary,
+  secondaryLinkText: {
+    fontFamily: Typography.fonts.extraBold,
+    fontSize: Typography.parent.label,
+    color: Colors.parent.primary,
   },
   legalText: {
     fontFamily: Typography.fonts.regular,

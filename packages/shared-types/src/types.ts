@@ -86,6 +86,21 @@ export interface UserProfile {
   role: UserRole;
   avatarUrl?: string;
   createdAt: string;
+  /** All family group IDs this user belongs to (set by auth for most roles) */
+  familyIds?: string[];
+  /** Set when role === CHILD — ChildProfile id for API paths */
+  childProfileId?: string;
+  /** Child UI (optional; populated by child auth / profile merges) */
+  firstName?: string;
+  lastName?: string;
+  avatar?: string;
+  level?: number;
+  xp?: number;
+  points?: number;
+  coins?: number;
+  badgesCount?: number;
+  currentStreak?: number;
+  longestStreak?: number;
 }
 
 export interface FamilyGroup {
@@ -95,6 +110,65 @@ export interface FamilyGroup {
   children: ChildProfileSummary[];
   subscription: SubscriptionInfo;
   createdAt: string;
+}
+
+/** Minimal child id + name for family roster lists (e.g. multi-household picker). */
+export interface FamilyChildNameRef {
+  id: string;
+  name: string;
+}
+
+/**
+ * One of the current user’s household groups, with members and children for
+ * the family space / divorced multi-family UX.
+ */
+export interface MyFamilyListItem {
+  id: string;
+  name: string;
+  myRole: FamilyMemberRole;
+  members: FamilyMemberSummary[];
+  children: FamilyChildNameRef[];
+}
+
+export type FamilyCalendarRecurrenceKind = 'NONE' | 'WEEKLY';
+
+/** Resolved person on a calendar instance (week grid avatars). */
+export interface FamilyCalendarEventAssignee {
+  kind: 'user' | 'child';
+  id: string;
+  displayName: string;
+  avatarUrl: string | null;
+}
+
+/** One occurrence (weekly rows are expanded in range by the server). */
+export interface FamilyCalendarEventInstance {
+  id: string;
+  baseEventId: string;
+  familyId: string;
+  childId: string | null;
+  title: string;
+  type: string;
+  description: string | null;
+  /** Optional place or address */
+  location: string | null;
+  startAt: string;
+  endAt: string | null;
+  reminderDays: number | null;
+  recurrenceKind: FamilyCalendarRecurrenceKind;
+  /** First weekday when weekly (legacy); use `recurrenceByWeekdays` for full set. */
+  recurrenceByWeekday: number | null;
+  /** 0=Sun … 6=Sat; empty when not weekly. */
+  recurrenceByWeekdays: number[];
+  /** Who this event is for (users + children); empty if none linked. */
+  assignees: FamilyCalendarEventAssignee[];
+  createdBy: string;
+  createdAt: string;
+  isRecurringInstance: boolean;
+}
+
+export interface CreateFamilyRequest {
+  /** Display name for the new household (e.g. “Summer with kids”). */
+  name: string;
 }
 
 export interface FamilyMemberSummary {
@@ -159,9 +233,20 @@ export interface ChildSummary {
 // ─── Child Dashboard ─────────────────────────────────────────────────────────
 
 /**
- * The data shape returned by GET /families/:id/dashboard
+ * The data shape returned by GET /families/:id/home and GET /families/:id/dashboard
+ * (identical; home is the preferred fast parent-shell endpoint).
  * This is the main API call the parent dashboard makes on load.
  */
+/** A child’s phone/tablet linked for monitoring (parent home “paired devices” list). */
+export interface PairedDeviceSummary {
+  id: string;
+  childId: string;
+  childName: string;
+  deviceName: string | null;
+  platform: string;
+  lastActiveAt: string | null;
+}
+
 export interface FamilyDashboard {
   familyId: string;
   familyName: string;
@@ -169,6 +254,8 @@ export interface FamilyDashboard {
   urgentAlerts: SafetyAlert[];
   upcomingEvents: CalendarEvent[];
   weeklyHighlights: string[]; // AI-generated summary sentences
+  /** Active paired devices for all children in this family (safety, screen time, push). */
+  pairedDevices: PairedDeviceSummary[];
 }
 
 export interface ChildDashboardCard {
@@ -183,6 +270,21 @@ export interface ChildDashboardCard {
   lastLocationAt?: string;
   lastSeenAt?: string;
   activeAlerts: number; // count of unread safety alerts
+  /** Child devices still marked active in this family. */
+  linkedDeviceCount: number;
+  /** True if any screen-usage was logged for this child for today (UTC date, same as missions). */
+  hasScreenUsageToday: boolean;
+  /** Latest activity time across the child’s linked devices, if any. */
+  lastDeviceActivityAt?: string;
+  /**
+   * True when a kid login PIN is stored on the server (bcrypt hash).
+   */
+  kidPinIsSet: boolean;
+  /**
+   * Four-digit PIN for parent UI recovery — decrypted server-side from `pinEnc` (AES-GCM).
+   * Omitted for legacy rows that only have `pinHash`, until the parent sets the PIN again.
+   */
+  kidPinDigits?: string;
 }
 
 // ─── Missions & Habits ────────────────────────────────────────────────────────
@@ -321,6 +423,9 @@ export interface SafetyAlert {
   isRead: boolean;
   actionTaken?: string;
   createdAt: string;
+  /** Optional UI hint for legacy / agent alerts */
+  alertType?: string;
+  summary?: string;
 }
 
 export interface ScreenTimeControls {
@@ -328,8 +433,12 @@ export interface ScreenTimeControls {
   dailyLimitMinutes: number;
   socialMediaLimitMinutes: number;
   gamingLimitMinutes: number;
+  youtubeLimitMinutes?: number;
   youtubeRestrictedMode: boolean;
   safeSearchEnabled: boolean;
+  youtubeAllowedChannelIds?: string[];
+  youtubeBlockedChannelIds?: string[];
+  youtubeAllowlistMode?: boolean;
   bedtimeStart: string;  // HH:MM
   bedtimeEnd: string;    // HH:MM
   morningUnlockTime: string; // HH:MM
@@ -339,6 +448,8 @@ export interface ScreenTimeControls {
   isPaused: boolean;     // Emergency internet pause
   blockedApps: string[];
   blockedWebsites: string[];
+  /** Bumped when parent changes controls; child can use for ETag / poll skip */
+  controlsVersion?: number;
 }
 
 // ─── AI & Growth Plan ─────────────────────────────────────────────────────────
@@ -503,6 +614,7 @@ export interface CalendarEvent {
   type: string;        // 'EXAM' | 'APPOINTMENT' | 'BIRTHDAY' | 'TRIP' etc.
   startAt: string;
   endAt?: string;
+  location?: string;
   note?: string;
   childId?: string;    // Linked to specific child if applicable
   reminderDays?: number; // Send reminder X days before

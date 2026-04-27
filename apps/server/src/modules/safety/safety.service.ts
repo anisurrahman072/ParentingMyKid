@@ -109,6 +109,29 @@ export class UpdateScreenTimeDto {
   @IsOptional()
   @IsArray()
   blockedApps?: string[];
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  blockedWebsites?: string[];
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  youtubeAllowedChannelIds?: string[];
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  youtubeBlockedChannelIds?: string[];
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsBoolean()
+  youtubeAllowlistMode?: boolean;
 }
 
 @Injectable()
@@ -215,7 +238,11 @@ export class SafetyService {
 
   // ─── Geofences ────────────────────────────────────────────────────────────
 
-  async createGeofence(parentId: string, childId: string, dto: CreateGeofenceDto): Promise<Geofence> {
+  async createGeofence(
+    parentId: string,
+    childId: string,
+    dto: CreateGeofenceDto,
+  ): Promise<Geofence> {
     await this.assertParentChildAccess(parentId, childId);
 
     const geofence = await this.prisma.geofence.create({
@@ -245,30 +272,77 @@ export class SafetyService {
 
   // ─── Screen Time Controls ─────────────────────────────────────────────────
 
-  async getScreenTimeControls(parentId: string, childId: string): Promise<ScreenTimeControls> {
-    await this.assertParentChildAccess(parentId, childId);
-
-    let controls = await this.prisma.screenTimeControls.findUnique({ where: { childId } });
-
-    if (!controls) {
-      controls = await this.prisma.screenTimeControls.create({ data: { childId } });
-    }
-
+  private mapToScreenTimeControls(controls: {
+    childId: string;
+    dailyLimitMinutes: number;
+    socialMediaLimitMinutes: number;
+    gamingLimitMinutes: number;
+    youtubeLimitMinutes: number;
+    youtubeRestrictedMode: boolean;
+    safeSearchEnabled: boolean;
+    youtubeAllowedChannelIds: string[];
+    youtubeBlockedChannelIds: string[];
+    youtubeAllowlistMode: boolean;
+    controlsVersion: number;
+    bedtimeStart: string;
+    bedtimeEnd: string;
+    morningUnlockTime: string;
+    focusTimeStart: string | null;
+    focusTimeEnd: string | null;
+    drivingModeEnabled: boolean;
+    isPaused: boolean;
+    blockedApps: string[];
+    blockedWebsites: string[];
+  }): ScreenTimeControls {
     return {
       childId: controls.childId,
       dailyLimitMinutes: controls.dailyLimitMinutes,
       socialMediaLimitMinutes: controls.socialMediaLimitMinutes,
       gamingLimitMinutes: controls.gamingLimitMinutes,
+      youtubeLimitMinutes: controls.youtubeLimitMinutes,
       youtubeRestrictedMode: controls.youtubeRestrictedMode,
       safeSearchEnabled: controls.safeSearchEnabled,
+      youtubeAllowedChannelIds: controls.youtubeAllowedChannelIds,
+      youtubeBlockedChannelIds: controls.youtubeBlockedChannelIds,
+      youtubeAllowlistMode: controls.youtubeAllowlistMode,
+      controlsVersion: controls.controlsVersion,
       bedtimeStart: controls.bedtimeStart,
       bedtimeEnd: controls.bedtimeEnd,
       morningUnlockTime: controls.morningUnlockTime,
+      focusTimeStart: controls.focusTimeStart ?? undefined,
+      focusTimeEnd: controls.focusTimeEnd ?? undefined,
       drivingModeEnabled: controls.drivingModeEnabled,
       isPaused: controls.isPaused,
       blockedApps: controls.blockedApps,
       blockedWebsites: controls.blockedWebsites,
     };
+  }
+
+  async getScreenTimeControls(parentId: string, childId: string): Promise<ScreenTimeControls> {
+    await this.assertParentChildAccess(parentId, childId);
+
+    let row = await this.prisma.screenTimeControls.findUnique({ where: { childId } });
+
+    if (!row) {
+      row = await this.prisma.screenTimeControls.create({ data: { childId } });
+    }
+
+    return this.mapToScreenTimeControls(row);
+  }
+
+  /** Child JWT — same rules as parent view, but only for own profile. */
+  async getScreenTimeControlsForChild(userId: string, childId: string): Promise<ScreenTimeControls> {
+    const child = await this.prisma.childProfile.findUnique({ where: { id: childId } });
+    if (!child || child.userId !== userId) {
+      throw new ForbiddenException('Access denied');
+    }
+
+    let row = await this.prisma.screenTimeControls.findUnique({ where: { childId } });
+    if (!row) {
+      row = await this.prisma.screenTimeControls.create({ data: { childId } });
+    }
+
+    return this.mapToScreenTimeControls(row);
   }
 
   /**
@@ -282,11 +356,16 @@ export class SafetyService {
   ): Promise<ScreenTimeControls> {
     await this.assertParentChildAccess(parentId, childId);
 
+    const clean = Object.fromEntries(
+      Object.entries(dto as object).filter(([, v]) => v !== undefined),
+    ) as Record<string, unknown>;
+
     const controls = await this.prisma.screenTimeControls.update({
       where: { childId },
       data: {
-        ...dto,
-      },
+        ...clean,
+        controlsVersion: { increment: 1 },
+      } as any,
     });
 
     // If parent paused internet — send notification to child's device
@@ -306,7 +385,7 @@ export class SafetyService {
       }
     }
 
-    return this.getScreenTimeControls(parentId, childId);
+    return this.mapToScreenTimeControls(controls);
   }
 
   // ─── AI Content Monitoring Alerts ─────────────────────────────────────────

@@ -18,6 +18,7 @@
 
 import { useEffect } from 'react';
 import { Stack, router } from 'expo-router';
+import * as SecureStore from 'expo-secure-store';
 import { useFonts } from 'expo-font';
 import {
   Nunito_400Regular,
@@ -38,11 +39,21 @@ import { StatusBar } from 'expo-status-bar';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import Constants, { ExecutionEnvironment } from 'expo-constants';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { StyleSheet } from 'react-native';
+import { AppState, InteractionManager, StyleSheet } from 'react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { useAuthStore } from '../src/store/auth.store';
 import { UserRole } from '@parentingmykid/shared-types';
 import { apiClient } from '../src/services/api.client';
 import { API_ENDPOINTS } from '../src/constants/api';
+import { deviceSessionService, CHILD_ID_KEY } from '../src/store/deviceSession.store';
+import { startPolicySync, stopPolicySync } from '../src/services/policySync.service';
+import { useThemeStore } from '../src/store/theme.store';
+
+/**
+ * Dev-only: this module re-executes on Fast Refresh, so the flag resets and we can
+ * re-read SecureStore + refresh when the zustand store was wiped in memory.
+ */
+let __pmkDevSessionRecovery = false;
 
 // Keep splash screen visible while fonts are loading
 SplashScreen.preventAutoHideAsync();
@@ -78,7 +89,9 @@ const queryClient = new QueryClient({
 });
 
 export default function RootLayout() {
-  const { loadPersistedAuth, isLoading, isAuthenticated, user } = useAuthStore();
+  const loadPersistedAuth = useAuthStore((s) => s.loadPersistedAuth);
+  const { isLoading, isAuthenticated, user } = useAuthStore();
+  const loadTheme = useThemeStore((s) => s.load);
 
   const [fontsLoaded] = useFonts({
     Nunito_400Regular,
@@ -95,8 +108,24 @@ export default function RootLayout() {
 
   // Load auth state from SecureStore on startup
   useEffect(() => {
-    loadPersistedAuth();
-  }, []);
+    void loadPersistedAuth();
+  }, [loadPersistedAuth]);
+
+  useEffect(() => {
+    void loadTheme();
+  }, [loadTheme]);
+
+  // Child: poll screen time / pause policy for in-app soft enforcement
+  useEffect(() => {
+    if (isAuthenticated && user?.role === UserRole.CHILD) {
+      startPolicySync();
+    } else {
+      stopPolicySync();
+    }
+    return () => {
+      stopPolicySync();
+    };
+  }, [isAuthenticated, user?.role, user?.childProfileId]);
 
   // Register Expo push token once authenticated
   useEffect(() => {
@@ -104,6 +133,33 @@ export default function RootLayout() {
       registerPushNotifications();
     }
   }, [isAuthenticated]);
+
+  // Resume: refresh access token; background may have let it expire
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state !== 'active') return;
+      const s = useAuthStore.getState();
+      if (s.isAuthenticated) {
+        void s.refreshAccessToken();
+      } else {
+        void s.revalidateFromSecureStore();
+      }
+    });
+    return () => sub.remove();
+  }, []);
+
+  // Dev Fast Refresh: rehydrate in-memory zustand from SecureStore if it was reset
+  useEffect(() => {
+    if (!__DEV__ || !fontsLoaded || isLoading) return;
+    if (__pmkDevSessionRecovery) return;
+    __pmkDevSessionRecovery = true;
+    const task = InteractionManager.runAfterInteractions(() => {
+      const { isAuthenticated, accessToken } = useAuthStore.getState();
+      if (isAuthenticated && accessToken) return;
+      void useAuthStore.getState().revalidateFromSecureStore();
+    });
+    return () => task.cancel?.();
+  }, [fontsLoaded, isLoading]);
 
   // Hide splash screen once fonts and auth are ready
   useEffect(() => {
@@ -121,20 +177,30 @@ export default function RootLayout() {
       return;
     }
 
-    // Role-based routing — each role sees a completely different app experience
-    switch (user?.role) {
-      case UserRole.PARENT:
-        router.replace('/(parent)/dashboard');
-        break;
-      case UserRole.CHILD:
-        router.replace('/(child)/missions');
-        break;
+    void (async () => {
+      if (user?.role === UserRole.PARENT) {
+        const childPaired = await SecureStore.getItemAsync(CHILD_ID_KEY);
+        const hasPin = await deviceSessionService.hasUnlockPin();
+        if (childPaired && !hasPin) {
+          router.replace('/auth/setup-unlock-pin');
+          return;
+        }
+      }
+
+      switch (user?.role) {
+        case UserRole.PARENT:
+          router.replace('/(parent)/dashboard');
+          break;
+        case UserRole.CHILD:
+          router.replace('/(child)/missions');
+          break;
       case UserRole.TUTOR:
-        router.replace('/(tutor)');
+        router.replace('/(tutor)/portal');
         break;
-      default:
-        router.replace('/auth');
-    }
+        default:
+          router.replace('/auth');
+      }
+    })();
   }, [isAuthenticated, isLoading, fontsLoaded, user?.role]);
 
   if (!fontsLoaded || isLoading) {
@@ -143,15 +209,22 @@ export default function RootLayout() {
 
   return (
     <GestureHandlerRootView style={styles.root}>
-      <QueryClientProvider client={queryClient}>
-        <StatusBar style="auto" />
-        <Stack screenOptions={{ headerShown: false }}>
-          <Stack.Screen name="auth" />
-          <Stack.Screen name="(parent)" />
-          <Stack.Screen name="(child)" />
-          <Stack.Screen name="(tutor)" />
-        </Stack>
-      </QueryClientProvider>
+      <SafeAreaProvider>
+        <QueryClientProvider client={queryClient}>
+          <StatusBar style="auto" />
+          <Stack
+            screenOptions={{
+              headerShown: false,
+              contentStyle: { backgroundColor: 'transparent' },
+            }}
+          >
+            <Stack.Screen name="auth" />
+            <Stack.Screen name="(parent)" />
+            <Stack.Screen name="(child)" />
+            <Stack.Screen name="(tutor)" />
+          </Stack>
+        </QueryClientProvider>
+      </SafeAreaProvider>
     </GestureHandlerRootView>
   );
 }
@@ -165,9 +238,12 @@ async function registerPushNotifications(): Promise<void> {
     const { status } = await Notifications.requestPermissionsAsync();
     if (status !== 'granted') return;
 
-    const token = await Notifications.getExpoPushTokenAsync({
-      projectId: 'your-expo-project-id', // Set in app.json extra.eas.projectId
-    });
+    const projectId =
+      (Constants.expoConfig as { extra?: { eas?: { projectId?: string } } } | undefined)?.extra
+        ?.eas?.projectId;
+    const token = await Notifications.getExpoPushTokenAsync(
+      projectId ? { projectId: String(projectId) } : undefined,
+    );
 
     await apiClient.post(API_ENDPOINTS.notifications.registerToken, {
       expoPushToken: token.data,
