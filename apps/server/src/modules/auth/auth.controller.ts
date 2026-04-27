@@ -18,6 +18,9 @@ import {
   RefreshTokenDto,
   ConfirmPairingDto,
   SetChildPinDto,
+  GeneratePairingCodeDto,
+  AutoPairDeviceDto,
+  PairDeviceStatusDto,
 } from './dto/register.dto';
 import {
   UserRole,
@@ -69,14 +72,38 @@ export class AuthController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.PARENT)
   @Post('pair-device/generate')
-  generatePairingCode(@CurrentUser() user: AuthTokenPayload): Promise<PairingCodeResponse> {
-    return this.authService.generatePairingCode(user.sub);
+  generatePairingCode(
+    @CurrentUser() user: AuthTokenPayload,
+    @Body() dto: GeneratePairingCodeDto,
+  ): Promise<PairingCodeResponse> {
+    return this.authService.generatePairingCode(user.sub, dto.childId);
   }
 
   @ApiOperation({ summary: 'Confirm device pairing with code from parent device' })
   @Post('pair-device/confirm')
   confirmPairing(@Body() dto: ConfirmPairingDto): Promise<AuthResponse> {
     return this.authService.confirmDevicePairing(dto);
+  }
+
+  @ApiOperation({ summary: 'Auto-pair this device from parent session on same phone' })
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.PARENT)
+  @Post('pair-device/auto')
+  autoPairDevice(@CurrentUser() user: AuthTokenPayload, @Body() dto: AutoPairDeviceDto): Promise<void> {
+    return this.authService.autoPairDeviceForParent(user.sub, dto);
+  }
+
+  @ApiOperation({ summary: 'List child profile(s) this device is paired to (Expo token match)' })
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.PARENT)
+  @Post('pair-device/status')
+  pairDeviceStatus(
+    @CurrentUser() user: AuthTokenPayload,
+    @Body() dto: PairDeviceStatusDto,
+  ): Promise<{ pairs: { childId: string; name: string }[] }> {
+    return this.authService.getPairingStatusForDevice(user.sub, dto);
   }
 
   @ApiOperation({ summary: 'Parent sets child PIN for app login' })

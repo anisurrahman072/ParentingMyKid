@@ -13,6 +13,7 @@ import { Prisma } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import { v4 as uuidv4 } from 'uuid';
 import { PrismaService } from '../../database/prisma.service';
+import { ChildPinCryptoService } from '../../common/child-pin-crypto/child-pin-crypto.service';
 import { CreateChildDto, SubmitBaselineDto } from './dto/create-child.dto';
 import {
   UserRole,
@@ -26,7 +27,10 @@ import {
 export class ChildrenService {
   private readonly logger = new Logger(ChildrenService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly childPinCrypto: ChildPinCryptoService,
+  ) {}
 
   // ─── Create Child Profile ────────────────────────────────────────────────
 
@@ -84,7 +88,8 @@ export class ChildrenService {
       },
     });
 
-    const pinHash = dto.initialPin ? await bcrypt.hash(dto.initialPin, 12) : null;
+    const pinHash = await bcrypt.hash(dto.initialPin, 12);
+    const pinEnc = this.childPinCrypto.encryptPin(dto.initialPin);
 
     const child = await this.prisma.childProfile.create({
       data: {
@@ -102,6 +107,7 @@ export class ChildrenService {
         favoriteActivities: dto.favoriteActivities ?? [],
         islamicModuleEnabled: dto.islamicModuleEnabled ?? family.islamicModuleEnabled,
         pinHash,
+        pinEnc,
       },
     });
 
@@ -143,6 +149,8 @@ export class ChildrenService {
                 avatarUrl: true,
                 currentStreak: true,
                 wellbeingScore: true,
+                pinHash: true,
+                pinEnc: true,
               },
             },
           },
@@ -251,6 +259,8 @@ export class ChildrenService {
       const missionsJson = todayMissions?.missionsJson as { total?: number } | null | undefined;
       const missionTotal = missionsJson?.total ?? 0;
 
+      const kidPinDigits = this.childPinCrypto.tryDecryptPin(child.pinEnc) ?? undefined;
+
       return {
         childId: child.id,
         name: child.name,
@@ -266,6 +276,8 @@ export class ChildrenService {
         linkedDeviceCount: linked,
         hasScreenUsageToday,
         lastDeviceActivityAt,
+        kidPinIsSet: child.pinHash != null && child.pinHash.length > 0,
+        ...(kidPinDigits ? { kidPinDigits } : {}),
       };
     });
 

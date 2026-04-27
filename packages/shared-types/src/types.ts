@@ -276,6 +276,15 @@ export interface ChildDashboardCard {
   hasScreenUsageToday: boolean;
   /** Latest activity time across the child’s linked devices, if any. */
   lastDeviceActivityAt?: string;
+  /**
+   * True when a kid login PIN is stored on the server (bcrypt hash).
+   */
+  kidPinIsSet: boolean;
+  /**
+   * Four-digit PIN for parent UI recovery — decrypted server-side from `pinEnc` (AES-GCM).
+   * Omitted for legacy rows that only have `pinHash`, until the parent sets the PIN again.
+   */
+  kidPinDigits?: string;
 }
 
 // ─── Missions & Habits ────────────────────────────────────────────────────────

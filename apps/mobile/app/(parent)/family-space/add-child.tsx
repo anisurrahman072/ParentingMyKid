@@ -24,6 +24,7 @@ import { isAxiosError } from 'axios';
 import { Ionicons } from '@expo/vector-icons';
 import { ChildProfile } from '@parentingmykid/shared-types';
 import { apiClient } from '../../../src/services/api.client';
+import { setCachedChildPin } from '../../../src/services/childPinCache.service';
 import { API_ENDPOINTS } from '../../../src/constants/api';
 import { useFamilyStore } from '../../../src/store/family.store';
 import { COLORS } from '../../../src/constants/colors';
@@ -73,8 +74,8 @@ export default function AddChildScreen() {
       if (grade.trim().length < 1) {
         throw new Error('Add a grade or level (e.g. Grade 4).');
       }
-      if (initialPin.length > 0 && !/^\d{4}$/.test(initialPin)) {
-        throw new Error('PIN must be exactly 4 digits, or leave empty to set later.');
+      if (!/^\d{4}$/.test(initialPin)) {
+        throw new Error('Enter a 4-digit PIN so your child can sign in on their device.');
       }
       try {
         const { data } = await apiClient.post<ChildProfile>(API_ENDPOINTS.children.base, {
@@ -82,7 +83,7 @@ export default function AddChildScreen() {
           dob: dob.trim(),
           grade: grade.trim(),
           school: school.trim() || undefined,
-          initialPin: initialPin.length === 4 ? initialPin : undefined,
+          initialPin,
           familyId: activeFamilyId ?? undefined,
           languagePreference: 'en',
         });
@@ -96,7 +97,10 @@ export default function AddChildScreen() {
         throw e;
       }
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
+      if (/^\d{4}$/.test(initialPin)) {
+        void setCachedChildPin(data.id, initialPin);
+      }
       void queryClient.invalidateQueries({ queryKey: ['family-home', activeFamilyId] });
       Alert.alert(
         'Child added',
@@ -182,11 +186,20 @@ export default function AddChildScreen() {
           </View>
 
           <View style={styles.field}>
-            <Text style={styles.label}>4-digit PIN (optional)</Text>
+            <Text style={styles.label}>4-digit PIN</Text>
+            <View style={styles.pinCallout} accessibilityLabel="PIN tip">
+              <View style={styles.pinCalloutAccent} />
+              <View style={styles.pinCalloutBody}>
+                <Text style={styles.pinCalloutTitle}>Anchor to something familiar</Text>
+                <Text style={styles.pinCalloutMeta}>
+                  Last 4 of student ID, roll, or their birth year
+                </Text>
+              </View>
+            </View>
             <TextInput
               value={initialPin}
               onChangeText={(t) => setInitialPin(t.replace(/[^0-9]/g, '').slice(0, 4))}
-              placeholder="Set now or later"
+              placeholder="4 digits"
               placeholderTextColor={COLORS.parent.textMuted}
               style={styles.input}
               keyboardType="number-pad"
@@ -244,6 +257,39 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: COLORS.parent.textPrimary,
     marginBottom: 6,
+  },
+  pinCallout: {
+    flexDirection: 'row',
+    borderRadius: 12,
+    overflow: 'hidden',
+    backgroundColor: 'rgba(59, 130, 246, 0.07)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(59, 130, 246, 0.22)',
+    marginBottom: 10,
+  },
+  pinCalloutAccent: {
+    width: 4,
+    backgroundColor: COLORS.parent.primary,
+  },
+  pinCalloutBody: {
+    flex: 1,
+    paddingVertical: 11,
+    paddingRight: 12,
+    paddingLeft: 10,
+  },
+  pinCalloutTitle: {
+    fontFamily: Typography.fonts.interMedium,
+    fontSize: 14,
+    lineHeight: 20,
+    color: COLORS.parent.textPrimary,
+    marginBottom: 3,
+  },
+  pinCalloutMeta: {
+    fontFamily: Typography.fonts.interRegular,
+    fontSize: 12,
+    lineHeight: 16,
+    color: COLORS.parent.textMuted,
+    letterSpacing: 0.2,
   },
   input: {
     fontFamily: Typography.fonts.interRegular,

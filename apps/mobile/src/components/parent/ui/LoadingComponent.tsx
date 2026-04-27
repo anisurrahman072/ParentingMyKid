@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { View, StyleSheet, useWindowDimensions } from 'react-native';
+import { View, StyleSheet, useWindowDimensions, type StyleProp, type ViewStyle } from 'react-native';
 import Animated, {
   Easing,
   interpolate,
@@ -45,6 +45,8 @@ type Props = {
   accessibilityLabel?: string;
   /** Set false when a parent row already exposes progress (avoids duplicate VoiceOver). */
   accessibilityAnnounce?: boolean;
+  /** Merged into the root gradient (e.g. `marginBottom: 0` when nested in a card). */
+  style?: StyleProp<ViewStyle>;
 };
 
 /**
@@ -55,6 +57,7 @@ export function LoadingComponent({
   variant,
   accessibilityLabel = 'Loading',
   accessibilityAnnounce = true,
+  style,
 }: Props) {
   const [colorIdx, setColorIdx] = useState(0);
 
@@ -80,7 +83,7 @@ export function LoadingComponent({
         locations={[...PREMIUM_BG_LOCATIONS]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
-        style={styles.compactShell}
+        style={[styles.compactShell, style]}
         {...a11y}
       >
         <SuspenseStyleShimmer />
@@ -98,7 +101,7 @@ export function LoadingComponent({
         locations={[...PREMIUM_BG_LOCATIONS]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
-        style={styles.setupTileShell}
+        style={[styles.setupTileShell, style]}
         {...a11y}
       >
         <SuspenseStyleShimmer />
@@ -115,7 +118,7 @@ export function LoadingComponent({
       locations={[...PREMIUM_BG_LOCATIONS]}
       start={{ x: 0, y: 0 }}
       end={{ x: 1, y: 1 }}
-      style={styles.premiumCardShell}
+      style={[styles.premiumCardShell, style]}
       {...a11y}
     >
       <SuspenseStyleShimmer />

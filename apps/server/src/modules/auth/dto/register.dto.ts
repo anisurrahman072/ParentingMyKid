@@ -76,11 +76,43 @@ export class SetChildPinDto {
 }
 
 export class ConfirmPairingDto {
+  @ApiProperty({ description: 'QR payload scanned on child device (base64 json)' , required: false})
+  @IsOptional()
+  @IsString()
+  qrToken?: string;
+
   @ApiProperty({ description: '6-digit pairing code shown on parent device' })
+  @IsOptional()
   @IsString()
   @Length(6, 6)
-  code!: string;
+  code?: string;
 
+  @ApiProperty({ description: 'Child profile ID this device belongs to' })
+  @IsOptional()
+  @IsString()
+  childId?: string;
+
+  @ApiProperty({ description: 'Expo push token for this device' })
+  @IsString()
+  expoPushToken!: string;
+
+  @ApiProperty({ description: "Platform: 'android' | 'ios'" })
+  @IsString()
+  platform!: string;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsString()
+  deviceName?: string;
+}
+
+export class GeneratePairingCodeDto {
+  @ApiProperty({ description: 'Child profile ID that this QR should pair to' })
+  @IsString()
+  childId!: string;
+}
+
+export class AutoPairDeviceDto {
   @ApiProperty({ description: 'Child profile ID this device belongs to' })
   @IsString()
   childId!: string;
@@ -97,4 +129,10 @@ export class ConfirmPairingDto {
   @IsOptional()
   @IsString()
   deviceName?: string;
+}
+
+export class PairDeviceStatusDto {
+  @ApiProperty({ description: 'Expo push token for this device (from Notifications.getExpoPushTokenAsync)' })
+  @IsString()
+  expoPushToken!: string;
 }

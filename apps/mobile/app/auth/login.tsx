@@ -26,6 +26,9 @@ import { API_ENDPOINTS } from '../../src/constants/api';
 import { COLORS } from '../../src/constants/colors';
 import { SPACING } from '../../src/constants/spacing';
 import { getRoleHomeHref } from '../../src/utils/roleHomeHref';
+import { getResolvedActiveFamilyId } from '../../src/store/activeFamily.persistence';
+import { FamilyDashboard } from '@parentingmykid/shared-types';
+import { autoPairCurrentDevice } from '../../src/services/devicePairing.service';
 
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
@@ -53,6 +56,7 @@ export default function LoginScreen() {
     try {
       const { data } = await apiClient.post(API_ENDPOINTS.auth.login, { email, password });
       await login(data.accessToken, data.refreshToken, data.user);
+      await tryAutoPairOnParentLogin(data.user.familyIds ?? []);
       // Root layout handles redirect based on role
     } catch (err: any) {
       if (!err.response) {
@@ -74,6 +78,25 @@ export default function LoginScreen() {
       }
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function tryAutoPairOnParentLogin(familyIds: string[]) {
+    if (!familyIds.length) {
+      return;
+    }
+    try {
+      const activeFamilyId = await getResolvedActiveFamilyId(familyIds);
+      if (!activeFamilyId) {
+        return;
+      }
+      const { data } = await apiClient.get<FamilyDashboard>(API_ENDPOINTS.children.home(activeFamilyId));
+      if (data.children.length !== 1) {
+        return;
+      }
+      await autoPairCurrentDevice(data.children[0].childId);
+    } catch {
+      // Best effort only: parent login should not fail if auto-pair fails/offline.
     }
   }
 

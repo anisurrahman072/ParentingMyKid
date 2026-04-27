@@ -350,6 +350,8 @@ model ChildProfile {
   // Child's PIN (4-digit, bcrypt hashed) for app login
   // PIN login is age-appropriate and doesn't require typing an email
   pinHash String?
+  /// AES-GCM ciphertext (base64) so parents can see digits after reinstall; use CHILD_PIN_ENCRYPTION_KEY
+  pinEnc String?
 
   // Profile personalization
   languagePreference String   @default("en")

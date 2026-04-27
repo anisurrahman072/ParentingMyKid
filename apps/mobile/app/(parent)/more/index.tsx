@@ -74,8 +74,8 @@ const MORE_ITEMS: MenuItem[] = [
   },
   {
     href: '/(parent)/settings/add-device',
-    title: 'Add device',
-    subtitle: "Pair a child's phone or tablet",
+    title: 'Kids Login',
+    subtitle: 'PIN for this phone · new device, scan QR',
     icon: 'phone-portrait-outline',
     color: COLORS.parent.danger,
   },

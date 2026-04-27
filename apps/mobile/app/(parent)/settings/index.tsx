@@ -93,7 +93,7 @@ export default function SettingsScreen() {
     const go = async () => {
       const childId = await SecureStore.getItemAsync(CHILD_ID_KEY);
       if (!childId) {
-        Alert.alert('Pair this device', 'Set up a child profile on this device from Add child device first.');
+        Alert.alert('Pair this device', 'Link a child to this device first (More → Kids Login).');
         return;
       }
       await logout();
@@ -155,7 +155,7 @@ export default function SettingsScreen() {
         <SettingsSection title="Family & device">
           <SettingsRow
             icon="📱"
-            label="Add child device"
+            label="Kids Login"
             onPress={() => router.push('/(parent)/settings/add-device')}
           />
           <SettingsRow

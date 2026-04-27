@@ -10,9 +10,11 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { JwtStrategy } from './strategies/jwt.strategy';
+import { ChildPinCryptoModule } from '../../common/child-pin-crypto/child-pin-crypto.module';
 
 @Module({
   imports: [
+    ChildPinCryptoModule,
     PassportModule.register({ defaultStrategy: 'jwt' }),
     JwtModule.registerAsync({
       imports: [ConfigModule],

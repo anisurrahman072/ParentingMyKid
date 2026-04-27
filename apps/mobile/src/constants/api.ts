@@ -89,6 +89,10 @@ export const API_ENDPOINTS = {
     logout: '/auth/logout',
     generatePairingCode: '/auth/pair-device/generate',
     confirmPairing: '/auth/pair-device/confirm',
+    autoPairDevice: '/auth/pair-device/auto',
+    pairDeviceStatus: '/auth/pair-device/status',
+    /** Parent sets or updates a child 4-digit PIN (body: { pin }) */
+    setChildPin: (childId: string) => `/auth/children/${childId}/pin`,
   },
 
   // ─── Families & Children ─────────────────────────────────────────────────

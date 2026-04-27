@@ -1,77 +1,64 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  TextInput,
   TouchableOpacity,
   ActivityIndicator,
   Alert,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import * as SecureStore from 'expo-secure-store';
-import * as Notifications from 'expo-notifications';
-import * as Device from 'expo-device';
-import axios from 'axios';
-import { API_BASE_URL, API_ENDPOINTS } from '../../src/constants/api';
+import { CameraView, useCameraPermissions } from 'expo-camera';
+import { apiClient } from '../../src/services/api.client';
+import { API_ENDPOINTS } from '../../src/constants/api';
 import { useAuthStore } from '../../src/store/auth.store';
 import { COLORS } from '../../src/constants/colors';
 import { SPACING } from '../../src/constants/spacing';
 import { CHILD_ID_KEY } from '../../src/store/deviceSession.store';
-
-async function getExpoPushToken(): Promise<string> {
-  const { status: existing } = await Notifications.getPermissionsAsync();
-  let final = existing;
-  if (existing !== 'granted') {
-    const { status } = await Notifications.requestPermissionsAsync();
-    final = status;
-  }
-  if (final !== 'granted') {
-    return 'no-permission';
-  }
-  const token = await Notifications.getExpoPushTokenAsync();
-  return token.data;
-}
+import { getCurrentDeviceRegistration } from '../../src/services/devicePairing.service';
 
 export default function LinkDeviceScreen() {
-  const [code, setCode] = useState('');
-  const [childId, setChildId] = useState('');
+  const [permission, requestPermission] = useCameraPermissions();
+  const [scanPaused, setScanPaused] = useState(false);
   const [loading, setLoading] = useState(false);
   const { login } = useAuthStore();
 
-  async function handleLink() {
-    const c = code.replace(/\D/g, '').slice(0, 6);
-    if (c.length !== 6) {
-      Alert.alert('Code', 'Enter the 6-digit code from the parent app.');
+  useEffect(() => {
+    if (!permission) {
       return;
     }
-    if (!childId.trim()) {
-      Alert.alert('Child ID', 'Ask your parent for the child profile ID from their Add device screen.');
+    if (!permission.granted) {
+      void requestPermission();
+    }
+  }, [permission, requestPermission]);
+
+  async function handleScanned(raw: string) {
+    if (scanPaused || loading) {
       return;
     }
+    setScanPaused(true);
     setLoading(true);
     try {
-      const expoPushToken = await getExpoPushToken();
-      const { data } = await axios.post(
-        `${API_BASE_URL}/auth/pair-device/confirm`,
-        {
-          code: c,
-          childId: childId.trim(),
-          expoPushToken,
-          platform: Platform.OS,
-          deviceName: Device.deviceName ?? Device.modelName ?? 'Device',
-        },
-        { headers: { 'Content-Type': 'application/json' } },
-      );
-      await SecureStore.setItemAsync(CHILD_ID_KEY, childId.trim());
+      const qrToken = raw.trim();
+      const device = await getCurrentDeviceRegistration();
+      const { data } = await apiClient.post(API_ENDPOINTS.auth.confirmPairing, {
+        qrToken,
+        expoPushToken: device.expoPushToken,
+        platform: device.platform,
+        deviceName: device.deviceName,
+      });
+      if (data?.user?.childProfileId) {
+        await SecureStore.setItemAsync(CHILD_ID_KEY, data.user.childProfileId);
+      } else {
+        await SecureStore.deleteItemAsync(CHILD_ID_KEY);
+      }
       await login(data.accessToken, data.refreshToken, data.user);
     } catch (e: any) {
       const msg = e?.response?.data?.message ?? e?.message ?? 'Link failed';
       Alert.alert('Could not link', typeof msg === 'string' ? msg : 'Try again');
+      setScanPaused(false);
     } finally {
       setLoading(false);
     }
@@ -79,77 +66,72 @@ export default function LinkDeviceScreen() {
 
   return (
     <LinearGradient colors={[...COLORS.kids.gradientApp]} style={styles.gradient}>
-      <KeyboardAvoidingView
-        style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      >
-        <ScrollView contentContainerStyle={styles.content}>
-          <Text style={styles.title}>Link this device</Text>
-          <Text style={styles.sub}>
-            Enter the 6-digit code and your child profile ID. Your parent can find the ID in their
-            app under Add child device.
-          </Text>
-          <Text style={styles.label}>6-digit code</Text>
-          <TextInput
-            value={code}
-            onChangeText={setCode}
-            keyboardType="number-pad"
-            maxLength={6}
-            placeholder="000000"
-            placeholderTextColor="rgba(255,255,255,0.3)"
-            style={styles.input}
-          />
-          <Text style={styles.label}>Child profile ID (UUID)</Text>
-          <TextInput
-            value={childId}
-            onChangeText={setChildId}
-            autoCapitalize="none"
-            autoCorrect={false}
-            placeholder="xxxxxxxx-xxxx-..."
-            placeholderTextColor="rgba(255,255,255,0.3)"
-            style={styles.input}
-          />
-          <TouchableOpacity
-            style={[styles.btn, loading && { opacity: 0.6 }]}
-            onPress={handleLink}
-            disabled={loading}
-          >
-            {loading ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text style={styles.btnText}>Link device</Text>
-            )}
+      <View style={styles.content}>
+        <Text style={styles.title}>Link this device</Text>
+        <Text style={styles.sub}>
+          Ask your parent to open "Kids Login" (More tab), choose "Setup a New Device", then scan the QR code.
+        </Text>
+
+        <View style={styles.cameraShell}>
+          {permission?.granted ? (
+            <CameraView
+              style={styles.camera}
+              barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
+              onBarcodeScanned={scanPaused ? undefined : (event) => void handleScanned(event.data)}
+            />
+          ) : (
+            <View style={styles.permissionBox}>
+              <Text style={styles.permissionText}>Camera permission is needed to scan the parent QR.</Text>
+              <TouchableOpacity style={styles.btn} onPress={() => void requestPermission()}>
+                <Text style={styles.btnText}>Allow camera</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+        </View>
+
+        {loading ? <ActivityIndicator color="#fff" style={styles.loader} /> : null}
+        {scanPaused && !loading ? (
+          <TouchableOpacity style={styles.btn} onPress={() => setScanPaused(false)}>
+            <Text style={styles.btnText}>Scan again</Text>
           </TouchableOpacity>
-          <TouchableOpacity onPress={() => router.back()}>
-            <Text style={styles.back}>Cancel</Text>
-          </TouchableOpacity>
-        </ScrollView>
-      </KeyboardAvoidingView>
+        ) : null}
+        <TouchableOpacity onPress={() => router.back()}>
+          <Text style={styles.back}>Cancel</Text>
+        </TouchableOpacity>
+      </View>
     </LinearGradient>
   );
 }
 
 const styles = StyleSheet.create({
-  flex: { flex: 1 },
   gradient: { flex: 1 },
-  content: { padding: SPACING[6], paddingTop: 60, gap: SPACING[2] },
+  content: { flex: 1, padding: SPACING[6], paddingTop: 60, gap: SPACING[3] },
   title: { color: '#fff', fontSize: 26, fontWeight: '800', marginBottom: SPACING[1] },
-  sub: { color: 'rgba(255,255,255,0.75)', fontSize: 14, lineHeight: 20, marginBottom: SPACING[4] },
-  label: { color: 'rgba(255,255,255,0.85)', fontSize: 13, fontWeight: '600', marginTop: SPACING[2] },
-  input: {
-    backgroundColor: 'rgba(255,255,255,0.25)',
-    borderRadius: 12,
-    padding: 14,
-    color: '#fff',
-    fontSize: 16,
+  sub: { color: 'rgba(255,255,255,0.75)', fontSize: 14, lineHeight: 20, marginBottom: SPACING[2] },
+  cameraShell: {
+    overflow: 'hidden',
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.3)',
+    backgroundColor: 'rgba(0,0,0,0.18)',
+    minHeight: 340,
   },
+  camera: { width: '100%', height: 340 },
+  permissionBox: {
+    minHeight: 340,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: SPACING[4],
+    gap: SPACING[3],
+  },
+  permissionText: { color: '#fff', textAlign: 'center', lineHeight: 20 },
   btn: {
     backgroundColor: COLORS.parent.primary,
     borderRadius: 12,
     padding: 16,
     alignItems: 'center',
-    marginTop: SPACING[4],
   },
   btnText: { color: '#fff', fontWeight: '800', fontSize: 17 },
+  loader: { marginTop: SPACING[2] },
   back: { color: 'rgba(255,255,255,0.6)', textAlign: 'center', marginTop: 16 },
 });
