@@ -19,8 +19,9 @@ build/
 *.mobileprovision
 *.orig.*
 web-build/
-android/
-ios/
+# Prebuild output only — do not use bare android/ or ios/ (breaks local Expo modules under modules/*/android)
+apps/mobile/android/
+apps/mobile/ios/
 
 # Environment files — NEVER commit secrets
 .env

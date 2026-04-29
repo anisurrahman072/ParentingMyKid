@@ -4,7 +4,7 @@ import { UserRole } from '@parentingmykid/shared-types';
 export function getRoleHomeHref(role: UserRole): Href | null {
   switch (role) {
     case UserRole.PARENT:
-      return '/(parent)/dashboard';
+      return '/(parent)/control-center';
     case UserRole.CHILD:
       return '/(child)/missions';
     case UserRole.TUTOR:

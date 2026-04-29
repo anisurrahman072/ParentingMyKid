@@ -326,6 +326,11 @@ export interface ScreenTimeControls {
     blockedApps: string[];
     blockedWebsites: string[];
     controlsVersion?: number;
+    appGuardEnabled?: boolean;
+    stopInternetEnabled?: boolean;
+    silentCameraEnabled?: boolean;
+    blockedDomains?: string[];
+    allowedDomains?: string[];
 }
 export interface GrowthPlan {
     childId: string;

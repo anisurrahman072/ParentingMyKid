@@ -4,7 +4,7 @@
  *              All endpoints are under /api/v1/auth/
  */
 
-import { Controller, Post, Body, UseGuards, Get, Param } from '@nestjs/common';
+import { Controller, Post, Body, UseGuards, Get, Param, Req } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { AuthService } from './auth.service';
@@ -22,6 +22,7 @@ import {
   AutoPairDeviceDto,
   PairDeviceStatusDto,
 } from './dto/register.dto';
+import { SetParentalPinDto, VerifyParentalPinDto } from './dto/parental-pin.dto';
 import {
   UserRole,
   AuthResponse,
@@ -117,6 +118,34 @@ export class AuthController {
     @Body() dto: SetChildPinDto,
   ): Promise<void> {
     return this.authService.setChildPin(user.sub, childId, dto);
+  }
+
+  @ApiOperation({ summary: 'Set parental PIN (4-digit) for quick re-auth' })
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
+  @Post('set-parental-pin')
+  setParentalPin(
+    @CurrentUser() user: AuthTokenPayload,
+    @Body() dto: SetParentalPinDto,
+  ): Promise<{ success: boolean }> {
+    return this.authService.setParentalPin(user.sub, dto.pin);
+  }
+
+  @ApiOperation({ summary: 'Verify parental PIN' })
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
+  @Post('verify-parental-pin')
+  verifyParentalPin(
+    @CurrentUser() user: AuthTokenPayload,
+    @Body() dto: VerifyParentalPinDto,
+  ): Promise<{ valid: boolean }> {
+    return this.authService.verifyParentalPin(user.sub, dto.pin);
+  }
+
+  @ApiOperation({ summary: 'Sign in or register with Google ID token' })
+  @Post('google')
+  googleSignIn(@Body() body: { idToken: string }) {
+    return this.authService.googleSignIn(body.idToken);
   }
 
   @ApiOperation({ summary: 'Logout — revoke refresh token' })

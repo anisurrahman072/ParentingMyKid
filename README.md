@@ -286,15 +286,141 @@ npm run dev            # auto starts → http://localhost:4001
 -------------- MOBILE 👇 --------------
 -------------- MOBILE 👇 --------------
 
-# 5. Mobile — see **apps/mobile/README.md** (development build + EAS, Android & iOS)
+# 5. Mobile — Expo dev client (not Expo Go). Full narrative: **apps/mobile/README.md**
 
-#    First time: build and install a **development** client on device/simulator, then:
-cd apps/mobile
-npm start
-#    (`npm start` = `expo start --dev-client` — use the **development build** app, not Expo Go.)
+#    All commands below assume repo root install first: `npm install` (from monorepo root),
+#    then `cd apps/mobile` unless noted.
 
-#    Expo Go: `npx expo start --go` or `npm run start:go` (limited; not used for this app’s
-#    push / native-dependent features)
+# ─────────────────────────────────────────
+# Android — first-time setup on this Mac (local development build)
+# ─────────────────────────────────────────
+
+# Prerequisites (one-time on the machine):
+# - Install **Android Studio**: SDK Platform + Platform Tools + an emulator image (optional).
+# - **JDK 17** (Android Gradle Plugin expects a modern JDK). On Apple Silicon, Zulu/Temurin 17 is typical.
+#   If Gradle says `JAVA_HOME is set to an invalid directory` (common with **jenv**), fix before `./gradlew` / `npm run android`:
+#     export JAVA_HOME=$(/usr/libexec/java_home -v 17)
+#   Or point explicitly at your JDK, e.g. Zulu: `/Library/Java/JavaVirtualMachines/zulu-17.jdk/Contents/Home`
+# - Set env vars (add to ~/.zshrc or ~/.bash_profile), then open a new terminal:
+#     export ANDROID_HOME=$HOME/Library/Android/sdk
+#     export PATH=$PATH:$ANDROID_HOME/emulator:$ANDROID_HOME/platform-tools
+# - Accept SDK licenses (once):
+#     yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses
+#     # If "latest" path differs, use Android Studio → SDK Manager → note "Android SDK Location".
+
+# Link monorepo + generate native project + install debug dev client on emulator/USB device:
+#     cd /path/to/ParentingMyKid && npm install
+#     cd apps/mobile
+#     npx expo login                    # optional; needed for EAS-related features
+#     npx expo prebuild --platform android --clean   # first time, or after big native/plugin changes
+#     npm run android                   # compiles native app + installs; starts Metro if configured
+
+# Daily (after dev client is installed): API on :3001, `.env` with EXPO_PUBLIC_* as needed, then:
+#     cd apps/mobile
+#     npm start                         # Metro: expo start --dev-client
+
+# Device cannot reach your Mac (firewall / different network):
+#     npx expo start --dev-client --tunnel
+
+# Useful checks:
+#     npx expo doctor
+#     adb devices
+
+# ─────────────────────────────────────────
+# Android — local Gradle (from apps/mobile/android after prebuild)
+# ─────────────────────────────────────────
+
+#     cd apps/mobile/android
+#     ./gradlew clean
+#     ./gradlew assembleDebug           # debug APK → app/build/outputs/apk/debug/app-debug.apk
+#     ./gradlew assembleRelease         # release APK → app/build/outputs/apk/release/app-release.apk
+#                                         # (needs signing; unsigned: often app-release-unsigned.apk in same folder)
+#     ./gradlew bundleRelease           # Play AAB → app/build/outputs/bundle/release/app-release.aab (needs signing)
+
+# Paths are relative to apps/mobile/android/ (after `cd apps/mobile/android`).
+
+# Install manually (if you built outside Expo):
+#     adb install -r app/build/outputs/apk/debug/app-debug.apk
+#     adb install -r app/build/outputs/apk/release/app-release.apk
+
+# ─────────────────────────────────────────
+# Android — EAS cloud builds (keep for CI / no local Android Studio)
+# ─────────────────────────────────────────
+
+# Log in / project (once per machine): `npm install -g eas-cli` then `eas login`
+# From apps/mobile:
+#     npm run build:dev:android         # development client (internal APK) — same as:
+#     # eas build --profile development --platform android
+#     npm run build:preview             # preview profile (script = android only)
+#     npm run build:production          # production (all platforms in script; adjust if needed)
+#     eas build --profile production --platform android   # Play-style AAB by default
+#     eas build:list && eas build:view                      # inspect runs
+
+# Store / submit (after production build):
+#     npm run submit                    # eas submit
+
+# ─────────────────────────────────────────
+# iOS — local Mac development build (for later; keep apps/mobile/ios/ in repo)
+# ─────────────────────────────────────────
+
+# This app targets **Android-only** day-to-day; keep the iOS tree for future work.
+# After `npx expo prebuild --platform ios`, a normal local build requires **Xcode** and
+# **CocoaPods** (`npx pod-install` or `cd ios && pod install`). Skip Pods until you return to iOS.
+
+#     cd apps/mobile
+#     npx expo prebuild --platform ios --clean
+#     npx pod-install                   # when you are ready for iOS again
+#     npm run ios                       # or: npx expo run:ios
+
+# ─────────────────────────────────────────
+# iOS — EAS cloud builds (for later)
+# ─────────────────────────────────────────
+
+#     npm run build:dev:ios             # development / simulator per eas.json
+#     # eas build --profile development --platform ios
+#     eas build --profile production --platform ios   # IPA for TestFlight / App Store flow
+
+# ─────────────────────────────────────────
+# EAS — download Android keystore (credentials you created with past EAS builds)
+# ─────────────────────────────────────────
+
+# 1. `cd apps/mobile`
+# 2. `eas login` (same Expo account as the project)
+# 3. `eas credentials -p android`
+# 4. Choose the **Android** app / package, then the **build profile** (e.g. production).
+# 5. Use the menu option to **download** the keystore (and note the passwords EAS shows —
+#    store them in your password manager; EAS may not show them again).
+# 6. Alternatively: [expo.dev](https://expo.dev) → your **project** → **Credentials** → Android.
+#
+# 7. **Where to put the keystore on this Mac (for local `./gradlew assembleRelease` / `bundleRelease`):**
+#    - Create a folder next to the app (not inside generated native code):
+#        apps/mobile/credentials/android/
+#    - Save the downloaded file there, e.g.:
+#        apps/mobile/credentials/android/release.jks
+#      (keep EAS’s filename if you prefer; `.jks` is gitignored at repo level via `*.jks`.)
+#    - **Do not** keep your **only** copy under `apps/mobile/android/**`. That directory is wiped when you run
+#      `npx expo prebuild --platform android --clean`, so you would lose the file.
+# 8. **Point Gradle at it:** in `apps/mobile/android/app/build.gradle`, under `signingConfigs.release`, set e.g.:
+#        storeFile file("../../credentials/android/release.jks")
+#      (path is relative to `android/app/`). Store keystore passwords in env / `apps/mobile/.env` (already gitignored),
+#      not in the repo.
+
+# Docs: https://docs.expo.dev/app-signing/app-credentials/
+
+# ─────────────────────────────────────────
+# Quick reference — npm scripts in apps/mobile/package.json
+# ─────────────────────────────────────────
+
+# | Script / command              | Purpose                                      |
+# |------------------------------|----------------------------------------------|
+# | npm start                    | Metro + dev client URL                       |
+# | npm run android / ios        | expo run:android / run:ios                   |
+# | npm run build:dev:android    | EAS development Android                      |
+# | npm run build:dev:ios        | EAS development iOS                          |
+# | npm run build:dev            | EAS development all platforms                |
+# | npm run build:preview        | EAS preview (android in this repo’s script)  |
+# | npm run build:production     | EAS production (script uses platform all)    |
+# | npm run start:go             | Expo Go (limited; not this app’s main path)  |
 ```
 
 ---

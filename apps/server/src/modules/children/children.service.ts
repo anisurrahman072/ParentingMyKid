@@ -44,6 +44,7 @@ export class ChildrenService {
     const memberships = await this.prisma.familyMember.findMany({
       where: { userId: parentId, role: { in: ['PRIMARY', 'CO_PARENT'] } },
       include: { family: { include: { subscription: true, children: true } } },
+      orderBy: { joinedAt: 'asc' },
     });
 
     if (memberships.length === 0) {
@@ -88,8 +89,14 @@ export class ChildrenService {
       },
     });
 
-    const pinHash = await bcrypt.hash(dto.initialPin, 12);
-    const pinEnc = this.childPinCrypto.encryptPin(dto.initialPin);
+    const pinHash =
+      dto.initialPin && /^\d{4}$/.test(dto.initialPin)
+        ? await bcrypt.hash(dto.initialPin, 12)
+        : null;
+    const pinEnc =
+      dto.initialPin && /^\d{4}$/.test(dto.initialPin)
+        ? this.childPinCrypto.encryptPin(dto.initialPin)
+        : null;
 
     const child = await this.prisma.childProfile.create({
       data: {
@@ -480,5 +487,28 @@ export class ChildrenService {
       level: child.level,
       xp: child.xp,
     };
+  }
+
+  // ─── Installed Apps Cache ─────────────────────────────────────────────────
+
+  async getInstalledApps(childId: string) {
+    const child = await this.prisma.childProfile.findUnique({
+      where: { id: childId },
+      select: { installedAppsCache: true },
+    });
+    if (!child) throw new NotFoundException('Child not found');
+    return { apps: child.installedAppsCache };
+  }
+
+  async upsertInstalledApps(
+    childId: string,
+    apps: Array<{ packageName: string; appName: string; category: string; iconBase64?: string }>,
+  ) {
+    const updated = await this.prisma.childProfile.update({
+      where: { id: childId },
+      data: { installedAppsCache: apps as Prisma.InputJsonValue },
+      select: { id: true, installedAppsCache: true },
+    });
+    return { apps: updated.installedAppsCache };
   }
 }

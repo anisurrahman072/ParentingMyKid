@@ -31,7 +31,15 @@ import { AppLogoMark } from '../../src/components/branding/AppLogoMark';
 import { LOGO_PNG, APP_DISPLAY_NAME } from '../../src/constants/branding';
 import { getRoleHomeHref } from '../../src/utils/roleHomeHref';
 
-type Step = 'personal' | 'consent' | 'success';
+type Step = 'personal' | 'religion' | 'consent' | 'success';
+
+type Religion = 'ISLAM' | 'CHRISTIAN' | 'OTHER';
+
+const RELIGIONS: { value: Religion; label: string; emoji: string; desc: string }[] = [
+  { value: 'ISLAM', label: 'Islam', emoji: '🕌', desc: 'Islamic content & Halal filtering' },
+  { value: 'CHRISTIAN', label: 'Christian', emoji: '⛪', desc: 'Faith-based family values' },
+  { value: 'OTHER', label: 'Other / Prefer not to say', emoji: '🌍', desc: 'General family content' },
+];
 
 export default function RegisterScreen() {
   const [step, setStep] = useState<Step>('personal');
@@ -42,6 +50,9 @@ export default function RegisterScreen() {
   const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+
+  // Religion
+  const [religion, setReligion] = useState<Religion>('ISLAM');
 
   // Consent
   const [consentToTerms, setConsentToTerms] = useState(false);
@@ -76,14 +87,14 @@ export default function RegisterScreen() {
         email: email.trim().toLowerCase(),
         password,
         name,
+        religion,
         parentalConsentGiven: consentToTerms && consentToDataProcessing,
       });
 
       await login(data.accessToken, data.refreshToken, data.user);
       setStep('success');
 
-      // Navigate to baseline assessment (primary conversion hook)
-      setTimeout(() => router.replace('/(parent)/dashboard'), 2000);
+      setTimeout(() => router.replace('/(parent)/control-center'), 2000);
     } catch (err: any) {
       const raw = err.response?.data?.message;
       const fromServer = Array.isArray(raw) ? raw.join('\n') : raw;
@@ -113,7 +124,7 @@ export default function RegisterScreen() {
             Welcome to {APP_DISPLAY_NAME}!
           </Animated.Text>
           <Animated.Text entering={FadeInDown.delay(350)} style={styles.successSubtitle}>
-            Your 14-day free trial has started.{'\n'}Let's build your family profile.
+            Account created successfully!{'\n'}Let's set up your family.
           </Animated.Text>
           <ActivityIndicator color={COLORS.parent.primary} style={{ marginTop: SPACING[6] }} />
         </View>
@@ -142,15 +153,19 @@ export default function RegisterScreen() {
             <View style={styles.stepIndicator}>
               <View style={[styles.stepDot, step === 'personal' && styles.stepDotActive]} />
               <View style={styles.stepLine} />
+              <View style={[styles.stepDot, step === 'religion' && styles.stepDotActive]} />
+              <View style={styles.stepLine} />
               <View style={[styles.stepDot, step === 'consent' && styles.stepDotActive]} />
             </View>
 
             <Text style={styles.title}>
-              {step === 'personal' ? 'Create your account' : 'Almost there!'}
+              {step === 'personal' ? 'Create your account' : step === 'religion' ? 'Family profile' : 'Almost there!'}
             </Text>
             <Text style={styles.subtitle}>
               {step === 'personal'
-                ? '14-day free trial — no credit card needed'
+                ? 'Free account — no credit card needed'
+                : step === 'religion'
+                ? 'Help us tailor content for your family'
                 : 'We take your family\'s privacy seriously'}
             </Text>
           </Animated.View>
@@ -211,10 +226,53 @@ export default function RegisterScreen() {
 
               <TouchableOpacity
                 style={styles.primaryButton}
-                onPress={() => validatePersonal() && setStep('consent')}
+                onPress={() => validatePersonal() && setStep('religion')}
               >
                 <Text style={styles.primaryButtonText}>Continue →</Text>
               </TouchableOpacity>
+            </Animated.View>
+          )}
+
+          {/* Step: Religion / Family Profile */}
+          {step === 'religion' && (
+            <Animated.View entering={FadeInDown.delay(200)} style={styles.form}>
+              <View style={styles.consentCard}>
+                <Text style={styles.consentTitle}>🌟 Personalize your experience</Text>
+                <Text style={styles.consentDescription}>
+                  Select your family's faith tradition. This helps us recommend appropriate content, videos, and educational materials for your children.
+                </Text>
+              </View>
+
+              {RELIGIONS.map((rel) => (
+                <TouchableOpacity
+                  key={rel.value}
+                  style={[styles.religionCard, religion === rel.value && styles.religionCardActive]}
+                  onPress={() => setReligion(rel.value)}
+                >
+                  <Text style={styles.religionEmoji}>{rel.emoji}</Text>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.religionLabel}>{rel.label}</Text>
+                    <Text style={styles.religionDesc}>{rel.desc}</Text>
+                  </View>
+                  {religion === rel.value && (
+                    <View style={styles.religionCheck}>
+                      <Text style={{ color: '#fff', fontSize: 14, fontFamily: 'Inter_700Bold' }}>✓</Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
+              ))}
+
+              <View style={styles.buttonRow}>
+                <TouchableOpacity style={styles.secondaryButton} onPress={() => setStep('personal')}>
+                  <Text style={styles.secondaryButtonText}>← Back</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.primaryButton, styles.flex]}
+                  onPress={() => setStep('consent')}
+                >
+                  <Text style={styles.primaryButtonText}>Continue →</Text>
+                </TouchableOpacity>
+              </View>
             </Animated.View>
           )}
 
@@ -262,7 +320,7 @@ export default function RegisterScreen() {
               </TouchableOpacity>
 
               <View style={styles.buttonRow}>
-                <TouchableOpacity style={styles.secondaryButton} onPress={() => setStep('personal')}>
+                <TouchableOpacity style={styles.secondaryButton} onPress={() => setStep('religion')}>
                   <Text style={styles.secondaryButtonText}>← Back</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
@@ -273,13 +331,13 @@ export default function RegisterScreen() {
                   {loading ? (
                     <ActivityIndicator color="#fff" />
                   ) : (
-                    <Text style={styles.primaryButtonText}>Start Free Trial 🚀</Text>
+                    <Text style={styles.primaryButtonText}>Create Account 🚀</Text>
                   )}
                 </TouchableOpacity>
               </View>
 
               <Text style={styles.trialNote}>
-                ✓ 14 days free  ✓ No credit card  ✓ Cancel anytime
+                ✓ Free account  ✓ No credit card  ✓ All features included
               </Text>
             </Animated.View>
           )}
@@ -473,6 +531,41 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter',
     color: 'rgba(255,255,255,0.4)',
     textAlign: 'center',
+  },
+  religionCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING[3],
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderRadius: 14,
+    padding: SPACING[4],
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.1)',
+  },
+  religionCardActive: {
+    borderColor: COLORS.parent.primary,
+    backgroundColor: 'rgba(59,130,246,0.15)',
+  },
+  religionEmoji: { fontSize: 28 },
+  religionLabel: {
+    fontSize: 16,
+    fontFamily: 'Inter',
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  religionDesc: {
+    fontSize: 13,
+    fontFamily: 'Inter',
+    color: 'rgba(255,255,255,0.55)',
+    marginTop: 2,
+  },
+  religionCheck: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: COLORS.parent.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   footer: { marginTop: SPACING[8], alignItems: 'center' },
   footerText: {

@@ -15,6 +15,7 @@ import {
   Platform,
   Alert,
   ActivityIndicator,
+  Image,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Redirect, router } from 'expo-router';
@@ -34,6 +35,7 @@ export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const passwordRef = useRef<TextInput>(null);
 
@@ -78,6 +80,26 @@ export default function LoginScreen() {
       }
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleGoogleLogin() {
+    setGoogleLoading(true);
+    try {
+      const { GoogleSignin, statusCodes } = await import('@react-native-google-signin/google-signin');
+      await GoogleSignin.hasPlayServices();
+      const userInfo = await GoogleSignin.signIn();
+      const idToken = (userInfo as any).idToken || (userInfo as any).data?.idToken;
+      if (!idToken) throw new Error('No ID token returned from Google');
+      const { data } = await apiClient.post('/auth/google', { idToken });
+      await login(data.accessToken, data.refreshToken, data.user);
+    } catch (err: any) {
+      const { statusCodes } = await import('@react-native-google-signin/google-signin');
+      if (err.code !== statusCodes.SIGN_IN_CANCELLED) {
+        Alert.alert('Google Sign-In failed', err.message || 'Please try again.');
+      }
+    } finally {
+      setGoogleLoading(false);
     }
   }
 
@@ -181,6 +203,31 @@ export default function LoginScreen() {
               )}
             </TouchableOpacity>
 
+            {/* Google Sign-In */}
+            <View style={styles.divider}>
+              <View style={styles.dividerLine} />
+              <Text style={styles.dividerText}>or</Text>
+              <View style={styles.dividerLine} />
+            </View>
+
+            <TouchableOpacity
+              style={[styles.googleButton, googleLoading && styles.loginButtonDisabled]}
+              onPress={handleGoogleLogin}
+              disabled={googleLoading}
+            >
+              {googleLoading ? (
+                <ActivityIndicator color="#333" />
+              ) : (
+                <>
+                  <Text style={styles.googleIcon}>G</Text>
+                  <Text style={styles.googleButtonText}>Continue with Google</Text>
+                </>
+              )}
+            </TouchableOpacity>
+
+            {/* TODO: commented-for-now 🔴 — "Sign in as a child (PIN)" button + divider hidden for Milestone 1.
+                Child PIN login is a Milestone 3+ feature. Kids are now identified via KidIdentityModal
+                after the parent has logged in and set up the device. Restore when child PIN login is re-enabled.
             <View style={styles.divider}>
               <View style={styles.dividerLine} />
               <Text style={styles.dividerText}>or</Text>
@@ -194,13 +241,15 @@ export default function LoginScreen() {
               <Text style={styles.childPinIcon}>👶</Text>
               <Text style={styles.childPinText}>Sign in as a child (PIN)</Text>
             </TouchableOpacity>
+            */}
           </Animated.View>
 
           <Animated.View entering={FadeInDown.delay(350)} style={styles.footer}>
             <Text style={styles.footerText}>
               Don't have an account?{' '}
+              {/* TODO: commented-for-now 🔴 — "Start free trial" link text changed for Milestone 1 (no trial messaging). Restore original text when paid tier launches. */}
               <Text style={styles.signUpLink} onPress={() => router.replace('/auth/register')}>
-                Start free trial
+                Create an account
               </Text>
             </Text>
           </Animated.View>
@@ -320,6 +369,27 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontFamily: 'Inter_600SemiBold',
     color: COLORS.parent.textPrimary,
+  },
+  googleButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: SPACING[3],
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    paddingVertical: SPACING[4],
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.1)',
+  },
+  googleIcon: {
+    fontSize: 20,
+    fontFamily: 'Inter_700Bold',
+    color: '#4285F4',
+  },
+  googleButtonText: {
+    fontSize: 15,
+    fontFamily: 'Inter_600SemiBold',
+    color: '#333333',
   },
   footer: { marginTop: SPACING[8], alignItems: 'center' },
   footerText: {

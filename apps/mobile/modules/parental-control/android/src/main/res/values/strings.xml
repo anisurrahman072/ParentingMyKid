@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <string name="accessibility_service_description">ParentingMyKid keeps children safe: enforces app blocks, optional app lock, and works with your parent settings. Turn this on only if you are the parent or with parent consent.</string>
+  <string name="vpn_notification_channel">Parental network filter</string>
+  <string name="vpn_notification_title">ParentingMyKid</string>
+  <string name="vpn_notification_body">Network protection is active on this device</string>
+</resources>

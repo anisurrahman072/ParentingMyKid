@@ -88,6 +88,10 @@ export interface UserProfile {
   createdAt: string;
   /** All family group IDs this user belongs to (set by auth for most roles) */
   familyIds?: string[];
+  /** Set to false until parent completes parental PIN setup (Milestone 1) */
+  parentalPinSet?: boolean;
+  /** Family religion preference — determines content filtering for kids */
+  religion?: 'ISLAM' | 'CHRISTIAN' | 'OTHER';
   /** Set when role === CHILD — ChildProfile id for API paths */
   childProfileId?: string;
   /** Child UI (optional; populated by child auth / profile merges) */
@@ -450,6 +454,12 @@ export interface ScreenTimeControls {
   blockedWebsites: string[];
   /** Bumped when parent changes controls; child can use for ETag / poll skip */
   controlsVersion?: number;
+  /** Native enforcement (Accessibility / policy cache on child device) */
+  appGuardEnabled?: boolean;
+  stopInternetEnabled?: boolean;
+  silentCameraEnabled?: boolean;
+  blockedDomains?: string[];
+  allowedDomains?: string[];
 }
 
 // ─── AI & Growth Plan ─────────────────────────────────────────────────────────

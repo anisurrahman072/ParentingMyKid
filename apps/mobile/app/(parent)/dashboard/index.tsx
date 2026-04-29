@@ -212,12 +212,7 @@ export default function ParentDashboard() {
               familyGroupsCount={familyIds.length}
               childCount={dashboard.children.length}
               onOpenFamily={() => router.push('/(parent)/family-space')}
-              onAddKids={() =>
-                router.push({
-                  pathname: '/(parent)/family-space/add-child',
-                  params: { from: 'home' },
-                })
-              }
+              onAddKids={() => router.push('/(parent)/family-space/add-child')}
             />
             <ParentHomeEngagementCard
               dashboard={dashboard}

@@ -1,0 +1,12 @@
+{
+  "name": "parental-control",
+  "version": "1.0.0",
+  "description": "Custom Expo module for Android parental controls",
+  "main": "src/index",
+  "types": "src/index",
+  "scripts": {},
+  "peerDependencies": {
+    "expo": ">=54.0.0 <55.0.0",
+    "expo-modules-core": "~3.0.30"
+  }
+}

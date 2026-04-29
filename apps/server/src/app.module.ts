@@ -43,6 +43,10 @@ import { AnalyticsModule } from './modules/analytics/analytics.module';
 import { LeadsModule } from './modules/leads/leads.module';
 import { FamilyChatModule } from './modules/family-chat/family-chat.module';
 import { FriendsModule } from './modules/friends/friends.module';
+import { ActivityModule } from './modules/activity/activity.module';
+import { ParentContentModule } from './modules/parent-content/parent-content.module';
+import { MediaModule } from './modules/media/media.module';
+import { MonitorModule } from './modules/monitor/monitor.module';
 
 @Module({
   imports: [
@@ -103,6 +107,10 @@ import { FriendsModule } from './modules/friends/friends.module';
     LeadsModule,
     FamilyChatModule,
     FriendsModule,
+    ActivityModule,
+    ParentContentModule,
+    MediaModule,
+    MonitorModule,
   ],
 })
 export class AppModule {}

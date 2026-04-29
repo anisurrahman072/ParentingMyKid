@@ -1,6 +1,6 @@
 /**
- * Add child — in the family-space stack so Back uses real navigation history (not tab “pop to Home”).
- * When opened from the Home tab, pass `?from=home` so back returns to the dashboard.
+ * Add child — Back prefers real navigation history (`router.back()`), then a safe fallback
+ * (Control Center for most parent flows; add-device when opened from pairing).
  */
 
 import React, { useCallback, useState } from 'react';
@@ -16,7 +16,6 @@ import {
   Platform,
   ActivityIndicator,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
@@ -24,7 +23,6 @@ import { isAxiosError } from 'axios';
 import { Ionicons } from '@expo/vector-icons';
 import { ChildProfile } from '@parentingmykid/shared-types';
 import { apiClient } from '../../../src/services/api.client';
-import { setCachedChildPin } from '../../../src/services/childPinCache.service';
 import { API_ENDPOINTS } from '../../../src/constants/api';
 import { useFamilyStore } from '../../../src/store/family.store';
 import { COLORS } from '../../../src/constants/colors';
@@ -32,12 +30,9 @@ import { Spacing } from '../../../src/constants/spacing';
 import { Typography } from '../../../src/constants/typography';
 import { ParentPrimaryButton } from '../../../src/components/parent/ui/ParentPrimaryButton';
 import { ParentDateOfBirthPicker } from '../../../src/components/parent/ui/ParentDateOfBirthPicker';
-import { ParentHouseholdSwitcherCard } from '../../../src/components/parent/ParentHouseholdSwitcherCard';
-
 const DOB_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 export default function AddChildScreen() {
-  const navigation = useNavigation();
   const params = useLocalSearchParams<{ from?: string | string[] }>();
   const fromRaw = params.from;
   const from = Array.isArray(fromRaw) ? fromRaw[0] : fromRaw;
@@ -49,19 +44,21 @@ export default function AddChildScreen() {
   const [dob, setDob] = useState(''); // YYYY-MM-DD
   const [grade, setGrade] = useState('');
   const [school, setSchool] = useState('');
-  const [initialPin, setInitialPin] = useState('');
+  // TODO: commented-for-now 🔴 — Child PIN removed for Milestone 1. Kids are identified via
+  // KidIdentityModal; PIN-based child login is Milestone 3+. Restore when child PIN is re-enabled.
+  // const [initialPin, setInitialPin] = useState('');
 
   const goBack = useCallback(() => {
-    if (from === 'home') {
-      router.replace('/(parent)/dashboard');
+    if (router.canGoBack()) {
+      router.back();
       return;
     }
-    if (navigation.canGoBack()) {
-      navigation.goBack();
-    } else {
-      router.replace('/(parent)/family-space');
+    if (from === 'add-device') {
+      router.replace('/(parent)/settings/add-device');
+      return;
     }
-  }, [from, navigation]);
+    router.replace('/(parent)/control-center');
+  }, [from]);
 
   const createMutation = useMutation({
     mutationFn: async () => {
@@ -74,18 +71,19 @@ export default function AddChildScreen() {
       if (grade.trim().length < 1) {
         throw new Error('Add a grade or level (e.g. Grade 4).');
       }
-      if (!/^\d{4}$/.test(initialPin)) {
-        throw new Error('Enter a 4-digit PIN so your child can sign in on their device.');
-      }
+      // TODO: commented-for-now 🔴 — PIN validation removed for Milestone 1
+      // if (!/^\d{4}$/.test(initialPin)) {
+      //   throw new Error('Enter a 4-digit PIN so your child can sign in on their device.');
+      // }
       try {
         const { data } = await apiClient.post<ChildProfile>(API_ENDPOINTS.children.base, {
           name: name.trim(),
           dob: dob.trim(),
           grade: grade.trim(),
           school: school.trim() || undefined,
-          initialPin,
-          familyId: activeFamilyId ?? undefined,
           languagePreference: 'en',
+          // No initialPin — Milestone 1: child is added under the parent's default family (server: first membership).
+          // Omit familyId so the API always uses the default family, not a stale switched household.
         });
         return data;
       } catch (e) {
@@ -98,9 +96,10 @@ export default function AddChildScreen() {
       }
     },
     onSuccess: (data) => {
-      if (/^\d{4}$/.test(initialPin)) {
-        void setCachedChildPin(data.id, initialPin);
-      }
+      // TODO: commented-for-now 🔴 — setCachedChildPin removed for Milestone 1 (no PIN)
+      // if (/^\d{4}$/.test(initialPin)) {
+      //   void setCachedChildPin(data.id, initialPin);
+      // }
       void queryClient.invalidateQueries({ queryKey: ['family-home', activeFamilyId] });
       Alert.alert(
         'Child added',
@@ -131,13 +130,8 @@ export default function AddChildScreen() {
       </View>
 
       <Text style={styles.lead}>
-        Create a profile for your child. They’ll use a PIN to open the kid app on their device.
+        Create a profile for your child. They’ll appear in your family and Kid Mode on this device.
       </Text>
-
-      <ParentHouseholdSwitcherCard
-        invalidateQueryKeysAfterSwitch={[['family-home']]}
-        containerStyle={styles.householdCardSpacing}
-      />
 
       <KeyboardAvoidingView
         style={styles.flex}
@@ -185,6 +179,9 @@ export default function AddChildScreen() {
             />
           </View>
 
+          {/* TODO: commented-for-now 🔴 — 4-digit PIN field hidden for Milestone 1.
+              Child PIN login is Milestone 3+. Kids are identified via KidIdentityModal.
+              Restore this entire block when child PIN login is re-enabled.
           <View style={styles.field}>
             <Text style={styles.label}>4-digit PIN</Text>
             <View style={styles.pinCallout} accessibilityLabel="PIN tip">
@@ -207,6 +204,7 @@ export default function AddChildScreen() {
               secureTextEntry
             />
           </View>
+          */}
 
           {createMutation.isPending ? (
             <ActivityIndicator size="small" color={COLORS.parent.primary} style={styles.spinner} />
@@ -250,7 +248,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.screenPadding,
     marginBottom: Spacing.base,
   },
-  householdCardSpacing: { marginBottom: Spacing.md },
   field: { marginBottom: Spacing.md },
   label: {
     fontFamily: Typography.fonts.interMedium,

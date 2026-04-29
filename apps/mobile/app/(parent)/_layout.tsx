@@ -86,6 +86,10 @@ export default function ParentLayout() {
             sceneStyle: { backgroundColor: 'transparent' },
             tabBarBackground: ParentGlassTabBarBackground,
             tabBarStyle: {
+              // TODO: commented-for-now 🔴 — Tab bar hidden for Milestone 1. The Control Center
+              // replaces the tab bar as the primary parent navigation. All tab code is preserved.
+              // Restore by removing `display: 'none'` when bottom tabs are re-enabled for Milestone 2+.
+              display: 'none',
               backgroundColor: 'transparent',
               borderTopWidth: 0,
               paddingTop: tabBarPaddingTop,
@@ -172,6 +176,8 @@ export default function ParentLayout() {
           <Tabs.Screen name="settings/appearance" options={{ href: null }} />
           <Tabs.Screen name="settings/theme-picker" options={{ href: null }} />
           <Tabs.Screen name="family-space" options={{ href: null }} />
+          {/* Milestone 1: Control Center and all sub-screens registered as hidden tabs */}
+          <Tabs.Screen name="control-center" options={{ href: null }} />
         </Tabs>
         </View>
       </ThemeProvider>

@@ -3,7 +3,7 @@
  * @description REST endpoints for child profile management and family dashboard.
  */
 
-import { Controller, Get, Post, Body, Param, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Put, Body, Param, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { ChildrenService } from './children.service';
 import { CreateChildDto, SubmitBaselineDto } from './dto/create-child.dto';
@@ -68,5 +68,23 @@ export class ChildrenController {
     @Body() dto: SubmitBaselineDto,
   ): Promise<{ scores: Record<string, number>; reportSummary: string }> {
     return this.childrenService.submitBaseline(user.sub, childId, dto);
+  }
+
+  @ApiOperation({ summary: 'Get cached list of installed apps for a child device' })
+  @Get('children/:childId/installed-apps')
+  getInstalledApps(@Param('childId') childId: string) {
+    return this.childrenService.getInstalledApps(childId);
+  }
+
+  @ApiOperation({ summary: 'Upsert installed apps list for a child device' })
+  @Put('children/:childId/installed-apps')
+  upsertInstalledApps(
+    @Param('childId') childId: string,
+    @Body()
+    body: {
+      apps: Array<{ packageName: string; appName: string; category: string; iconBase64?: string }>;
+    },
+  ) {
+    return this.childrenService.upsertInstalledApps(childId, body.apps);
   }
 }

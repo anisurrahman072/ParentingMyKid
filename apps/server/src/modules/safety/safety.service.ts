@@ -272,6 +272,11 @@ export class SafetyService {
 
   // ─── Screen Time Controls ─────────────────────────────────────────────────
 
+  private jsonToStringArray(value: unknown): string[] {
+    if (!Array.isArray(value)) return [];
+    return value.filter((x): x is string => typeof x === 'string');
+  }
+
   private mapToScreenTimeControls(controls: {
     childId: string;
     dailyLimitMinutes: number;
@@ -293,6 +298,11 @@ export class SafetyService {
     isPaused: boolean;
     blockedApps: string[];
     blockedWebsites: string[];
+    appGuardEnabled: boolean;
+    stopInternetEnabled: boolean;
+    silentCameraEnabled: boolean;
+    blockedDomains: unknown;
+    allowedDomains: unknown;
   }): ScreenTimeControls {
     return {
       childId: controls.childId,
@@ -315,6 +325,11 @@ export class SafetyService {
       isPaused: controls.isPaused,
       blockedApps: controls.blockedApps,
       blockedWebsites: controls.blockedWebsites,
+      appGuardEnabled: controls.appGuardEnabled,
+      stopInternetEnabled: controls.stopInternetEnabled,
+      silentCameraEnabled: controls.silentCameraEnabled,
+      blockedDomains: this.jsonToStringArray(controls.blockedDomains),
+      allowedDomains: this.jsonToStringArray(controls.allowedDomains),
     };
   }
 
@@ -453,6 +468,24 @@ export class SafetyService {
       actionTaken: a.actionTaken ?? undefined,
       createdAt: a.createdAt.toISOString(),
     }));
+  }
+
+  // ─── Extended Parental Controls ───────────────────────────────────────────
+
+  async getParentalControls(childId: string) {
+    return this.prisma.screenTimeControls.upsert({
+      where: { childId },
+      create: { childId },
+      update: {},
+    });
+  }
+
+  async updateParentalControls(childId: string, data: Record<string, unknown>) {
+    return this.prisma.screenTimeControls.upsert({
+      where: { childId },
+      create: { childId, ...(data as any) },
+      update: data as any,
+    });
   }
 
   // ─── Private Helpers ──────────────────────────────────────────────────────

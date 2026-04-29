@@ -30,6 +30,8 @@ import {
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
+import { HttpService } from '@nestjs/axios';
+import { firstValueFrom } from 'rxjs';
 import { createHash } from 'node:crypto';
 import * as bcrypt from 'bcrypt';
 import * as QRCode from 'qrcode';
@@ -70,6 +72,7 @@ export class AuthService {
     private readonly jwt: JwtService,
     private readonly config: ConfigService,
     private readonly childPinCrypto: ChildPinCryptoService,
+    private readonly httpService: HttpService,
   ) {}
 
   // ─── Parent Registration ───────────────────────────────────────────────────
@@ -450,6 +453,78 @@ export class AuthService {
   async logout(userId: string, refreshToken: string): Promise<void> {
     const tokenFingerprint = refreshTokenRedisFingerprint(refreshToken);
     await this.redis.deleteSession(userId, tokenFingerprint);
+  }
+
+  // ─── Parental PIN ─────────────────────────────────────────────────────────
+
+  async setParentalPin(userId: string, pin: string): Promise<{ success: boolean }> {
+    const hash = await bcrypt.hash(pin, this.BCRYPT_ROUNDS);
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { parentalPinHash: hash, parentalPinSet: true },
+    });
+    return { success: true };
+  }
+
+  async verifyParentalPin(userId: string, pin: string): Promise<{ valid: boolean }> {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user?.parentalPinHash) return { valid: false };
+    const valid = await bcrypt.compare(pin, user.parentalPinHash);
+    return { valid };
+  }
+
+  // ─── Google Sign-In ────────────────────────────────────────────────────────
+
+  async googleSignIn(idToken: string): Promise<AuthResponse> {
+    const { data } = await firstValueFrom(
+      this.httpService.get(`https://oauth2.googleapis.com/tokeninfo?id_token=${idToken}`),
+    );
+    const { email, name, sub: googleId } = data as { email: string; name: string; sub: string };
+
+    let user = await this.prisma.user.findUnique({ where: { email } });
+    if (!user) {
+      const passwordHash = await bcrypt.hash(googleId, this.BCRYPT_ROUNDS);
+      user = await this.prisma.user.create({
+        data: {
+          email,
+          name: name || email.split('@')[0],
+          passwordHash,
+          role: 'PARENT',
+          parentalConsentGiven: true,
+          parentalConsentAt: new Date(),
+          parentalConsentVersion: '1.0',
+        },
+      });
+
+      // Auto-create default family group
+      const family = await this.prisma.familyGroup.create({
+        data: { name: `${user.name}'s Family`, createdById: user.id },
+      });
+      await this.prisma.familyMember.create({
+        data: {
+          familyId: family.id,
+          userId: user.id,
+          role: 'PRIMARY',
+          canViewSafetyData: true,
+          canChangeScreenTime: true,
+          canApproveRewards: true,
+          canManageSubscription: true,
+        },
+      });
+      const trialEnd = new Date();
+      trialEnd.setDate(trialEnd.getDate() + 14);
+      await this.prisma.subscription.create({
+        data: { familyId: family.id, plan: 'STANDARD', status: 'TRIAL', trialEndsAt: trialEnd },
+      });
+    }
+
+    const memberships = await this.prisma.familyMember.findMany({
+      where: { userId: user.id },
+      select: { familyId: true },
+    });
+    const familyIds = memberships.map((m) => m.familyId);
+
+    return this.issueTokens(user.id, user.email, user.role as UserRole, familyIds);
   }
 
   // ─── Internal Helpers ─────────────────────────────────────────────────────

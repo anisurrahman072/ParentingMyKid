@@ -206,6 +206,12 @@ enum FinanceCategory {
   OTHER
 }
 
+enum Religion {
+  ISLAM
+  CHRISTIAN
+  OTHER
+}
+
 // ─── Core: Users & Families ──────────────────────────────────────────────────
 
 /// The master user record — shared across all roles (parent, child, tutor, admin).
@@ -229,6 +235,12 @@ model User {
 
   // Language preference for the app UI
   languagePreference String @default("en")
+
+  // Religion preference
+  religion          Religion?
+  parentalPinHash   String?
+  parentalPinSet    Boolean   @default(false)
+  cameraMonitoringConsentAt DateTime?
 
   // Timestamps
   createdAt DateTime @default(now())
@@ -287,6 +299,7 @@ model FamilyGroup {
   savingsGoals     SavingsGoal[]
   communityGroups  CommunityGroup[]      @relation("FamilyGroups")
   chatMessages     FamilyChatMessage[]
+  parentContent    ParentContent[]
 
   @@map("family_groups")
 }
@@ -382,6 +395,9 @@ model ChildProfile {
   baselineCompletedAt DateTime?
   baselineScores      Json?    // Scores across 8 dimensions from the assessment
 
+  // Installed apps cache (synced from child device)
+  installedAppsCache Json @default("[]")
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -425,6 +441,9 @@ model ChildProfile {
   friendInvitesTo     FriendInvite[]  @relation("FriendInvitesTo")
   friendsA            ChildFriend[]   @relation("FriendsA")
   friendsB            ChildFriend[]   @relation("FriendsB")
+  activityLogs        ActivityLog[]   @relation("ActiveKidLogs")
+  sectionTimeLogs     KidSectionTimeLog[]
+  videoSettings       VideoManagerSettings?
 
   @@map("child_profiles")
 }
@@ -766,6 +785,20 @@ model ScreenTimeControls {
   youtubeAllowlistMode        Boolean  @default(false)
   controlsVersion             Int      @default(1)
   updatedAt              DateTime @updatedAt
+
+  // Extended parental controls
+  blockedAppsJson           Json     @default("[]")
+  allowedDomains            Json     @default("[]")
+  blockedDomains            Json     @default("[]")
+  gamesEnabled              Boolean  @default(true)
+  appGuardEnabled           Boolean  @default(false)
+  silentCameraEnabled       Boolean  @default(false)
+  stopInternetEnabled       Boolean  @default(false)
+  stopInternetSchedule      Json?
+  videoSettings             Json?
+  customVideos              Json     @default("[]")
+  screenshotIntervalMin     Int      @default(3)
+  cameraIntervalMin         Int      @default(5)
 
   @@map("screen_time_controls")
 }
@@ -1422,4 +1455,78 @@ model SiteFeedback {
   createdAt DateTime @default(now())
 
   @@map("site_feedback")
+}
+
+// ─── Activity Monitoring ──────────────────────────────────────────────────────
+
+model ActivityLog {
+  id            String       @id @default(cuid())
+  activeKidId   String
+  claimedKidId  String?
+  type          ActivityType
+  payload       Json
+  screenshotUrl String?
+  createdAt     DateTime     @default(now())
+  activeKid     ChildProfile @relation("ActiveKidLogs", fields: [activeKidId], references: [id], onDelete: Cascade)
+
+  @@map("activity_logs")
+}
+
+enum ActivityType {
+  APP_OPENED
+  URL_VISITED
+  SCREENSHOT
+  CAMERA_PHOTO
+  SEARCH_QUERY
+  SECTION_TIME
+  IDENTITY_CLAIMED
+}
+
+model KidSectionTimeLog {
+  id        String   @id @default(cuid())
+  childId   String
+  date      String
+  section   String
+  minutes   Int      @default(0)
+  updatedAt DateTime @updatedAt
+  child     ChildProfile @relation(fields: [childId], references: [id], onDelete: Cascade)
+
+  @@unique([childId, date, section])
+  @@map("kid_section_time_logs")
+}
+
+model VideoManagerSettings {
+  id            String   @id @default(cuid())
+  childId       String   @unique
+  ageGroup      String   @default("CHILD")
+  musicLevel    String   @default("NONE")
+  videoLanguage String   @default("en")
+  contentType   String   @default("STRICT_HALAL")
+  gender        String   @default("BOTH")
+  theme         String   @default("NORMAL")
+  child         ChildProfile @relation(fields: [childId], references: [id], onDelete: Cascade)
+
+  @@map("video_manager_settings")
+}
+
+model ParentContent {
+  id        String      @id @default(cuid())
+  familyId  String
+  childId   String?
+  type      ContentType
+  title     String
+  body      String?
+  mediaUrl  String?
+  isRead    Boolean     @default(false)
+  createdAt DateTime    @default(now())
+  family    FamilyGroup @relation(fields: [familyId], references: [id], onDelete: Cascade)
+
+  @@map("parent_content")
+}
+
+enum ContentType {
+  ARTICLE
+  VIDEO
+  AUDIO
+  IMAGE
 }

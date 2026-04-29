@@ -64,10 +64,14 @@ export class CreateChildDto {
   @IsBoolean()
   islamicModuleEnabled?: boolean;
 
-  @ApiProperty({ description: '4-digit PIN for child app login (required)' })
+  @ApiProperty({
+    required: false,
+    description: 'Optional 4-digit PIN for legacy child device login (Milestone 1: omit — kids use parent device + Kid Identity flow)',
+  })
+  @IsOptional()
   @IsString()
   @Matches(/^\d{4}$/, { message: 'initialPin must be exactly 4 digits' })
-  initialPin!: string;
+  initialPin?: string;
 
   @ApiProperty({ required: false })
   @IsOptional()

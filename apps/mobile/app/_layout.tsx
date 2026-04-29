@@ -19,6 +19,8 @@
 import { useEffect } from 'react';
 import { Stack, router } from 'expo-router';
 import * as SecureStore from 'expo-secure-store';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { LANGUAGE_SELECTED_KEY } from './auth/language';
 import { useFonts } from 'expo-font';
 import {
   Nunito_400Regular,
@@ -173,12 +175,26 @@ export default function RootLayout() {
     if (isLoading || !fontsLoaded) return;
 
     if (!isAuthenticated) {
-      router.replace('/auth');
+      // Check if language has been selected on first launch
+      void (async () => {
+        const langSelected = await AsyncStorage.getItem(LANGUAGE_SELECTED_KEY);
+        if (!langSelected) {
+          router.replace('/auth/language');
+        } else {
+          router.replace('/auth');
+        }
+      })();
       return;
     }
 
     void (async () => {
       if (user?.role === UserRole.PARENT) {
+        // Check if parental PIN has been set up
+        if (user?.parentalPinSet === false) {
+          router.replace('/auth/setup-parental-security-pin');
+          return;
+        }
+
         const childPaired = await SecureStore.getItemAsync(CHILD_ID_KEY);
         const hasPin = await deviceSessionService.hasUnlockPin();
         if (childPaired && !hasPin) {
@@ -189,14 +205,15 @@ export default function RootLayout() {
 
       switch (user?.role) {
         case UserRole.PARENT:
-          router.replace('/(parent)/dashboard');
+          // Route to Control Center (Milestone 1 new parent home)
+          router.replace('/(parent)/control-center');
           break;
         case UserRole.CHILD:
           router.replace('/(child)/missions');
           break;
-      case UserRole.TUTOR:
-        router.replace('/(tutor)/portal');
-        break;
+        case UserRole.TUTOR:
+          router.replace('/(tutor)/portal');
+          break;
         default:
           router.replace('/auth');
       }

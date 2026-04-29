@@ -106,4 +106,18 @@ export class SafetyController {
   ): Promise<SafetyAlert[]> {
     return this.safetyService.getAlerts(user.sub, childId);
   }
+
+  @ApiOperation({ summary: 'Get extended parental controls for child' })
+  @Roles(UserRole.PARENT)
+  @Get(':childId/parental-controls')
+  getParentalControls(@Param('childId') childId: string) {
+    return this.safetyService.getParentalControls(childId);
+  }
+
+  @ApiOperation({ summary: 'Update extended parental controls for child' })
+  @Roles(UserRole.PARENT)
+  @Patch(':childId/parental-controls')
+  updateParentalControls(@Param('childId') childId: string, @Body() dto: any) {
+    return this.safetyService.updateParentalControls(childId, dto);
+  }
 }

@@ -140,7 +140,8 @@ export default function SettingsScreen() {
           </View>
         </View>
 
-        {/* Subscription */}
+        {/* TODO: commented-for-now 🔴 — "Upgrade to Premium" banner hidden for Milestone 1.
+            All features are free in Milestone 1. Restore when paid tier launches.
         {!isPremium && (
           <TouchableOpacity style={styles.upgradeBanner}>
             <Text style={styles.upgradeIcon}>👑</Text>
@@ -151,12 +152,23 @@ export default function SettingsScreen() {
             <Text style={styles.upgradeArrow}>→</Text>
           </TouchableOpacity>
         )}
+        */}
 
         <SettingsSection title="Family & device">
           <SettingsRow
             icon="📱"
             label="Kids Login"
             onPress={() => router.push('/(parent)/settings/add-device')}
+          />
+          <SettingsRow
+            icon="🌐"
+            label="App Language"
+            onPress={() => router.push('/auth/language')}
+          />
+          <SettingsRow
+            icon="🔐"
+            label="Change Parental PIN"
+            onPress={() => router.push('/auth/setup-parental-security-pin')}
           />
           <SettingsRow
             icon="🎨"
@@ -170,7 +182,8 @@ export default function SettingsScreen() {
         <SettingsSection title="Account">
           <SettingsRow icon="👤" label="Edit Profile" onPress={() => Alert.alert('Profile', 'Edit profile coming soon!')} />
           <SettingsRow icon="🔑" label="Change Password" onPress={() => Alert.alert('Password', 'Coming soon!')} />
-          <SettingsRow icon="💳" label="Subscription" value={isPremium ? 'Premium' : 'Free'} onPress={() => Alert.alert('Subscription', 'Manage via App Store/Play Store.')} />
+          {/* TODO: commented-for-now 🔴 — Subscription row hidden for Milestone 1 (all features free). Restore when paid tier launches. */}
+          {/* <SettingsRow icon="💳" label="Subscription" value={isPremium ? 'Premium' : 'Free'} onPress={() => Alert.alert('Subscription', 'Manage via App Store/Play Store.')} /> */}
           <SettingsRow icon="👶" label="Manage Children" onPress={() => Alert.alert('Children', 'Child management coming soon!')} />
         </SettingsSection>
 

@@ -48,6 +48,7 @@ export default function WelcomeScreen() {
 
       {/* CTA Buttons */}
       <Animated.View entering={FadeInUp.duration(800).delay(600)} style={styles.buttons}>
+        {/* TODO: commented-for-now 🔴 — "Start Free Trial" button hidden for Milestone 1 (all features free, no trial messaging needed). Restore when paid tier launches.
         <TouchableOpacity
           style={styles.primaryButton}
           onPress={() => router.push('/auth/register')}
@@ -55,6 +56,17 @@ export default function WelcomeScreen() {
         >
           <Text style={styles.primaryButtonText}>Start Free Trial — 14 Days</Text>
           <Text style={styles.primaryButtonSub}>No credit card required</Text>
+        </TouchableOpacity>
+        */}
+
+        {/* Milestone 1 replacement — clean free account CTA */}
+        <TouchableOpacity
+          style={styles.primaryButton}
+          onPress={() => router.push('/auth/register')}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.primaryButtonText}>Get Started Free</Text>
+          <Text style={styles.primaryButtonSub}>Create your parental account</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
