@@ -84,20 +84,34 @@ async function bootstrap(): Promise<void> {
   }
 
   await app.listen(port, '0.0.0.0');
-  logStartupUrls(logger, port, nodeEnv);
+  logStartupUrls(logger, port, nodeEnv, configService);
 }
 
 /**
  * Print where the API is reachable (local + LAN) so mobile/Expo can use the right base URL.
+ * On Render, `RENDER_EXTERNAL_URL` is defined — log that as the public base in production.
  */
-function logStartupUrls(logger: Logger, port: number, nodeEnv: string): void {
+function logStartupUrls(
+  logger: Logger,
+  port: number,
+  nodeEnv: string,
+  configService: ConfigService,
+): void {
+  const renderUrl = configService.get<string>('RENDER_EXTERNAL_URL');
   const line = '─'.repeat(58);
   logger.log(line);
   logger.log(`  ParentingMyKid API  ·  port ${port}  ·  ${nodeEnv}`);
   logger.log(line);
-  logger.log(`  This machine:     http://127.0.0.1:${port}`);
-  logger.log(`  This machine:     http://localhost:${port}`);
-  logger.log(`  API base (v1):    http://127.0.0.1:${port}/api/v1`);
+  if (nodeEnv === 'production' && renderUrl) {
+    const base = renderUrl.replace(/\/$/, '');
+    logger.log(`  Public URL:       ${base}  ← clients use this`);
+    logger.log(`  API base (v1):    ${base}/api/v1`);
+  }
+  logger.log(`  Inside container: http://127.0.0.1:${port}`);
+  logger.log(`  Inside container: http://localhost:${port}`);
+  if (nodeEnv !== 'production' || !renderUrl) {
+    logger.log(`  API base (v1):    http://127.0.0.1:${port}/api/v1`);
+  }
   if (nodeEnv !== 'production') {
     logger.log(`  Swagger:          http://127.0.0.1:${port}/api/docs`);
   }

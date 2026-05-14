@@ -47,6 +47,7 @@ import { ActivityModule } from './modules/activity/activity.module';
 import { ParentContentModule } from './modules/parent-content/parent-content.module';
 import { MediaModule } from './modules/media/media.module';
 import { MonitorModule } from './modules/monitor/monitor.module';
+import { HealthModule } from './modules/health/health.module';
 
 @Module({
   imports: [
@@ -81,6 +82,9 @@ import { MonitorModule } from './modules/monitor/monitor.module';
 
     // MongoDB-backed session cache (replaces Redis/Upstash) — global
     CacheModule,
+
+    // Liveness (no DB) — used by Render / load balancers
+    HealthModule,
 
     // Feature Modules — each owns its domain
     AuthModule,
