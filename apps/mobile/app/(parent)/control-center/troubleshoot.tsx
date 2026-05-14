@@ -7,11 +7,8 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Platform,
-  PermissionsAndroid,
-  Linking,
-  Alert,
   AppState,
-  Modal,
+  Alert,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -20,272 +17,23 @@ import { router } from 'expo-router';
 import { COLORS } from '../../../src/constants/colors';
 import { SPACING } from '../../../src/constants/spacing';
 import {
-  hasUsageStatsPermission,
-  requestUsageStatsPermission,
-  hasAccessibilityPermission,
   requestAccessibilityPermission,
-  hasOverlayPermission,
-  requestOverlayPermission,
-  hasCameraPermission,
-  hasVpnPermission,
-  requestVpnPermission,
   openAppSettings,
+  releaseDeviceEnforcementState,
 } from '../../../src/services/ParentalControl';
+import {
+  clearActiveKidPolicyLocalMirror,
+  setParentDeviceEnforcementPaused,
+} from '../../../src/services/policySync.service';
+import { useParentGuardStore } from '../../../src/store/parentGuardSettings.store';
+import {
+  buildParentDevicePermissionDefinitions,
+  PARENT_DEVICE_PERMISSION_SLOT_IDS,
+  type ParentDevicePermissionDefinition,
+} from '../../../src/services/parentDevicePermissions.definitions';
+import { AccessibilityRestrictedSettingsGuideModal } from '../../../src/components/parent/AccessibilityRestrictedSettingsGuideModal';
 
-/** Google Help: Restricted settings (Android 13+) — usable on any OEM incl. Tecno/HiOS */
-const ANDROID_RESTRICTED_SETTINGS_HELP_URL =
-  'https://support.google.com/android/answer/12623953';
-
-type PermissionDef = {
-  id: string;
-  icon: string;
-  title: string;
-  description: string;
-  checkFn: () => Promise<boolean>;
-  grantFn: () => void | Promise<void>;
-};
-
-function buildPermissionList(showAccessibilityGuide: () => void): PermissionDef[] {
-  return [
-  {
-    id: 'usage-access',
-    icon: '📊',
-    title: 'Usage Access',
-    description: 'Allows monitoring which apps are used and for how long.',
-    checkFn: () => hasUsageStatsPermission(),
-    grantFn: async () => {
-      const ok = await requestUsageStatsPermission();
-      if (!ok) {
-        Alert.alert('Usage access', 'Open Settings → Apps → Special app access → Usage access → ParentingMyKid.', [
-          { text: 'Cancel', style: 'cancel' },
-          { text: 'App settings', onPress: () => void Linking.openSettings() },
-        ]);
-      }
-    },
-  },
-  {
-    id: 'accessibility',
-    icon: '♿',
-    title: 'Accessibility Service',
-    description: 'Detects when kids try to exit the app and brings them back.',
-    checkFn: () => hasAccessibilityPermission(),
-    grantFn: showAccessibilityGuide,
-  },
-  {
-    id: 'overlay',
-    icon: '🖥️',
-    title: 'System Overlay',
-    description: 'Displays the lock screen overlay on top of other apps.',
-    checkFn: () => hasOverlayPermission(),
-    grantFn: async () => {
-      const ok = await requestOverlayPermission();
-      if (!ok) {
-        Alert.alert('Display over other apps', 'Enable this under your app’s special access settings.', [
-          { text: 'Cancel', style: 'cancel' },
-          { text: 'App settings', onPress: () => void Linking.openSettings() },
-        ]);
-      }
-    },
-  },
-  {
-    id: 'vpn',
-    icon: '🔒',
-    title: 'VPN Service',
-    description: 'Enables DNS-based website filtering and internet blocking.',
-    // hasVpnPermission checks VpnService.prepare()==null (user consented), not whether VPN is active
-    checkFn: () => hasVpnPermission(),
-    grantFn: async () => {
-      // Android VPN consent MUST use startActivityForResult — fixed in native module
-      await requestVpnPermission();
-      // The OS dialog handles user interaction; AppState refresh will update the badge on return
-    },
-  },
-  {
-    id: 'camera',
-    icon: '📷',
-    title: 'Camera',
-    description: 'Required for silent camera monitoring of who is using the device.',
-    checkFn: () => hasCameraPermission(),
-    grantFn: async () => {
-      if (Platform.OS !== 'android') return;
-      try {
-        await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.CAMERA);
-      } catch {
-        void Linking.openSettings();
-      }
-    },
-  },
-];
-}
-
-const noop = () => {};
-const PERMISSION_IDS = buildPermissionList(noop).map((p) => p.id);
-
-function AccessibilityGuideModal({
-  visible,
-  onClose,
-  onOpenAccessibility,
-  onOpenAppInfo,
-  onOpenGoogleHelp,
-}: {
-  visible: boolean;
-  onClose: () => void;
-  onOpenAccessibility: () => void;
-  onOpenAppInfo: () => void;
-  onOpenGoogleHelp: () => void;
-}) {
-  return (
-    <Modal transparent animationType="fade" visible={visible} onRequestClose={onClose}>
-      <View style={a11yModalStyles.overlay}>
-        <View style={a11yModalStyles.sheet}>
-          <Text style={a11yModalStyles.title}>Accessibility (Android 13+)</Text>
-          <Text style={a11yModalStyles.intro}>
-            Tecno HiOS can hide the top-right ⋮ when App info opens the wrong task/fragment. Step 2 below includes fixes that match what works for others (XDA, Android issue trackers).
-          </Text>
-          <ScrollView style={a11yModalStyles.scroll} showsVerticalScrollIndicator>
-            <Text style={a11yModalStyles.sectionHeading}>
-              Step 1 — Trigger (do not skip)
-            </Text>
-            <Text style={a11yModalStyles.paragraph}>
-              {
-                'Open Accessibility, tap our app, and try to turn it ON. If Android shows "Restricted setting", tap OK. Google says the override often stays hidden until you do this once.'
-              }
-            </Text>
-            <Text style={a11yModalStyles.sectionHeading}>Step 2 — Allow restricted settings</Text>
-            <Text style={a11yModalStyles.paragraph}>
-              {
-                'Use button "2 · Open App info" after you install the latest ParentingMyKid dev build — it opens App info using the foreground app (shows ⋮ more often).\n\n' +
-                  'Still no ⋮? Try BOTH:\n\n' +
-                  '(A) Turn OFF system Dark theme briefly (Display → Dark theme). On some phones the overflow menu disappears in dark mode only — Android bug).\n\n' +
-                  '(B) Swipe ParentingMyKid away from Recent apps fully. Long-press the app icon on the home drawer → App info / More info. Many users report ⋮ appears on that route (XDA).\n\n' +
-                  'Then: Pixel-style ⋮ → "Allow restricted settings", or Samsung row in the list — scroll App info.'
-              }
-            </Text>
-            <Text style={a11yModalStyles.sectionHeading}>Step 3 — Enable</Text>
-            <Text style={a11yModalStyles.paragraph}>
-              Return to Settings → Accessibility → Parenting My Kid → turn ON.
-            </Text>
-            <Text style={a11yModalStyles.sectionHeading}>If it still will not unlock</Text>
-            <Text style={a11yModalStyles.paragraph}>
-              Sideloaded dev APKs are the strictest case. Easiest end-user path is installing from Google Play when you publish. Some developers use Split APK Installer (Play) to reinstall an APK for testing — search that name if you need a last resort.
-            </Text>
-          </ScrollView>
-          <TouchableOpacity style={a11yModalStyles.linkBtn} onPress={onOpenGoogleHelp}>
-            <Text style={a11yModalStyles.linkBtnText}>Open Google Help (restricted settings)</Text>
-          </TouchableOpacity>
-          <View style={a11yModalStyles.row}>
-            <TouchableOpacity style={a11yModalStyles.secondaryBtn} onPress={onClose}>
-              <Text style={a11yModalStyles.secondaryBtnText}>Close</Text>
-            </TouchableOpacity>
-          </View>
-          <View style={a11yModalStyles.actionRow}>
-            <TouchableOpacity
-              style={a11yModalStyles.primaryBtn}
-              onPress={() => {
-                onOpenAccessibility();
-                onClose();
-              }}
-            >
-              <Text style={a11yModalStyles.primaryBtnText}>1 · Open Accessibility</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={a11yModalStyles.primaryBtn}
-              onPress={() => {
-                onOpenAppInfo();
-                onClose();
-              }}
-            >
-              <Text style={a11yModalStyles.primaryBtnText}>2 · Open App info</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </View>
-    </Modal>
-  );
-}
-
-const a11yModalStyles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'center',
-    paddingHorizontal: SPACING[4],
-  },
-  sheet: {
-    backgroundColor: '#FFFCF9',
-    borderRadius: 16,
-    padding: SPACING[4],
-    maxHeight: '88%',
-    borderWidth: 1,
-    borderColor: 'rgba(92,61,46,0.12)',
-  },
-  title: {
-    fontFamily: 'Inter_700Bold',
-    fontSize: 18,
-    color: COLORS.parent.textPrimary,
-    marginBottom: SPACING[2],
-  },
-  intro: {
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 13,
-    color: COLORS.parent.textSecondary,
-    marginBottom: SPACING[3],
-    lineHeight: 19,
-  },
-  scroll: { maxHeight: 400 },
-  sectionHeading: {
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 14,
-    color: COLORS.parent.textPrimary,
-    marginTop: SPACING[2],
-    marginBottom: SPACING[1],
-  },
-  paragraph: {
-    fontFamily: 'Inter_400Regular',
-    fontSize: 13,
-    color: COLORS.parent.textMuted,
-    lineHeight: 20,
-    marginBottom: SPACING[1],
-  },
-  linkBtn: {
-    marginTop: SPACING[3],
-    paddingVertical: SPACING[2],
-  },
-  linkBtnText: {
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 14,
-    color: COLORS.parent.primary,
-  },
-  row: { marginTop: SPACING[2] },
-  secondaryBtn: {
-    alignSelf: 'flex-start',
-    paddingVertical: SPACING[2],
-  },
-  secondaryBtnText: {
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 15,
-    color: COLORS.parent.textMuted,
-  },
-  actionRow: {
-    flexDirection: 'row',
-    gap: SPACING[2],
-    marginTop: SPACING[3],
-    justifyContent: 'space-between',
-  },
-  primaryBtn: {
-    flex: 1,
-    backgroundColor: COLORS.parent.primary,
-    borderRadius: 12,
-    paddingVertical: SPACING[3],
-    alignItems: 'center',
-  },
-  primaryBtnText: {
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 13,
-    color: '#FFFFFF',
-    textAlign: 'center',
-  },
-});
+const PERMISSION_IDS = [...PARENT_DEVICE_PERMISSION_SLOT_IDS];
 
 type StatusMap = Record<string, 'granted' | 'required' | 'checking' | 'unknown'>;
 
@@ -294,7 +42,7 @@ function PermissionCard({
   status,
   onGrant,
 }: {
-  perm: PermissionDef;
+  perm: ParentDevicePermissionDefinition;
   status: string;
   onGrant: () => void;
 }) {
@@ -405,9 +153,14 @@ const cardStyles = StyleSheet.create({
 
 export default function TroubleshootScreen() {
   const [accessibilityGuideOpen, setAccessibilityGuideOpen] = useState(false);
+  const [releasing, setReleasing] = useState(false);
+  const updateGuard = useParentGuardStore((s) => s.update);
 
   const permissions = useMemo(
-    () => buildPermissionList(() => setAccessibilityGuideOpen(true)),
+    () =>
+      buildParentDevicePermissionDefinitions({
+        onAccessibilityHelp: () => setAccessibilityGuideOpen(true),
+      }),
     [],
   );
 
@@ -443,14 +196,57 @@ export default function TroubleshootScreen() {
     return () => sub.remove();
   }, [refreshStatuses]);
 
+  const onReleaseDeviceControl = useCallback(() => {
+    if (Platform.OS !== 'android') {
+      Alert.alert('Android only', 'This reset runs on the Android app build with parental controls.');
+      return;
+    }
+    Alert.alert(
+      'Release on-device control?',
+      'This stops the website VPN, turns off the quick overlay, and clears block rules from this phone’s enforcement layer. Your account, login, and saved lists on the server are not deleted.\n\nAndroid does not let apps turn off Accessibility for you — if Chrome or other apps still act blocked, open Accessibility settings and disable ParentingMyKid there.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Release control',
+          style: 'destructive',
+          onPress: () => {
+            void (async () => {
+              setReleasing(true);
+              try {
+                // Pause server→native sync first; then clear native enforcement before zustand,
+                // so we never call startForegroundService while prefs still imply an active VPN tunnel.
+                await setParentDeviceEnforcementPaused(true);
+                await clearActiveKidPolicyLocalMirror();
+                await releaseDeviceEnforcementState();
+                await updateGuard({
+                  applyBlockRulesToParent: false,
+                  quickAccessOverlayEnabled: false,
+                  autoKidModeEnabled: false,
+                });
+                Alert.alert(
+                  'On-device control released',
+                  'Automatic sync of rules to this phone is paused until you save again in Block Apps, Website blocker, or Stop internet. If needed, turn off ParentingMyKid in Accessibility settings.',
+                );
+                void refreshStatuses();
+              } catch {
+                Alert.alert('Something went wrong', 'Try again after reopening the app.');
+              } finally {
+                setReleasing(false);
+              }
+            })();
+          },
+        },
+      ],
+    );
+  }, [refreshStatuses, updateGuard]);
+
   return (
     <LinearGradient colors={['#E8F4EC', '#F2E8E9']} style={styles.container}>
-      <AccessibilityGuideModal
+      <AccessibilityRestrictedSettingsGuideModal
         visible={accessibilityGuideOpen}
         onClose={() => setAccessibilityGuideOpen(false)}
         onOpenAccessibility={() => void requestAccessibilityPermission()}
         onOpenAppInfo={() => void openAppSettings()}
-        onOpenGoogleHelp={() => void Linking.openURL(ANDROID_RESTRICTED_SETTINGS_HELP_URL)}
       />
       <SafeAreaView style={styles.safeArea} edges={['top']}>
         {/* Header */}
@@ -495,6 +291,34 @@ export default function TroubleshootScreen() {
               )}
             </TouchableOpacity>
           </Animated.View>
+
+          {Platform.OS === 'android' && (
+            <Animated.View entering={FadeInDown.delay(175).springify()} style={styles.dangerZoneCard}>
+              <Text style={styles.dangerZoneLabel}>Danger zone</Text>
+              <Text style={styles.dangerZoneBody}>
+                If the phone feels stuck (e.g. Chrome not loading), use this to stop VPN/overlay enforcement and
+                pause pushing rules to the device. Your account and server-side lists stay as they are.
+              </Text>
+              <TouchableOpacity
+                style={[styles.dangerButton, releasing && styles.dangerButtonDisabled]}
+                onPress={onReleaseDeviceControl}
+                disabled={releasing}
+              >
+                {releasing ? (
+                  <ActivityIndicator color="#FFFFFF" />
+                ) : (
+                  <Text style={styles.dangerButtonText}>Clear app access and on-phone enforcement</Text>
+                )}
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.dangerSecondaryBtn}
+                onPress={() => void requestAccessibilityPermission()}
+                disabled={releasing}
+              >
+                <Text style={styles.dangerSecondaryBtnText}>Open Accessibility settings</Text>
+              </TouchableOpacity>
+            </Animated.View>
+          )}
 
           {/* Permission cards */}
           {permissions.map((perm, i) => (
@@ -589,6 +413,54 @@ const styles = StyleSheet.create({
   },
 
   checkAllWrap: { marginBottom: SPACING[5] },
+
+  dangerZoneCard: {
+    backgroundColor: 'rgba(127,29,29,0.06)',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(220,38,38,0.35)',
+    padding: SPACING[4],
+    marginBottom: SPACING[5],
+  },
+  dangerZoneLabel: {
+    fontFamily: 'Inter_700Bold',
+    fontSize: 13,
+    color: COLORS.parent.danger,
+    marginBottom: SPACING[2],
+    letterSpacing: 0.3,
+    textTransform: 'uppercase',
+  },
+  dangerZoneBody: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 13,
+    color: COLORS.parent.textSecondary,
+    lineHeight: 20,
+    marginBottom: SPACING[4],
+  },
+  dangerButton: {
+    backgroundColor: COLORS.parent.danger,
+    borderRadius: 12,
+    height: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: SPACING[2],
+  },
+  dangerButtonDisabled: { opacity: 0.65 },
+  dangerButtonText: {
+    fontFamily: 'Inter_700Bold',
+    fontSize: 15,
+    color: '#FFFFFF',
+  },
+  dangerSecondaryBtn: {
+    alignItems: 'center',
+    paddingVertical: SPACING[2],
+  },
+  dangerSecondaryBtnText: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 14,
+    color: COLORS.parent.danger,
+  },
+
   checkAllButton: {
     backgroundColor: COLORS.parent.primary,
     borderRadius: 14,

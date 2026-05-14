@@ -23,11 +23,11 @@
  *               are used for simple tasks (wellbeing score, nutrition advice).
  */
 
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import OpenAI from 'openai';
-import { PrismaService } from '../../database/prisma.service';
-import { RedisService } from '../../common/redis/redis.service';
+import { DatabaseService } from '../../database/database.service';
+import { CacheService } from '../../common/cache/cache.service';
 import {
   GrowthPlan,
   WellbeingScore,
@@ -42,8 +42,8 @@ export class AiService {
   private readonly logger = new Logger(AiService.name);
 
   constructor(
-    private readonly prisma: PrismaService,
-    private readonly redis: RedisService,
+    private readonly db: DatabaseService,
+    private readonly cache: CacheService,
     private readonly config: ConfigService,
   ) {
     this.openai = new OpenAI({
@@ -59,23 +59,35 @@ export class AiService {
    * and skill assessments to create specific, time-bounded daily tasks.
    */
   async generateWeeklyGrowthPlan(childId: string): Promise<GrowthPlan> {
-    const child = await this.prisma.childProfile.findUniqueOrThrow({
-      where: { id: childId },
-      include: {
-        skillAssessments: { orderBy: { assessedAt: 'desc' }, take: 8 },
-        moodLogs: { orderBy: { loggedAt: 'desc' }, take: 7 },
-        dailyMissions: { orderBy: { date: 'desc' }, take: 7 },
-      },
-    });
+    const child = await this.db.childProfile.findOne({ _id: childId }).lean();
+    if (!child) throw new NotFoundException(`Child ${childId} not found`);
+
+    const [skillAssessments, moodLogs, dailyMissions] = await Promise.all([
+      this.db.skillAssessment
+        .find({ childId })
+        .sort({ assessedAt: -1 })
+        .limit(8)
+        .lean(),
+      this.db.moodLog
+        .find({ childId })
+        .sort({ loggedAt: -1 })
+        .limit(7)
+        .lean(),
+      this.db.dailyMission
+        .find({ childId })
+        .sort({ date: -1 })
+        .limit(7)
+        .lean(),
+    ]);
 
     const age = new Date().getFullYear() - new Date(child.dob).getFullYear();
     const recentMoodAvg =
-      child.moodLogs.reduce((sum, m) => sum + m.moodScore, 0) / (child.moodLogs.length || 1);
+      moodLogs.reduce((sum, m) => sum + m.moodScore, 0) / (moodLogs.length || 1);
     const recentCompletionAvg =
-      child.dailyMissions.reduce((sum, m) => sum + m.completionPct, 0) /
-      (child.dailyMissions.length || 1);
+      dailyMissions.reduce((sum, m) => sum + m.completionPct, 0) /
+      (dailyMissions.length || 1);
 
-    const skillSummary = child.skillAssessments.reduce(
+    const skillSummary = skillAssessments.reduce(
       (acc, s) => {
         acc[s.skillType] = s.score;
         return acc;
@@ -94,8 +106,8 @@ Child Profile:
 - Recent mood average: ${recentMoodAvg.toFixed(1)}/5
 - Recent mission completion: ${recentCompletionAvg.toFixed(0)}%
 - Skill scores (0-100): ${JSON.stringify(skillSummary)}
-- Allergies: ${child.allergies.join(', ') || 'none'}
-- Favorite activities: ${child.favoriteActivities.join(', ') || 'not specified'}
+- Allergies: ${(child.allergies ?? []).join(', ') || 'none'}
+- Favorite activities: ${(child.favoriteActivities ?? []).join(', ') || 'not specified'}
 
 Create a JSON response with this exact structure:
 {
@@ -136,22 +148,17 @@ Rules:
       const plan = JSON.parse(response.choices[0].message.content ?? '{}');
       const weekStart = this.getMonday();
 
-      // Save to database
-      await this.prisma.aiGrowthPlan.upsert({
-        where: { childId_weekStart: { childId, weekStart } },
-        create: {
-          childId,
-          weekStart,
-          focusAreasJson: plan.focusAreas,
-          predictedImprovements: plan.predictedImprovements ?? {},
-          confidence: plan.confidence ?? 0.7,
+      await this.db.aiGrowthPlan.findOneAndUpdate(
+        { childId, weekStart },
+        {
+          $set: {
+            focusAreasJson: plan.focusAreas,
+            predictedImprovements: plan.predictedImprovements ?? {},
+            confidence: plan.confidence ?? 0.7,
+          },
         },
-        update: {
-          focusAreasJson: plan.focusAreas,
-          predictedImprovements: plan.predictedImprovements ?? {},
-          confidence: plan.confidence ?? 0.7,
-        },
-      });
+        { upsert: true, new: true, setDefaultsOnInsert: true },
+      );
 
       return {
         childId,
@@ -208,18 +215,15 @@ Rules:
 
     const result = JSON.parse(response.choices[0].message.content ?? '{}');
 
-    // Save session for parent's history
-    await this.prisma.aiCoachSession.create({
-      data: {
-        parentId: request.childId, // Will be replaced with actual parentId from controller
-        childId: request.childId,
-        situation: request.situation,
-        category: result.category ?? 'OTHER',
-        immediateScript: result.immediateScript,
-        immediateSteps: result.immediateSteps,
-        doNotSay: result.doNotSay,
-        longerTermStrategy: result.longerTermStrategy,
-      },
+    await this.db.aiCoachSession.create({
+      parentId: request.childId, // Will be replaced with actual parentId from controller
+      childId: request.childId,
+      situation: request.situation,
+      category: result.category ?? 'OTHER',
+      immediateScript: result.immediateScript,
+      immediateSteps: result.immediateSteps,
+      doNotSay: result.doNotSay,
+      longerTermStrategy: result.longerTermStrategy,
     });
 
     return result as AICoachResponse;
@@ -233,8 +237,8 @@ Rules:
    * Alerts parent if score drops significantly or stays low for 3+ days.
    */
   async calculateWellbeingScore(childId: string): Promise<WellbeingScore> {
-    // Check Redis cache first — score is calculated once per day
-    const cached = await this.redis.getCachedWellbeingScore(childId);
+    // Check cache first — score is calculated once per day
+    const cached = await this.cache.getCachedWellbeingScore(childId);
     if (cached !== null) {
       return {
         childId,
@@ -247,26 +251,26 @@ Rules:
       };
     }
 
-    const today = new Date().toISOString().split('T')[0];
-    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    const sevenDaysAgoStr = sevenDaysAgo.toISOString().split('T')[0];
 
     const [moods, missions, healthRecords, screenLogs] = await Promise.all([
-      this.prisma.moodLog.findMany({
-        where: { childId, loggedAt: { gte: new Date(sevenDaysAgo) } },
-        orderBy: { loggedAt: 'desc' },
-        take: 14, // 2 per day for 7 days
-      }),
-      this.prisma.dailyMission.findMany({
-        where: { childId, date: { gte: sevenDaysAgo } },
-        orderBy: { date: 'desc' },
-        take: 7,
-      }),
-      this.prisma.healthRecord.findMany({
-        where: { childId, recordedAt: { gte: new Date(sevenDaysAgo) } },
-      }),
-      this.prisma.screenUsageLog.findMany({
-        where: { childId, date: { gte: sevenDaysAgo } },
-      }),
+      this.db.moodLog
+        .find({ childId, loggedAt: { $gte: sevenDaysAgo } })
+        .sort({ loggedAt: -1 })
+        .limit(14) // 2 per day for 7 days
+        .lean(),
+      this.db.dailyMission
+        .find({ childId, date: { $gte: sevenDaysAgoStr } })
+        .sort({ date: -1 })
+        .limit(7)
+        .lean(),
+      this.db.healthRecord
+        .find({ childId, recordedAt: { $gte: sevenDaysAgo } })
+        .lean(),
+      this.db.screenUsageLog
+        .find({ childId, date: { $gte: sevenDaysAgoStr } })
+        .lean(),
     ]);
 
     // Mood score (0-100): average of last 7 mood logs
@@ -322,14 +326,13 @@ Rules:
     if (missionScore < 30) alerts.push('Mission completion dropped significantly');
     if (sleepScore < 50) alerts.push('Sleep duration is below recommended levels');
 
-    // Cache the score
-    await this.redis.cacheWellbeingScore(childId, score);
+    await this.cache.cacheWellbeingScore(childId, score);
 
-    // Save to database
-    await this.prisma.childProfile.update({
-      where: { id: childId },
-      data: { wellbeingScore: score, wellbeingUpdatedAt: new Date() },
-    });
+    await this.db.childProfile.findOneAndUpdate(
+      { _id: childId },
+      { wellbeingScore: score, wellbeingUpdatedAt: new Date() },
+      { new: true },
+    );
 
     return {
       childId,
@@ -350,16 +353,12 @@ Rules:
    * Halal-aware when Islamic module is enabled.
    */
   async getNutritionAdvice(childId: string): Promise<string> {
-    const child = await this.prisma.childProfile.findUniqueOrThrow({
-      where: { id: childId },
-    });
+    const child = await this.db.childProfile.findOne({ _id: childId }).lean();
+    if (!child) throw new NotFoundException(`Child ${childId} not found`);
 
-    const weekLogs = await this.prisma.mealLog.findMany({
-      where: {
-        childId,
-        loggedAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) },
-      },
-    });
+    const weekLogs = await this.db.mealLog
+      .find({ childId, loggedAt: { $gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) } })
+      .lean();
 
     const age = new Date().getFullYear() - new Date(child.dob).getFullYear();
 
@@ -367,7 +366,7 @@ Rules:
 You are a nutritionist specialized in children aged 4-15 in South Asia (Bangladesh).
 Analyze this child's weekly nutrition and give practical advice.
 
-Child: ${age} years old, allergies: ${child.allergies.join(', ') || 'none'}
+Child: ${age} years old, allergies: ${(child.allergies ?? []).join(', ') || 'none'}
 Halal only: ${child.islamicModuleEnabled}
 Meal logs this week: ${JSON.stringify(weekLogs.map((l) => l.foodsJson))}
 
@@ -396,7 +395,8 @@ Keep it warm, practical, not clinical. Max 60 words.
    * Parents can see a log of all AI interactions in their dashboard.
    */
   async safeStudyAssist(childId: string, question: string, subject: string): Promise<SafeAIStudyResponse> {
-    const child = await this.prisma.childProfile.findUniqueOrThrow({ where: { id: childId } });
+    const child = await this.db.childProfile.findOne({ _id: childId }).lean();
+    if (!child) throw new NotFoundException(`Child ${childId} not found`);
     const age = new Date().getFullYear() - new Date(child.dob).getFullYear();
 
     const prompt = `
@@ -429,15 +429,12 @@ Respond in JSON:
 
     const parsed = JSON.parse(result.choices[0].message.content ?? '{}');
 
-    // Log the study session
-    await this.prisma.studySession.create({
-      data: {
-        childId,
-        subject,
-        durationMinutes: 0,
-        sessionType: 'AI_HELP',
-        aiPrompts: 1,
-      },
+    await this.db.studySession.create({
+      childId,
+      subject,
+      durationMinutes: 0,
+      sessionType: 'AI_HELP',
+      aiPrompts: 1,
     });
 
     return parsed as SafeAIStudyResponse;
@@ -453,21 +450,19 @@ Respond in JSON:
     const score = await this.calculateWellbeingScore(childId);
 
     if (score.alerts.length > 0 && score.score < 50) {
-      // Create an AI recommendation for the parent
-      const child = await this.prisma.childProfile.findUniqueOrThrow({ where: { id: childId } });
+      const child = await this.db.childProfile.findOne({ _id: childId }).lean();
+      if (!child) return;
 
-      await this.prisma.aiRecommendation.create({
-        data: {
-          childId,
-          parentId: child.parentId,
-          category: 'safety',
-          recommendationText: `${child.name}'s wellbeing score is ${score.score}/100 this week. ${score.alerts.join('. ')}`,
-          actionStepsJson: [
-            'Check in with your child about how they are feeling',
-            'Review their recent missions and screen time',
-            'Consider a 1-on-1 activity together this weekend',
-          ],
-        },
+      await this.db.aiRecommendation.create({
+        childId,
+        parentId: child.parentId,
+        category: 'safety',
+        recommendationText: `${child.name}'s wellbeing score is ${score.score}/100 this week. ${score.alerts.join('. ')}`,
+        actionStepsJson: [
+          'Check in with your child about how they are feeling',
+          'Review their recent missions and screen time',
+          'Consider a 1-on-1 activity together this weekend',
+        ],
       });
     }
   }
@@ -526,7 +521,8 @@ Valid types: RATING (1-5 stars), TEXT (short answer), BOOLEAN (yes/no)
     correctAnswer: string;
     explanation: string;
   }>> {
-    const child = await this.prisma.childProfile.findUniqueOrThrow({ where: { id: childId } });
+    const child = await this.db.childProfile.findOne({ _id: childId }).lean();
+    if (!child) throw new NotFoundException(`Child ${childId} not found`);
     const age = new Date().getFullYear() - new Date(child.dob).getFullYear();
 
     const prompt = `

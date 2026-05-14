@@ -23,15 +23,21 @@
  *             Parents must explicitly enable monitoring and children are informed.
  */
 
-import { Injectable, Logger } from '@nestjs/common';
-import { AlertCategory, AlertSeverity as DbAlertSeverity } from '@prisma/client';
-import { PrismaService } from '../../database/prisma.service';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { DatabaseService } from '../../database/database.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import OpenAI from 'openai';
 import { ConfigService } from '@nestjs/config';
 import { NotificationType } from '@parentingmykid/shared-types';
 import { IsString, IsOptional } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
+
+enum AlertSeverity {
+  LOW = 'LOW',
+  MEDIUM = 'MEDIUM',
+  HIGH = 'HIGH',
+  CRITICAL = 'CRITICAL',
+}
 
 /** Stored in ContentFilterEvent.reason as JSON for social-scan events. */
 interface SocialScanReasonPayload {
@@ -43,9 +49,10 @@ interface SocialScanReasonPayload {
   confidence?: number;
 }
 
-function parseSocialScanPayload(reason: string): SocialScanReasonPayload | null {
+function parseSocialScanPayload(reason: unknown): SocialScanReasonPayload | null {
   try {
-    const parsed = JSON.parse(reason) as SocialScanReasonPayload;
+    const str = typeof reason === 'string' ? reason : JSON.stringify(reason);
+    const parsed = JSON.parse(str) as SocialScanReasonPayload;
     return parsed?.kind === 'SOCIAL_SCAN' ? parsed : null;
   } catch {
     return null;
@@ -140,7 +147,7 @@ export class SocialMonitorService {
   private readonly openai: OpenAI;
 
   constructor(
-    private readonly prisma: PrismaService,
+    private readonly db: DatabaseService,
     private readonly notifications: NotificationsService,
     private readonly config: ConfigService,
   ) {
@@ -154,9 +161,8 @@ export class SocialMonitorService {
    * Analyzes content and triggers alerts if harmful content detected.
    */
   async scanContent(dto: ScanContentDto) {
-    const child = await this.prisma.childProfile.findUniqueOrThrow({
-      where: { id: dto.childId },
-    });
+    const child = await this.db.childProfile.findOne({ _id: dto.childId }).lean();
+    if (!child) throw new NotFoundException('Child not found');
 
     // Skip scan if monitoring is not enabled for this child
     if (!child.socialMonitoringEnabled) {
@@ -193,39 +199,35 @@ export class SocialMonitorService {
       confidence: scanResult.confidence ?? 0,
     };
 
-    await this.prisma.contentFilterEvent.create({
-      data: {
-        childId: dto.childId,
-        blockedUrl: `app://social-scan/${encodeURIComponent(dto.platform)}`,
-        reason: JSON.stringify(reasonPayload),
-      },
+    await this.db.contentFilterEvent.create({
+      childId: dto.childId,
+      blockedUrl: `app://social-scan/${encodeURIComponent(dto.platform)}`,
+      reason: JSON.stringify(reasonPayload),
     });
 
     // If harmful content detected, create a safety alert
     if (scanResult.detected && scanResult.severity !== 'NONE' && !scanResult.falsePositiveLikely) {
       const isCritical = scanResult.categories?.some((c: string) => CRITICAL_CATEGORIES.includes(c));
-      const severity = isCritical ? DbAlertSeverity.CRITICAL : this.mapSeverity(scanResult.severity);
+      const severity = isCritical ? AlertSeverity.CRITICAL : this.mapSeverity(scanResult.severity);
 
-      await this.prisma.safetyAlert.create({
-        data: {
-          childId: dto.childId,
-          category: AlertCategory.STRANGER_CONTACT,
-          severity,
-          title: `Content concern on ${dto.platform}`,
-          description: scanResult.summary ?? 'Potentially harmful content detected',
-          evidenceSnippet:
-            scanResult.categories?.length ? `Categories: ${scanResult.categories.join(', ')}` : null,
-          platform: dto.platform,
-          isRead: false,
-        },
+      await this.db.safetyAlert.create({
+        childId: dto.childId,
+        category: 'STRANGER_CONTACT',
+        severity,
+        title: `Content concern on ${dto.platform}`,
+        description: scanResult.summary ?? 'Potentially harmful content detected',
+        evidenceSnippet:
+          scanResult.categories?.length ? `Categories: ${scanResult.categories.join(', ')}` : null,
+        platform: dto.platform,
+        isRead: false,
       });
 
       // Notify parent
-      await this.notifications.sendToUser(child.parentId, {
+      await this.notifications.sendToUser(child.parentId as string, {
         type: NotificationType.SAFETY_ALERT,
         title: isCritical
-          ? `🚨 URGENT: Safety concern detected on ${child.name}'s ${dto.platform}`
-          : `⚠️ Content concern on ${child.name}'s ${dto.platform}`,
+          ? `🚨 URGENT: Safety concern detected on ${child.name as string}'s ${dto.platform}`
+          : `⚠️ Content concern on ${child.name as string}'s ${dto.platform}`,
         body: scanResult.summary ?? `Potential ${scanResult.categories?.[0]?.replace(/_/g, ' ')} detected`,
         data: {
           screen: 'safety',
@@ -237,7 +239,7 @@ export class SocialMonitorService {
       });
 
       this.logger.warn(
-        `Safety alert created for child ${dto.childId}: ${scanResult.severity} on ${dto.platform}`,
+        `Safety alert created for child ${dto.childId}: ${scanResult.severity as string} on ${dto.platform}`,
       );
     }
 
@@ -254,13 +256,10 @@ export class SocialMonitorService {
   async getMonitoringSummary(childId: string, days = 7) {
     const since = new Date(Date.now() - days * 86400000);
 
-    const events = await this.prisma.contentFilterEvent.findMany({
-      where: {
-        childId,
-        timestamp: { gte: since },
-      },
-      orderBy: { timestamp: 'desc' },
-    });
+    const events = await this.db.contentFilterEvent
+      .find({ childId, createdAt: { $gte: since } })
+      .sort({ createdAt: -1 })
+      .lean();
 
     const total = events.length;
     const flagged = events.filter((e) => {
@@ -303,22 +302,23 @@ export class SocialMonitorService {
   // ─── Enable/Disable Monitoring ────────────────────────────────────────────
 
   async setMonitoring(childId: string, enabled: boolean) {
-    await this.prisma.childProfile.update({
-      where: { id: childId },
-      data: { socialMonitoringEnabled: enabled },
-    });
+    await this.db.childProfile.findOneAndUpdate(
+      { _id: childId },
+      { $set: { socialMonitoringEnabled: enabled } },
+      { new: true },
+    );
     return { success: true, monitoringEnabled: enabled };
   }
 
   // ─── Helper ───────────────────────────────────────────────────────────────
 
-  private mapSeverity(severity: string): DbAlertSeverity {
-    const map: Record<string, DbAlertSeverity> = {
-      LOW: DbAlertSeverity.LOW,
-      MEDIUM: DbAlertSeverity.MEDIUM,
-      HIGH: DbAlertSeverity.HIGH,
-      CRITICAL: DbAlertSeverity.CRITICAL,
+  private mapSeverity(severity: string): AlertSeverity {
+    const map: Record<string, AlertSeverity> = {
+      LOW: AlertSeverity.LOW,
+      MEDIUM: AlertSeverity.MEDIUM,
+      HIGH: AlertSeverity.HIGH,
+      CRITICAL: AlertSeverity.CRITICAL,
     };
-    return map[severity] ?? DbAlertSeverity.MEDIUM;
+    return map[severity] ?? AlertSeverity.MEDIUM;
   }
 }

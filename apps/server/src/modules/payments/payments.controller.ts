@@ -26,7 +26,9 @@ export class PaymentsController {
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard)
   @Get('subscription/:familyId')
-  getSubscription(@Param('familyId') familyId: string) {
+  getSubscription(
+    @Param('familyId') familyId: string,
+  ): Promise<(Record<string, unknown> & { events: Array<Record<string, unknown>> }) | null> {
     return this.paymentsService.getSubscription(familyId);
   }
 }

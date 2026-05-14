@@ -16,7 +16,7 @@ import { ScheduleModule } from '@nestjs/schedule';
 
 // Shared Infrastructure
 import { DatabaseModule } from './database/database.module';
-import { RedisModule } from './common/redis/redis.module';
+import { CacheModule } from './common/cache/cache.module';
 
 // Feature Modules
 import { AuthModule } from './modules/auth/auth.module';
@@ -54,8 +54,8 @@ import { MonitorModule } from './modules/monitor/monitor.module';
     ConfigModule.forRoot({
       isGlobal: true,
       // Nest resolves `.env` from process.cwd(). When the API is started from the repo root
-      // (turbo, some IDEs), cwd may not be `apps/server`, so `RESEND_API_KEY` would be missing
-      // while `DATABASE_URL` still works if set in the shell. Include both locations.
+      // (turbo, some IDEs), cwd may not be `apps/server`, so env vars like RESEND_API_KEY
+      // may be missing. Including both locations covers all startup modes.
       envFilePath: [
         join(process.cwd(), '.env'),
         join(process.cwd(), '.env.local'),
@@ -68,19 +68,19 @@ import { MonitorModule } from './modules/monitor/monitor.module';
     // AI endpoints have their own stricter throttling via module-level guards
     ThrottlerModule.forRoot([
       {
-        ttl: 60000,  // 1 minute window
-        limit: 100,  // Max 100 requests per minute per IP
+        ttl: 60000, // 1 minute window
+        limit: 100, // Max 100 requests per minute per IP
       },
     ]),
 
     // Cron jobs for scheduled tasks (weekly reports, reminders)
     ScheduleModule.forRoot(),
 
-    // Database (Prisma + Neon PostgreSQL) — global, available to all modules
+    // Database (MongoDB via Mongoose) — global, available to all modules
     DatabaseModule,
 
-    // Redis (Upstash) — global, available to all modules
-    RedisModule,
+    // MongoDB-backed session cache (replaces Redis/Upstash) — global
+    CacheModule,
 
     // Feature Modules — each owns its domain
     AuthModule,

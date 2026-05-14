@@ -3,7 +3,7 @@
  * Profile, subscription, family management, notifications, privacy.
  */
 
-import React, { useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
   View,
   Text,
@@ -17,6 +17,8 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { router } from 'expo-router';
+import { useFocusEffect } from '@react-navigation/native';
+import { UserRole } from '@parentingmykid/shared-types';
 import * as SecureStore from 'expo-secure-store';
 import { useAuthStore } from '../../../src/store/auth.store';
 import { useFamilyStore } from '../../../src/store/family.store';
@@ -24,7 +26,6 @@ import { COLORS } from '../../../src/constants/colors';
 import { SPACING } from '../../../src/constants/spacing';
 import { LOGO_PNG, APP_DISPLAY_NAME } from '../../../src/constants/branding';
 import { CHILD_ID_KEY } from '../../../src/store/deviceSession.store';
-import { ParentHouseholdSwitcherCard } from '../../../src/components/parent/ParentHouseholdSwitcherCard';
 
 interface SettingsRowProps {
   icon: string;
@@ -75,12 +76,21 @@ function SettingsSection({ title, children }: { title: string; children: React.R
 
 export default function SettingsScreen() {
   const { user, logout } = useAuthStore();
+  const refreshUserProfileFromServer = useAuthStore((s) => s.refreshUserProfileFromServer);
   const { subscription } = useFamilyStore();
   const [emailNotifs, setEmailNotifs] = useState(true);
   const [pushNotifs, setPushNotifs] = useState(true);
   const [safetyAlerts, setSafetyAlerts] = useState(true);
 
   const isPremium = subscription?.plan !== 'FREE';
+
+  useFocusEffect(
+    useCallback(() => {
+      if (user?.role === UserRole.PARENT) {
+        void refreshUserProfileFromServer();
+      }
+    }, [user?.role, refreshUserProfileFromServer]),
+  );
 
   function handleLogout() {
     Alert.alert('Sign out?', 'You will need to sign in again.', [
@@ -105,8 +115,27 @@ export default function SettingsScreen() {
     ]);
   }
 
+  function handleSettingsBack() {
+    if (router.canGoBack()) {
+      router.back();
+    }
+  }
+
   return (
     <SafeAreaView style={styles.screen} edges={['top']}>
+      <View style={styles.topHeader}>
+        <TouchableOpacity
+          style={styles.backBtn}
+          onPress={handleSettingsBack}
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          accessibilityRole="button"
+          accessibilityLabel="Back"
+        >
+          <Text style={styles.backIcon}>‹</Text>
+        </TouchableOpacity>
+        <Text style={styles.topHeaderTitle}>Settings</Text>
+        <View style={styles.backBtn} />
+      </View>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
         {/* Profile header */}
         <View style={styles.brandRow}>
@@ -118,8 +147,6 @@ export default function SettingsScreen() {
             <Text style={styles.brandSub}>Family app</Text>
           </View>
         </View>
-
-        <ParentHouseholdSwitcherCard invalidateQueryKeysAfterSwitch={[['family-home']]} />
 
         <View style={styles.profileHeader}>
           <View style={styles.avatarPlaceholder}>
@@ -167,8 +194,12 @@ export default function SettingsScreen() {
           />
           <SettingsRow
             icon="🔐"
-            label="Change Parental PIN"
-            onPress={() => router.push('/auth/setup-parental-security-pin')}
+            label={user?.parentalPinSet === true ? 'Manage my parental PIN' : 'Set my parental PIN'}
+            onPress={() =>
+              router.push(
+                user?.parentalPinSet === true ? '/(parent)/settings/my-pin' : '/auth/setup-parental-security-pin',
+              )
+            }
           />
           <SettingsRow
             icon="🎨"
@@ -176,6 +207,15 @@ export default function SettingsScreen() {
             onPress={() => router.push('/(parent)/settings/theme-picker')}
           />
           <SettingsRow icon="👧" label="Hand device to child" onPress={handDeviceToChild} />
+        </SettingsSection>
+
+        {/* Kid Mode & Protection — Features 1, 2, 3 */}
+        <SettingsSection title="Kid Mode & Protection">
+          <SettingsRow
+            icon="🛡️"
+            label="Block Rules, Auto Kid Mode & Overlay"
+            onPress={() => router.push('/(parent)/settings/kid-mode-settings')}
+          />
         </SettingsSection>
 
         {/* Account */}
@@ -245,6 +285,33 @@ export default function SettingsScreen() {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: COLORS.parent.background },
+  topHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: SPACING[4],
+    paddingVertical: SPACING[2],
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(92,61,46,0.08)',
+    backgroundColor: COLORS.parent.surface,
+  },
+  backBtn: {
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  backIcon: {
+    fontSize: 28,
+    color: COLORS.parent.primary,
+    lineHeight: 32,
+  },
+  topHeaderTitle: {
+    fontSize: 17,
+    fontFamily: 'Inter',
+    fontWeight: '700',
+    color: COLORS.parent.textPrimary,
+  },
   scrollContent: { paddingBottom: SPACING[10] },
   brandRow: {
     flexDirection: 'row',

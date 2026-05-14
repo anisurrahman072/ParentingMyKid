@@ -18,6 +18,8 @@ import {
   Dimensions,
   Vibration,
   StatusBar,
+  AppState,
+  Platform,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -33,13 +35,23 @@ import Animated, {
   SlideInDown,
   ZoomIn,
 } from 'react-native-reanimated';
-import { router, useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { apiClient } from '../../../src/services/api.client';
+import { API_ENDPOINTS } from '../../../src/constants/api';
 import { useFamilyStore } from '../../../src/store/family.store';
 import { useAuthStore } from '../../../src/store/auth.store';
 import { SPACING } from '../../../src/constants/spacing';
 import { KidIdentityModal } from '../../../src/components/kids/KidIdentityModal';
+import { useParentGuardStore } from '../../../src/store/parentGuardSettings.store';
+import { UserRole } from '@parentingmykid/shared-types';
+import {
+  setKidModeActive,
+  stopVpn,
+  consumePendingGameQuotaMessage,
+} from '../../../modules/parental-control/src/index';
+import { hasVpnPermission, requestVpnPermission } from '../../../src/services/ParentalControl';
+import { getParentPinPlain } from '../../../src/services/parentPinPlainStorage';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
@@ -207,17 +219,16 @@ function ParentalPinModal({
   visible,
   onClose,
   onSuccess,
-  childId,
 }: {
   visible: boolean;
   onClose: () => void;
   onSuccess: () => void;
-  childId: string;
 }) {
   const [pin, setPin] = useState('');
   const [error, setError] = useState(false);
   const [checking, setChecking] = useState(false);
-  const { user } = useAuthStore();
+  const login = useAuthStore((s) => s.login);
+  const user = useAuthStore((s) => s.user);
   const shakeX = useSharedValue(0);
   const animStyle = useAnimatedStyle(() => ({ transform: [{ translateX: shakeX.value }] }));
 
@@ -238,23 +249,50 @@ function ParentalPinModal({
     if (next.length === 4) {
       setChecking(true);
       try {
-        const { data } = await apiClient.post('/auth/verify-parental-pin', {
-          pin: next,
-          userId: user?.id,
-        });
-        if (data.valid) {
-          setPin('');
-          onSuccess();
+        if (user?.role === UserRole.CHILD) {
+          const { data } = await apiClient.post<{
+            accessToken: string;
+            refreshToken: string;
+            user: import('@parentingmykid/shared-types').UserProfile;
+          }>(API_ENDPOINTS.auth.switchToParentWithPin, { pin: next });
+          await login(data.accessToken, data.refreshToken, data.user);
         } else {
-          Vibration.vibrate(300);
-          setError(true);
-          shake();
-          setTimeout(() => { setPin(''); setError(false); }, 600);
+          // Try the locally-stored plain PIN first (works fully offline — critical when
+          // Stop Internet is active and the backend is unreachable on this device).
+          const localPin = await getParentPinPlain().catch(() => null);
+          if (localPin && /^\d{4}$/.test(localPin)) {
+            // Local PIN exists: compare directly — no network call needed at all.
+            if (localPin !== next) {
+              throw new Error('INVALID_PARENT_PIN');
+            }
+            // Local match — fall through to success path below.
+          } else {
+            // No local PIN cached yet — fall back to backend verification.
+            const { data } = await apiClient.post<{ valid: boolean }>(
+              API_ENDPOINTS.auth.verifyParentalPin,
+              { pin: next },
+            );
+            if (!data.valid) {
+              throw new Error('INVALID_PARENT_PIN');
+            }
+          }
         }
+        try {
+          // Write kidModeActive=false so the VPN gate logic knows we're in parent mode,
+          // then immediately kill the VPN service — parent must never be blocked.
+          await setKidModeActive(false);
+          await stopVpn();
+        } catch {}
+        setPin('');
+        onSuccess();
       } catch {
         Vibration.vibrate(300);
+        setError(true);
         shake();
-        setTimeout(() => { setPin(''); setError(false); }, 600);
+        setTimeout(() => {
+          setPin('');
+          setError(false);
+        }, 600);
       } finally {
         setChecking(false);
       }
@@ -356,15 +394,82 @@ export default function KidModeScreen() {
   const { dashboard } = useFamilyStore();
   const [showPinModal, setShowPinModal] = useState(false);
   const [showIdentityModal, setShowIdentityModal] = useState(true);
+  const [gameQuotaSplash, setGameQuotaSplash] = useState<{ title: string; body: string } | null>(null);
   const kid = dashboard?.children?.find((c) => c.childId === childId);
   const religion = (kid as any)?.religion ?? 'OTHER';
+  const updateGuardSettings = useParentGuardStore((s) => s.update);
 
-  // Persist last active kid
+  // Kid-mode native flags + policy mirror run from `control-center/_layout.tsx` so category navigation
+  // does not briefly disable blocking. Still persist last active kid here for identity modal / resume UX.
   useEffect(() => {
-    if (childId) {
-      AsyncStorage.setItem(LAST_ACTIVE_KID_KEY, childId).catch(() => {});
-    }
-  }, [childId]);
+    if (!childId) return;
+    void updateGuardSettings({ lastActiveChildId: childId });
+    AsyncStorage.setItem(LAST_ACTIVE_KID_KEY, childId).catch(() => {});
+  }, [childId, updateGuardSettings]);
+
+  const refreshGameQuotaSplash = useCallback(() => {
+    if (Platform.OS !== 'android') return;
+    void consumePendingGameQuotaMessage()
+      .then((msg) => {
+        if (msg) setGameQuotaSplash(msg);
+      })
+      .catch(() => {});
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      refreshGameQuotaSplash();
+    }, [refreshGameQuotaSplash]),
+  );
+
+  useEffect(() => {
+    if (Platform.OS !== 'android') return;
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') refreshGameQuotaSplash();
+    });
+    return () => sub.remove();
+  }, [refreshGameQuotaSplash]);
+
+  // VPN permission guard: Android resets VPN consent on app reinstall.
+  // Request the permission on mount if needed. Only re-trigger VPN start via AppState
+  // when we were actually waiting for the user to grant the permission dialog —
+  // NOT on every foreground resume (which would race with the parent-mode PIN switch).
+  useEffect(() => {
+    if (Platform.OS !== 'android') return;
+    let mounted = true;
+    let waitingForPermission = false;
+
+    void (async () => {
+      try {
+        const ok = await hasVpnPermission();
+        if (!ok && mounted) {
+          waitingForPermission = true;
+          await requestVpnPermission();
+          // requestVpnPermission shows the system dialog and returns immediately.
+          // When the user taps OK and returns, AppState fires 'active' below.
+        }
+      } catch {}
+    })();
+
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active' && mounted && waitingForPermission) {
+        void (async () => {
+          try {
+            const ok = await hasVpnPermission();
+            if (ok) {
+              waitingForPermission = false;
+              await setKidModeActive(true);
+            }
+          } catch {}
+        })();
+      }
+    });
+
+    return () => {
+      mounted = false;
+      sub.remove();
+    };
+  }, []);
 
   const visibleCategories = CATEGORIES.filter(
     (cat) => cat.religions.includes('ALL') || cat.religions.includes(religion as any)
@@ -420,7 +525,6 @@ export default function KidModeScreen() {
           setShowPinModal(false);
           router.replace('/(parent)/control-center');
         }}
-        childId={childId ?? ''}
       />
 
       {/* Kid Identity Modal — shown on first open / after idle */}
@@ -430,6 +534,28 @@ export default function KidModeScreen() {
           onDismiss={() => setShowIdentityModal(false)}
         />
       )}
+
+      <Modal
+        visible={gameQuotaSplash !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setGameQuotaSplash(null)}
+      >
+        <View style={styles.quotaSplashBackdrop}>
+          <LinearGradient colors={['#FFF7ED', '#E0F2FE', '#F5F3FF']} style={styles.quotaSplashCard}>
+            <Text style={styles.quotaSplashEmoji}>🌟</Text>
+            <Text style={styles.quotaSplashTitle}>{gameQuotaSplash?.title ?? ''}</Text>
+            <Text style={styles.quotaSplashBody}>{gameQuotaSplash?.body ?? ''}</Text>
+            <TouchableOpacity
+              style={styles.quotaSplashBtn}
+              onPress={() => setGameQuotaSplash(null)}
+              accessibilityRole="button"
+            >
+              <Text style={styles.quotaSplashBtnText}>Sounds good!</Text>
+            </TouchableOpacity>
+          </LinearGradient>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -502,6 +628,51 @@ const styles = StyleSheet.create({
   parentModeButtonText: {
     fontFamily: 'Inter_600SemiBold',
     fontSize: 14,
+    color: '#FFFFFF',
+  },
+
+  quotaSplashBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(15,12,41,0.55)',
+    justifyContent: 'center',
+    paddingHorizontal: SPACING[5],
+  },
+  quotaSplashCard: {
+    borderRadius: 22,
+    padding: SPACING[5],
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.85)',
+  },
+  quotaSplashEmoji: {
+    fontSize: 40,
+    textAlign: 'center',
+    marginBottom: SPACING[3],
+  },
+  quotaSplashTitle: {
+    fontFamily: 'Inter_700Bold',
+    fontSize: 19,
+    color: '#5C3D2E',
+    textAlign: 'center',
+    marginBottom: SPACING[3],
+    lineHeight: 26,
+  },
+  quotaSplashBody: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 15,
+    color: '#7C6658',
+    textAlign: 'center',
+    lineHeight: 23,
+    marginBottom: SPACING[5],
+  },
+  quotaSplashBtn: {
+    backgroundColor: '#2563EB',
+    borderRadius: 14,
+    paddingVertical: SPACING[3],
+    alignItems: 'center',
+  },
+  quotaSplashBtnText: {
+    fontFamily: 'Inter_700Bold',
+    fontSize: 16,
     color: '#FFFFFF',
   },
 

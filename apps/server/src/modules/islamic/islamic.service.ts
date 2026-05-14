@@ -21,7 +21,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import axios from 'axios';
-import { PrismaService } from '../../database/prisma.service';
+import { DatabaseService } from '../../database/database.service';
 import { SalahName, DailyIslamicContent } from '@parentingmykid/shared-types';
 import { IsString, IsBoolean, IsNumber, IsOptional } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
@@ -122,7 +122,7 @@ export class IslamicService {
   private readonly prayerTimesApiUrl: string;
 
   constructor(
-    private readonly prisma: PrismaService,
+    private readonly db: DatabaseService,
     private readonly config: ConfigService,
   ) {
     this.prayerTimesApiUrl = config.get<string>('PRAYER_TIMES_API_URL', 'https://api.aladhan.com/v1');
@@ -148,9 +148,7 @@ export class IslamicService {
     const prayerTimes = await this.getPrayerTimes(lat ?? 23.8103, lon ?? 90.4125); // Default: Dhaka
 
     // Get child's Quran goal status
-    const quranLog = await this.prisma.quranLog.findFirst({
-      where: { childId, date: today },
-    });
+    const quranLog = await this.db.quranLog.findOne({ childId, date: today }).lean();
 
     const quranStreak = await this.calculateQuranStreak(childId);
 
@@ -166,7 +164,7 @@ export class IslamicService {
         dailyGoal: '1 page',
         completedToday: !!quranLog,
         streak: quranStreak,
-        totalPagesRead: 0, // Computed from total logs
+        totalPagesRead: 0,
         completedSurahs: [],
       },
       ramadanMode: isRamadan,
@@ -180,29 +178,19 @@ export class IslamicService {
   async logSalah(dto: LogSalahDto): Promise<void> {
     const today = new Date().toISOString().split('T')[0];
 
-    await this.prisma.salahLog.upsert({
-      where: {
-        childId_date_salah: {
-          childId: dto.childId,
-          date: today,
-          salah: dto.salah as SalahName,
-        },
+    await this.db.salahLog.findOneAndUpdate(
+      { childId: dto.childId, date: today, salah: dto.salah as SalahName },
+      {
+        $set: { onTime: dto.onTime ?? true },
+        $setOnInsert: { childId: dto.childId, date: today, salah: dto.salah as SalahName },
       },
-      create: {
-        childId: dto.childId,
-        date: today,
-        salah: dto.salah as SalahName,
-        onTime: dto.onTime ?? true,
-      },
-      update: { onTime: dto.onTime ?? true },
-    });
+      { upsert: true, new: true, setDefaultsOnInsert: true },
+    );
   }
 
   async getTodaySalahStatus(childId: string) {
     const today = new Date().toISOString().split('T')[0];
-    const logs = await this.prisma.salahLog.findMany({
-      where: { childId, date: today },
-    });
+    const logs = await this.db.salahLog.find({ childId, date: today }).lean();
 
     const allPrayers: SalahName[] = [
       SalahName.FAJR,
@@ -224,14 +212,12 @@ export class IslamicService {
   async logQuranReading(dto: LogQuranDto): Promise<void> {
     const today = new Date().toISOString().split('T')[0];
 
-    await this.prisma.quranLog.create({
-      data: {
-        childId: dto.childId,
-        date: today,
-        pagesRead: dto.pagesRead,
-        surahName: dto.surahName,
-        photoUrl: dto.photoUrl,
-      },
+    await this.db.quranLog.create({
+      childId: dto.childId,
+      date: today,
+      pagesRead: dto.pagesRead,
+      surahName: dto.surahName,
+      photoUrl: dto.photoUrl,
     });
   }
 
@@ -256,18 +242,15 @@ export class IslamicService {
         ? totalZakatableWealth * 0.025
         : 0;
 
-    // Save calculation
-    await this.prisma.zakatRecord.create({
-      data: {
-        parentId,
-        year: new Date().getFullYear(),
-        savingsAmount: dto.savingsAmount,
-        goldValue: dto.goldValue ?? 0,
-        investmentValue: dto.investmentValue ?? 0,
-        nisabThreshold: NISAB_GOLD_BDT,
-        zakatDue,
-        currency: dto.currency ?? 'BDT',
-      },
+    await this.db.zakatRecord.create({
+      parentId,
+      year: new Date().getFullYear(),
+      savingsAmount: dto.savingsAmount,
+      goldValue: dto.goldValue ?? 0,
+      investmentValue: dto.investmentValue ?? 0,
+      nisabThreshold: NISAB_GOLD_BDT,
+      zakatDue,
+      currency: dto.currency ?? 'BDT',
     });
 
     return {
@@ -298,18 +281,17 @@ export class IslamicService {
         ISHA: timings.Isha ?? '19:30',
       };
     } catch {
-      // Return Dhaka defaults if API is unavailable
       return { FAJR: '05:00', DHUHR: '12:30', ASR: '15:30', MAGHRIB: '18:00', ISHA: '19:30' };
     }
   }
 
   private async calculateQuranStreak(childId: string): Promise<number> {
-    const logs = await this.prisma.quranLog.findMany({
-      where: { childId },
-      orderBy: { date: 'desc' },
-      take: 365,
-      select: { date: true },
-    });
+    const logs = await this.db.quranLog
+      .find({ childId })
+      .sort({ date: -1 })
+      .limit(365)
+      .select('date')
+      .lean();
 
     if (logs.length === 0) return 0;
 
@@ -318,7 +300,7 @@ export class IslamicService {
     currentDate.setHours(0, 0, 0, 0);
 
     for (const log of logs) {
-      const logDate = new Date(log.date);
+      const logDate = new Date(log.date as string);
       logDate.setHours(0, 0, 0, 0);
 
       const diffDays = Math.floor(

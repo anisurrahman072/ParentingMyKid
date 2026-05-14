@@ -8,11 +8,16 @@
  *               and a growth plan. Parent dashboard aggregates all children at once.
  */
 
-import { Injectable, ForbiddenException, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import {
+  Injectable,
+  ForbiddenException,
+  NotFoundException,
+  BadRequestException,
+  Logger,
+} from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 import { v4 as uuidv4 } from 'uuid';
-import { PrismaService } from '../../database/prisma.service';
+import { DatabaseService } from '../../database/database.service';
 import { ChildPinCryptoService } from '../../common/child-pin-crypto/child-pin-crypto.service';
 import { CreateChildDto, SubmitBaselineDto } from './dto/create-child.dto';
 import {
@@ -28,7 +33,7 @@ export class ChildrenService {
   private readonly logger = new Logger(ChildrenService.name);
 
   constructor(
-    private readonly prisma: PrismaService,
+    private readonly db: DatabaseService,
     private readonly childPinCrypto: ChildPinCryptoService,
   ) {}
 
@@ -40,30 +45,36 @@ export class ChildrenService {
    * Checks subscription plan limits (FREE = 1 child, STANDARD = 3, PRO = unlimited).
    */
   async createChild(parentId: string, dto: CreateChildDto): Promise<ChildProfile> {
-    // Get parent's family (use first family if not specified)
-    const memberships = await this.prisma.familyMember.findMany({
-      where: { userId: parentId, role: { in: ['PRIMARY', 'CO_PARENT'] } },
-      include: { family: { include: { subscription: true, children: true } } },
-      orderBy: { joinedAt: 'asc' },
-    });
+    const memberships = await this.db.familyMember
+      .find({ userId: parentId, role: { $in: ['PRIMARY', 'CO_PARENT'] } })
+      .sort({ joinedAt: 1 })
+      .lean();
 
     if (memberships.length === 0) {
       throw new BadRequestException('No family group found. Please create a family first.');
     }
 
-    const membership = dto.familyId
+    const targetMembership = dto.familyId
       ? memberships.find((m) => m.familyId === dto.familyId)
       : memberships[0];
 
-    if (!membership) {
+    if (!targetMembership) {
       throw new ForbiddenException('Access to this family denied');
     }
 
-    const { family } = membership;
+    const familyId = targetMembership.familyId;
 
-    // Enforce subscription child limits
-    const childCount = family.children.length;
-    const plan = family.subscription?.plan ?? 'FREE';
+    const [family, subscription, childCount] = await Promise.all([
+      this.db.familyGroup.findOne({ _id: familyId }).lean(),
+      this.db.subscription.findOne({ familyId }).lean(),
+      this.db.childProfile.countDocuments({ familyId }),
+    ]);
+
+    if (!family) {
+      throw new NotFoundException('Family group not found');
+    }
+
+    const plan = subscription?.plan ?? 'FREE';
 
     if (plan === 'FREE' && childCount >= 1) {
       throw new ForbiddenException(
@@ -77,16 +88,14 @@ export class ChildrenService {
     }
 
     // Create the child's User account (for PIN login)
-    const childUser = await this.prisma.user.create({
-      data: {
-        email: `child-${uuidv4()}@internal.parentingmykid.com`, // Internal email, never used for login
-        passwordHash: await bcrypt.hash(uuidv4(), 10), // Random password — child uses PIN not password
-        name: dto.name,
-        role: UserRole.CHILD,
-        parentalConsentGiven: true, // Parent gave consent on registration
-        parentalConsentAt: new Date(),
-        parentalConsentVersion: '1.0',
-      },
+    const childUser = await this.db.user.create({
+      email: `child-${uuidv4()}@internal.parentingmykid.com`,
+      passwordHash: await bcrypt.hash(uuidv4(), 10),
+      name: dto.name,
+      role: UserRole.CHILD,
+      parentalConsentGiven: true,
+      parentalConsentAt: new Date(),
+      parentalConsentVersion: '1.0',
     });
 
     const pinHash =
@@ -98,32 +107,27 @@ export class ChildrenService {
         ? this.childPinCrypto.encryptPin(dto.initialPin)
         : null;
 
-    const child = await this.prisma.childProfile.create({
-      data: {
-        userId: childUser.id,
-        familyId: family.id,
-        parentId,
-        name: dto.name,
-        nickname: dto.nickname,
-        dob: new Date(dto.dob),
-        grade: dto.grade,
-        school: dto.school,
-        languagePreference: dto.languagePreference ?? 'en',
-        allergies: dto.allergies ?? [],
-        foodPreferences: dto.foodPreferences ?? [],
-        favoriteActivities: dto.favoriteActivities ?? [],
-        islamicModuleEnabled: dto.islamicModuleEnabled ?? family.islamicModuleEnabled,
-        pinHash,
-        pinEnc,
-      },
+    const child = await this.db.childProfile.create({
+      userId: childUser._id,
+      familyId: family._id,
+      parentId,
+      name: dto.name,
+      nickname: dto.nickname,
+      dob: new Date(dto.dob),
+      grade: dto.grade,
+      school: dto.school,
+      languagePreference: dto.languagePreference ?? 'en',
+      allergies: dto.allergies ?? [],
+      foodPreferences: dto.foodPreferences ?? [],
+      favoriteActivities: dto.favoriteActivities ?? [],
+      islamicModuleEnabled: dto.islamicModuleEnabled ?? family.islamicModuleEnabled,
+      pinHash,
+      pinEnc,
     });
 
-    // Initialize screen time controls with safe defaults
-    await this.prisma.screenTimeControls.create({
-      data: { childId: child.id },
-    });
+    await this.db.screenTimeControls.create({ childId: child._id, appGuardEnabled: false });
 
-    this.logger.log(`Child profile created: ${child.name} (id: ${child.id})`);
+    this.logger.log(`Child profile created: ${child.name} (id: ${child._id})`);
 
     return this.mapChildToDto(child);
   }
@@ -140,90 +144,67 @@ export class ChildrenService {
   /**
    * Returns the complete family dashboard for the parent app's home screen.
    * Uses small parallel queries (counts, latest mood, one daily row per child) instead of
-   * deep `include`s that loaded every unread safety alert — much faster for real DB sizes.
+   * deep joins that loaded every unread safety alert — much faster for real DB sizes.
    * Same response shape is served by GET .../home and GET .../dashboard.
    */
   async getFamilyDashboard(parentId: string, familyId: string): Promise<FamilyDashboard> {
-    const membership = await this.prisma.familyMember.findUnique({
-      where: { familyId_userId: { familyId, userId: parentId } },
-      include: {
-        family: {
-          include: {
-            children: {
-              select: {
-                id: true,
-                name: true,
-                avatarUrl: true,
-                currentStreak: true,
-                wellbeingScore: true,
-                pinHash: true,
-                pinEnc: true,
-              },
-            },
-          },
-        },
-      },
-    });
+    const membership = await this.db.familyMember.findOne({ familyId, userId: parentId }).lean();
 
     if (!membership) {
       throw new ForbiddenException('Access to this family denied');
     }
 
-    const { family } = membership;
-    const childIds = family.children.map((c) => c.id);
+    const family = await this.db.familyGroup.findOne({ _id: familyId }).lean();
+    if (!family) {
+      throw new ForbiddenException('Family group not found');
+    }
+
+    const children = await this.db.childProfile
+      .find({ familyId })
+      .select('_id name avatarUrl currentStreak wellbeingScore pinHash pinEnc')
+      .lean();
+
+    const childIds = children.map((c) => c._id as string);
     const today = new Date().toISOString().split('T')[0];
     const now = new Date();
 
     const [alertGroups, latestMoods, todayMissionRows, activeDevices, usageGroups, calendarEvents] =
       await Promise.all([
         childIds.length
-          ? this.prisma.safetyAlert.groupBy({
-              by: ['childId'],
-              where: { childId: { in: childIds }, isRead: false },
-              _count: { _all: true },
-            })
-          : Promise.resolve(
-              [] as { childId: string; _count: { _all: number } }[],
-            ),
+          ? this.db.safetyAlert.aggregate<{ _id: string; count: number }>([
+              { $match: { childId: { $in: childIds }, isRead: false } },
+              { $group: { _id: '$childId', count: { $sum: 1 } } },
+            ])
+          : Promise.resolve([]),
         childIds.length
           ? Promise.all(
               childIds.map((childId) =>
-                this.prisma.moodLog.findFirst({
-                  where: { childId },
-                  orderBy: { loggedAt: 'desc' },
-                }),
+                this.db.moodLog.findOne({ childId }).sort({ loggedAt: -1 }).lean(),
               ),
             )
           : Promise.resolve([]),
         childIds.length
-          ? this.prisma.dailyMission.findMany({
-              where: { childId: { in: childIds }, date: today },
-            })
+          ? this.db.dailyMission.find({ childId: { $in: childIds }, date: today }).lean()
           : Promise.resolve([]),
         childIds.length
-          ? this.prisma.childDevice.findMany({
-              where: { childId: { in: childIds }, isActive: true },
-            })
+          ? this.db.childDevice.find({ childId: { $in: childIds }, isActive: true }).lean()
           : Promise.resolve([]),
         childIds.length
-          ? this.prisma.screenUsageLog.groupBy({
-              by: ['childId'],
-              where: { childId: { in: childIds }, date: today },
-              _sum: { durationSeconds: true },
-            })
-          : Promise.resolve(
-              [] as { childId: string; _sum: { durationSeconds: number | null } }[],
-            ),
-        this.prisma.familyCalendarEvent.findMany({
-          where: { familyId, startAt: { gte: now } },
-          orderBy: { startAt: 'asc' },
-          take: 5,
-        }),
+          ? this.db.screenUsageLog.aggregate<{ _id: string; totalSeconds: number }>([
+              { $match: { childId: { $in: childIds }, date: today } },
+              { $group: { _id: '$childId', totalSeconds: { $sum: '$durationSeconds' } } },
+            ])
+          : Promise.resolve([]),
+        this.db.familyCalendarEvent
+          .find({ familyId, startAt: { $gte: now } })
+          .sort({ startAt: 1 })
+          .limit(5)
+          .lean(),
       ]);
 
     const alertCountByChild = new Map<string, number>();
     for (const row of alertGroups) {
-      alertCountByChild.set(row.childId, row._count._all);
+      alertCountByChild.set(row._id, row.count);
     }
 
     const latestMoodByChild = new Map<string, (typeof latestMoods)[0]>();
@@ -239,7 +220,7 @@ export class ChildrenService {
 
     const usageByChildId = new Map<string, number>();
     for (const row of usageGroups) {
-      usageByChildId.set(row.childId, row._sum.durationSeconds ?? 0);
+      usageByChildId.set(row._id, row.totalSeconds ?? 0);
     }
 
     const devicesByChild = new Map<string, typeof activeDevices>();
@@ -249,37 +230,38 @@ export class ChildrenService {
       devicesByChild.set(d.childId, list);
     }
 
-    const childCards: ChildDashboardCard[] = family.children.map((child) => {
-      const todayMissions = missionByChild.get(child.id);
-      const latestMood = latestMoodByChild.get(child.id);
-      const devices = devicesByChild.get(child.id) ?? [];
+    const childCards: ChildDashboardCard[] = children.map((child) => {
+      const childId = child._id as string;
+      const todayMissions = missionByChild.get(childId);
+      const latestMood = latestMoodByChild.get(childId);
+      const devices = devicesByChild.get(childId) ?? [];
       const linked = devices.length;
-      const seenSeconds = usageByChildId.get(child.id) ?? 0;
+      const seenSeconds = usageByChildId.get(childId) ?? 0;
       const hasScreenUsageToday = seenSeconds > 0;
 
       const lastDeviceMs = devices
-        .map((d) => (d.lastActiveAt ? d.lastActiveAt.getTime() : 0))
+        .map((d) => (d.lastActiveAt ? new Date(d.lastActiveAt).getTime() : 0))
         .reduce((a, b) => Math.max(a, b), 0);
       const lastDeviceActivityAt =
         lastDeviceMs > 0 ? new Date(lastDeviceMs).toISOString() : undefined;
 
-      const missionsJson = todayMissions?.missionsJson as { total?: number } | null | undefined;
-      const missionTotal = missionsJson?.total ?? 0;
+      const missionsJson = todayMissions?.missionsJson as { total?: number }[] | null | undefined;
+      const missionTotal = Array.isArray(missionsJson) ? missionsJson.length : 0;
 
-      const kidPinDigits = this.childPinCrypto.tryDecryptPin(child.pinEnc) ?? undefined;
+      const kidPinDigits = this.childPinCrypto.tryDecryptPin(child.pinEnc ?? null) ?? undefined;
 
       return {
-        childId: child.id,
+        childId,
         name: child.name,
         avatarUrl: child.avatarUrl ?? undefined,
         todayMissionsTotal: todayMissions ? missionTotal : 0,
         todayMissionsCompleted: Math.round(
-          ((todayMissions?.completionPct ?? 0) / 100) * (missionsJson?.total ?? 0),
+          ((todayMissions?.completionPct ?? 0) / 100) * missionTotal,
         ),
         currentMood: latestMood?.moodScore ?? undefined,
         currentStreak: child.currentStreak,
         wellbeingScore: child.wellbeingScore != null ? Math.round(child.wellbeingScore) : undefined,
-        activeAlerts: alertCountByChild.get(child.id) ?? 0,
+        activeAlerts: alertCountByChild.get(childId) ?? 0,
         linkedDeviceCount: linked,
         hasScreenUsageToday,
         lastDeviceActivityAt,
@@ -288,30 +270,31 @@ export class ChildrenService {
       };
     });
 
-    const pairedDevices: PairedDeviceSummary[] = family.children.flatMap((child) => {
-      const devices = devicesByChild.get(child.id) ?? [];
+    const pairedDevices: PairedDeviceSummary[] = children.flatMap((child) => {
+      const childId = child._id as string;
+      const devices = devicesByChild.get(childId) ?? [];
       return devices.map((d) => ({
-        id: d.id,
-        childId: child.id,
+        id: d._id as string,
+        childId,
         childName: child.name,
-        deviceName: d.deviceName,
+        deviceName: d.deviceName ?? null,
         platform: d.platform,
-        lastActiveAt: d.lastActiveAt?.toISOString() ?? null,
+        lastActiveAt: d.lastActiveAt ? new Date(d.lastActiveAt).toISOString() : null,
       }));
     });
 
     return {
-      familyId: family.id,
+      familyId: family._id as string,
       familyName: family.name,
       children: childCards,
       urgentAlerts: [],
       upcomingEvents: calendarEvents.map((e) => ({
-        id: e.id,
+        id: e._id as string,
         familyId: e.familyId,
         title: e.title,
         type: e.type,
-        startAt: e.startAt.toISOString(),
-        endAt: e.endAt?.toISOString(),
+        startAt: new Date(e.startAt).toISOString(),
+        endAt: e.endAt ? new Date(e.endAt).toISOString() : undefined,
         location: e.location ?? undefined,
         childId: e.childId ?? undefined,
       })),
@@ -336,33 +319,19 @@ export class ChildrenService {
   ): Promise<{ scores: Record<string, number>; reportSummary: string }> {
     await this.assertChildAccess(parentId, childId);
 
-    // Score the answers across 8 dimensions
     const scores = this.scoreBaselineAnswers(dto.answers);
+    const report = { scores, summary: this.generateReportSummary(scores) };
 
-    // Save the assessment
-    const answersJson = dto.answers as unknown as Prisma.InputJsonValue;
+    await this.db.baselineAssessment.findOneAndUpdate(
+      { childId },
+      { $set: { answers: dto.answers, scores, report, completedAt: new Date() } },
+      { upsert: true, new: true },
+    );
 
-    await this.prisma.baselineAssessment.upsert({
-      where: { childId },
-      create: {
-        childId,
-        answers: answersJson,
-        scores,
-        report: { scores, summary: this.generateReportSummary(scores) },
-      },
-      update: {
-        answers: answersJson,
-        scores,
-        report: { scores, summary: this.generateReportSummary(scores) },
-        completedAt: new Date(),
-      },
-    });
-
-    // Mark baseline as completed on child profile
-    await this.prisma.childProfile.update({
-      where: { id: childId },
-      data: { baselineCompletedAt: new Date(), baselineScores: scores },
-    });
+    await this.db.childProfile.findOneAndUpdate(
+      { _id: childId },
+      { $set: { baselineCompletedAt: new Date(), baselineScores: scores } },
+    );
 
     return { scores, reportSummary: this.generateReportSummary(scores) };
   }
@@ -370,16 +339,13 @@ export class ChildrenService {
   // ─── Private Helpers ──────────────────────────────────────────────────────
 
   private async assertChildAccess(requesterId: string, childId: string) {
-    const child = await this.prisma.childProfile.findUnique({
-      where: { id: childId },
-    });
+    const child = await this.db.childProfile.findOne({ _id: childId }).lean();
 
     if (!child) throw new NotFoundException('Child profile not found');
 
-    // Check: is requester the parent, co-parent, or the child themselves?
-    const isParent = await this.prisma.familyMember.findFirst({
-      where: { familyId: child.familyId, userId: requesterId },
-    });
+    const isParent = await this.db.familyMember
+      .findOne({ familyId: child.familyId, userId: requesterId })
+      .lean();
 
     const isChild = child.userId === requesterId;
 
@@ -397,14 +363,21 @@ export class ChildrenService {
   private scoreBaselineAnswers(
     answers: Array<{ questionId: string; answer: unknown }>,
   ): Record<string, number> {
-    // Simplified scoring — production version uses AI to analyze answers
-    const dimensions = ['reading', 'math', 'physical', 'emotional', 'habit', 'social', 'sleep', 'islamic'];
+    const dimensions = [
+      'reading',
+      'math',
+      'physical',
+      'emotional',
+      'habit',
+      'social',
+      'sleep',
+      'islamic',
+    ];
     const scores: Record<string, number> = {};
     dimensions.forEach((d) => {
-      scores[d] = 50; // Default baseline
+      scores[d] = 50;
     });
 
-    // Map question IDs to dimensions and score accordingly
     answers.forEach((a) => {
       const qId = a.questionId;
       if (qId.startsWith('reading_')) scores.reading = this.normalizeScore(a.answer);
@@ -445,7 +418,7 @@ export class ChildrenService {
   }
 
   private mapChildToDto(child: {
-    id: string;
+    _id: string | unknown;
     name: string;
     nickname?: string | null;
     avatarUrl?: string | null;
@@ -462,19 +435,19 @@ export class ChildrenService {
     totalPoints: number;
     level: number;
     xp: number;
-    createdAt: Date;
+    createdAt?: Date;
   }): ChildProfile {
     const dob = new Date(child.dob);
     const age = new Date().getFullYear() - dob.getFullYear();
 
     return {
-      id: child.id,
+      id: child._id as string,
       name: child.name,
       nickname: child.nickname ?? undefined,
       avatarUrl: child.avatarUrl ?? undefined,
       age,
       grade: child.grade,
-      dob: child.dob.toISOString(),
+      dob: dob.toISOString(),
       school: child.school ?? undefined,
       languagePreference: child.languagePreference as 'en' | 'bn' | 'ar',
       allergies: child.allergies,
@@ -492,10 +465,10 @@ export class ChildrenService {
   // ─── Installed Apps Cache ─────────────────────────────────────────────────
 
   async getInstalledApps(childId: string) {
-    const child = await this.prisma.childProfile.findUnique({
-      where: { id: childId },
-      select: { installedAppsCache: true },
-    });
+    const child = await this.db.childProfile
+      .findOne({ _id: childId })
+      .select('installedAppsCache')
+      .lean();
     if (!child) throw new NotFoundException('Child not found');
     return { apps: child.installedAppsCache };
   }
@@ -504,11 +477,10 @@ export class ChildrenService {
     childId: string,
     apps: Array<{ packageName: string; appName: string; category: string; iconBase64?: string }>,
   ) {
-    const updated = await this.prisma.childProfile.update({
-      where: { id: childId },
-      data: { installedAppsCache: apps as Prisma.InputJsonValue },
-      select: { id: true, installedAppsCache: true },
-    });
-    return { apps: updated.installedAppsCache };
+    const updated = await this.db.childProfile
+      .findOneAndUpdate({ _id: childId }, { $set: { installedAppsCache: apps } }, { new: true })
+      .select('_id installedAppsCache')
+      .lean();
+    return { apps: updated?.installedAppsCache };
   }
 }

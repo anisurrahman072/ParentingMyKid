@@ -4,13 +4,21 @@
  *              Milestones, achievement certificates, trip memories.
  */
 
-import { Injectable } from '@nestjs/common';
-import { MemoryType } from '@prisma/client';
-import { PrismaService } from '../../database/prisma.service';
+import { Injectable, NotFoundException } from '@nestjs/common';
+import { DatabaseService } from '../../database/database.service';
 import { ConfigService } from '@nestjs/config';
 import { v2 as cloudinary } from 'cloudinary';
 import { IsString, IsOptional } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
+
+enum MemoryType {
+  PHOTO = 'PHOTO',
+  VIDEO = 'VIDEO',
+  MILESTONE = 'MILESTONE',
+  ACHIEVEMENT = 'ACHIEVEMENT',
+  TRIP = 'TRIP',
+  DAILY = 'DAILY',
+}
 
 export class AddMemoryDto {
   @ApiProperty()
@@ -39,7 +47,7 @@ export class AddMemoryDto {
 @Injectable()
 export class MemoryService {
   constructor(
-    private readonly prisma: PrismaService,
+    private readonly db: DatabaseService,
     private readonly config: ConfigService,
   ) {
     cloudinary.config({
@@ -50,35 +58,30 @@ export class MemoryService {
   }
 
   async getChildMemories(childId: string, page = 1, limit = 30) {
+    const skip = (page - 1) * limit;
     const [memories, total] = await Promise.all([
-      this.prisma.memory.findMany({
-        where: { childId },
-        orderBy: { createdAt: 'desc' },
-        skip: (page - 1) * limit,
-        take: limit,
-      }),
-      this.prisma.memory.count({ where: { childId } }),
+      this.db.memory.find({ childId }).sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
+      this.db.memory.countDocuments({ childId }),
     ]);
 
     return { memories, total, page, pages: Math.ceil(total / limit) };
   }
 
   async addMemory(dto: AddMemoryDto) {
-    const child = await this.prisma.childProfile.findUniqueOrThrow({ where: { id: dto.childId } });
+    const child = await this.db.childProfile.findOne({ _id: dto.childId }).lean();
+    if (!child) throw new NotFoundException('Child not found');
 
     const memoryType = dto.type as MemoryType;
     const isMilestone =
       memoryType === MemoryType.MILESTONE || dto.category === 'MILESTONE';
 
-    const memory = await this.prisma.memory.create({
-      data: {
-        childId: dto.childId,
-        familyId: child.familyId,
-        type: memoryType,
-        mediaUrl: dto.mediaUrl,
-        caption: dto.caption,
-        milestone: isMilestone ? dto.caption ?? undefined : undefined,
-      },
+    const memory = await this.db.memory.create({
+      childId: dto.childId,
+      familyId: child.familyId,
+      type: memoryType,
+      mediaUrl: dto.mediaUrl,
+      caption: dto.caption,
+      milestone: isMilestone ? dto.caption ?? undefined : undefined,
     });
 
     return { memory };
@@ -108,23 +111,20 @@ export class MemoryService {
   }
 
   async getMilestones(childId: string) {
-    return this.prisma.memory.findMany({
-      where: { childId, type: MemoryType.MILESTONE },
-      orderBy: { createdAt: 'desc' },
-    });
+    return this.db.memory.find({ childId, type: MemoryType.MILESTONE }).sort({ createdAt: -1 }).lean();
   }
 
   async deleteMemory(memoryId: string, childId: string) {
-    const memory = await this.prisma.memory.findFirst({ where: { id: memoryId, childId } });
+    const memory = await this.db.memory.findOne({ _id: memoryId, childId }).lean();
     if (!memory) return { success: false };
 
     // Delete from Cloudinary
     if (memory.mediaUrl) {
-      const publicId = memory.mediaUrl.split('/').slice(-1)[0].split('.')[0];
+      const publicId = (memory.mediaUrl as string).split('/').slice(-1)[0].split('.')[0];
       await cloudinary.uploader.destroy(`pmk/memories/${childId}/${publicId}`).catch(() => {});
     }
 
-    await this.prisma.memory.delete({ where: { id: memoryId } });
+    await this.db.memory.findOneAndDelete({ _id: memoryId });
     return { success: true };
   }
 }

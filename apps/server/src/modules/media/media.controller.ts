@@ -39,6 +39,9 @@ export class MediaController {
   @ApiQuery({ name: 'religion', required: false })
   @ApiQuery({ name: 'gender', required: false })
   @ApiQuery({ name: 'ageGroup', required: false })
+  @ApiQuery({ name: 'resultType', required: false, enum: ['video', 'channel'] })
+  @ApiQuery({ name: 'blockedVideoIds', required: false, description: 'Comma-separated video ids to exclude' })
+  @ApiQuery({ name: 'blockedChannelIds', required: false, description: 'Comma-separated UC… channel ids to exclude' })
   @Get('youtube-search')
   youtubeSearch(
     @Query('q') q: string,
@@ -47,8 +50,22 @@ export class MediaController {
     @Query('religion') religion?: string,
     @Query('gender') gender?: string,
     @Query('ageGroup') ageGroup?: string,
+    @Query('resultType') resultType?: string,
+    @Query('blockedVideoIds') blockedVideoIds?: string,
+    @Query('blockedChannelIds') blockedChannelIds?: string,
   ) {
-    return this.mediaService.youtubeSearch({ q, lang, safeSearch, religion, gender, ageGroup });
+    const rt = resultType === 'channel' ? 'channel' : 'video';
+    return this.mediaService.youtubeSearch({
+      q,
+      lang,
+      safeSearch,
+      religion,
+      gender,
+      ageGroup,
+      resultType: rt,
+      blockedVideoIds,
+      blockedChannelIds,
+    });
   }
 
   @ApiOperation({ summary: 'Upload base64-encoded media to Cloudinary' })

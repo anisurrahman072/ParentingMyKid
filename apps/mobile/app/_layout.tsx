@@ -16,9 +16,8 @@
  *               - TUTOR → /(tutor)/ → Lightweight scoped view
  */
 
-import { useEffect } from 'react';
-import { Stack, router } from 'expo-router';
-import * as SecureStore from 'expo-secure-store';
+import { useEffect, useCallback, useRef } from 'react';
+import { Stack, router, useRootNavigationState } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LANGUAGE_SELECTED_KEY } from './auth/language';
 import { useFonts } from 'expo-font';
@@ -41,15 +40,17 @@ import { StatusBar } from 'expo-status-bar';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import Constants, { ExecutionEnvironment } from 'expo-constants';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { AppState, InteractionManager, StyleSheet } from 'react-native';
+import { AppState, InteractionManager, Platform, StyleSheet } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { useAuthStore } from '../src/store/auth.store';
 import { UserRole } from '@parentingmykid/shared-types';
 import { apiClient } from '../src/services/api.client';
 import { API_ENDPOINTS } from '../src/constants/api';
-import { deviceSessionService, CHILD_ID_KEY } from '../src/store/deviceSession.store';
-import { startPolicySync, stopPolicySync } from '../src/services/policySync.service';
+import { fetchAndPushParentalPolicyForChild, startPolicySync, stopPolicySync } from '../src/services/policySync.service';
 import { useThemeStore } from '../src/store/theme.store';
+import { useParentGuardStore } from '../src/store/parentGuardSettings.store';
+import { useAutoKidMode } from '../src/hooks/useAutoKidMode';
+import { consumePendingModeSwitch, setApplyRulesToParent, setKidModeActive, stopVpn } from '../modules/parental-control/src/index';
 
 /**
  * Dev-only: this module re-executes on Fast Refresh, so the flag resets and we can
@@ -91,9 +92,18 @@ const queryClient = new QueryClient({
 });
 
 export default function RootLayout() {
+  const rootNavigationState = useRootNavigationState();
   const loadPersistedAuth = useAuthStore((s) => s.loadPersistedAuth);
   const { isLoading, isAuthenticated, user } = useAuthStore();
   const loadTheme = useThemeStore((s) => s.load);
+  const {
+    load: loadGuardSettings,
+    autoKidModeEnabled,
+    autoKidModeIdleMinutes,
+    isHydrated: guardSettingsHydrated,
+    applyBlockRulesToParent,
+    lastActiveChildId,
+  } = useParentGuardStore();
 
   const [fontsLoaded] = useFonts({
     Nunito_400Regular,
@@ -108,6 +118,49 @@ export default function RootLayout() {
     Inter_700Bold,
   });
 
+  /** True once fonts + auth are ready AND the root Stack has mounted (Expo Router navigator key exists). */
+  const navigationReady =
+    fontsLoaded &&
+    !isLoading &&
+    Boolean(rootNavigationState?.key);
+
+  const navigationReadyRef = useRef(false);
+  navigationReadyRef.current = navigationReady;
+
+  /**
+   * Avoid "navigate before mounting Root Layout":
+   * - `router.replace` can reject asynchronously even when `useRootNavigationState` looks ready.
+   * - On failure, retry on the next frame until success or a sane attempt cap.
+   */
+  const navigateReplaceWhenReady = useCallback((href: string) => {
+    let attempts = 0;
+    const maxAttempts = 240;
+
+    const run = () => {
+      attempts += 1;
+      if (attempts > maxAttempts) return;
+      if (!navigationReadyRef.current) {
+        requestAnimationFrame(run);
+        return;
+      }
+
+      InteractionManager.runAfterInteractions(() => {
+        const target = href as Parameters<typeof router.replace>[0];
+        try {
+          const out = router.replace(target) as unknown;
+          if (out != null && typeof (out as Promise<void>).then === 'function') {
+            void (out as Promise<void>).catch(() => requestAnimationFrame(run));
+            return;
+          }
+        } catch {
+          requestAnimationFrame(run);
+        }
+      });
+    };
+
+    requestAnimationFrame(run);
+  }, []);
+
   // Load auth state from SecureStore on startup
   useEffect(() => {
     void loadPersistedAuth();
@@ -116,6 +169,42 @@ export default function RootLayout() {
   useEffect(() => {
     void loadTheme();
   }, [loadTheme]);
+
+  // Load parent guard settings (features 1–3)
+  useEffect(() => {
+    void loadGuardSettings();
+  }, [loadGuardSettings]);
+
+  // Native VPN reads `applyToParent` from SharedPreferences — keep in sync after cold start / reinstall.
+  useEffect(() => {
+    if (!isAuthenticated || user?.role !== UserRole.PARENT || !guardSettingsHydrated) return;
+    if (Platform.OS !== 'android') return;
+    void setApplyRulesToParent(applyBlockRulesToParent).catch(() => {});
+  }, [isAuthenticated, user?.role, guardSettingsHydrated, applyBlockRulesToParent]);
+
+  /**
+   * PARENT STARTUP GUARD: Clear any stale kidModeActive=true that may have been left in
+   * native SharedPreferences if the app was force-killed while in Kid Mode.
+   * Without this, the parent would be blocked by the VPN on every cold start after a crash.
+   * Deps intentionally exclude navigation-driven values (lastActiveChildId) so this fires
+   * exactly once after hydration and never while the user is already in kid handoff.
+   */
+  useEffect(() => {
+    if (!isAuthenticated || user?.role !== UserRole.PARENT || !guardSettingsHydrated) return;
+    if (Platform.OS !== 'android') return;
+    void Promise.all([
+      setKidModeActive(false),
+      stopVpn(),
+    ]).catch(() => {});
+  }, [isAuthenticated, user?.role, guardSettingsHydrated]);
+
+  // Refresh mirrored child policy on the parent phone so JSON includes `websiteDnsGatesOnKidMode` and matches server.
+  useEffect(() => {
+    if (!isAuthenticated || user?.role !== UserRole.PARENT || !guardSettingsHydrated) return;
+    if (Platform.OS !== 'android') return;
+    if (!lastActiveChildId) return;
+    void fetchAndPushParentalPolicyForChild(lastActiveChildId);
+  }, [isAuthenticated, user?.role, guardSettingsHydrated, lastActiveChildId]);
 
   // Child: poll screen time / pause policy for in-app soft enforcement
   useEffect(() => {
@@ -150,6 +239,65 @@ export default function RootLayout() {
     return () => sub.remove();
   }, []);
 
+  // Feature 3: On resume, check if the native overlay has queued a mode switch.
+  // The overlay service writes "pendingModeSwitch" to SharedPreferences, then launches
+  // the app. We read and clear it here, then navigate to the correct screen.
+  useEffect(() => {
+    if (!navigationReady || !isAuthenticated || user?.role !== UserRole.PARENT) return;
+
+    const handleOverlaySwitch = async () => {
+      try {
+        const pending = await consumePendingModeSwitch();
+        if (!pending) return;
+        if (pending === 'parent') {
+          navigateReplaceWhenReady('/(parent)/control-center');
+        } else if (pending.startsWith('kid:')) {
+          const childId = pending.slice(4);
+          if (childId) {
+            navigateReplaceWhenReady(`/(parent)/control-center/kid-mode?childId=${childId}`);
+          } else {
+            navigateReplaceWhenReady('/(parent)/control-center');
+          }
+        }
+      } catch {
+        // native module not linked (Expo Go) — silently ignore
+      }
+    };
+
+    void handleOverlaySwitch();
+
+    const sub = AppState.addEventListener('change', (state) => {
+      if (
+        state === 'active' &&
+        navigationReadyRef.current &&
+        useAuthStore.getState().user?.role === UserRole.PARENT
+      ) {
+        void handleOverlaySwitch();
+      }
+    });
+    return () => sub.remove();
+  }, [navigationReady, isAuthenticated, user?.role, navigateReplaceWhenReady]);
+
+  // Feature 2: Auto Kid Mode — when idle/lock threshold exceeded, route to kid mode.
+  const handleAutoKidModeExpired = useCallback(() => {
+    const { isAuthenticated: auth, user: u } = useAuthStore.getState();
+    if (!auth || u?.role !== UserRole.PARENT) return;
+    const { lastActiveChildId: childId } = useParentGuardStore.getState();
+    if (childId) {
+      navigateReplaceWhenReady(`/(parent)/control-center/kid-mode?childId=${childId}`);
+    } else {
+      // No known child — go to control center where parent can select one
+      navigateReplaceWhenReady('/(parent)/control-center');
+    }
+  }, [navigateReplaceWhenReady]);
+
+  useAutoKidMode({
+    enabled: isAuthenticated && user?.role === UserRole.PARENT && autoKidModeEnabled,
+    navigationReady,
+    idleMinutes: autoKidModeIdleMinutes,
+    onIdleExpired: handleAutoKidModeExpired,
+  });
+
   // Dev Fast Refresh: rehydrate in-memory zustand from SecureStore if it was reset
   useEffect(() => {
     if (!__DEV__ || !fontsLoaded || isLoading) return;
@@ -172,16 +320,16 @@ export default function RootLayout() {
 
   // Route user to correct UI based on authentication state and role
   useEffect(() => {
-    if (isLoading || !fontsLoaded) return;
+    if (!navigationReady) return;
 
     if (!isAuthenticated) {
       // Check if language has been selected on first launch
       void (async () => {
         const langSelected = await AsyncStorage.getItem(LANGUAGE_SELECTED_KEY);
         if (!langSelected) {
-          router.replace('/auth/language');
+          navigateReplaceWhenReady('/auth/language');
         } else {
-          router.replace('/auth');
+          navigateReplaceWhenReady('/auth');
         }
       })();
       return;
@@ -191,39 +339,40 @@ export default function RootLayout() {
       if (user?.role === UserRole.PARENT) {
         // Check if parental PIN has been set up
         if (user?.parentalPinSet === false) {
-          router.replace('/auth/setup-parental-security-pin');
+          navigateReplaceWhenReady('/auth/setup-parental-security-pin');
           return;
         }
 
-        const childPaired = await SecureStore.getItemAsync(CHILD_ID_KEY);
-        const hasPin = await deviceSessionService.hasUnlockPin();
-        if (childPaired && !hasPin) {
-          router.replace('/auth/setup-unlock-pin');
-          return;
-        }
+        // Do not block launch on device-local "parent code" (setup-unlock-pin). That hash is often missing
+        // after reinstall while the server parental PIN is already set — same screen felt like a duplicate PIN.
+        // Child-tab "open parent mode" still uses /auth/switch-to-parent when a cached parent session exists.
       }
 
       switch (user?.role) {
         case UserRole.PARENT:
           // Route to Control Center (Milestone 1 new parent home)
-          router.replace('/(parent)/control-center');
+          navigateReplaceWhenReady('/(parent)/control-center');
           break;
         case UserRole.CHILD:
-          router.replace('/(child)/missions');
+          navigateReplaceWhenReady('/(child)/missions');
           break;
         case UserRole.TUTOR:
-          router.replace('/(tutor)/portal');
+          navigateReplaceWhenReady('/(tutor)/portal');
           break;
         default:
-          router.replace('/auth');
+          navigateReplaceWhenReady('/auth');
       }
     })();
-  }, [isAuthenticated, isLoading, fontsLoaded, user?.role]);
+  }, [
+    navigationReady,
+    isAuthenticated,
+    user?.role,
+    user?.parentalPinSet,
+    navigateReplaceWhenReady,
+  ]);
 
-  if (!fontsLoaded || isLoading) {
-    return null; // Splash screen still visible
-  }
-
+  // Expo Router requires a navigator on the first RootLayout render — never return null here.
+  // SplashScreen stays up until fonts + auth finish (see hideAsync effect above).
   return (
     <GestureHandlerRootView style={styles.root}>
       <SafeAreaProvider>

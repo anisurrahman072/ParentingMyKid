@@ -1,8 +1,24 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+  CRITICAL: canRetrieveWindowContent="true" is REQUIRED for:
+    • getWindows()                          — full multi-window enumeration
+    • rootInActiveWindow                    — accessibility tree root
+    • findAccessibilityNodeInfosByViewId()  — view-ID lookups (Shorts/long-form probes)
+    • node.getBoundsInScreen() / .text / .contentDescription on retrieved nodes
+
+  Without this flag, all the accessibilityFlags below (`flagReportViewIds`,
+  `flagRetrieveInteractiveWindows`) are silently ignored on Android 13+, and the
+  YouTube content-type probe gets back an empty tree on every tick — which is exactly
+  the failure mode reported on the Tecno KI7 (Android 13 / HiOS): the probe logged
+  "no YouTube root windows reachable" forever, so the floating ribbon was stuck on
+  the neutral "Watching" label.
+-->
 <accessibility-service
   xmlns:android="http://schemas.android.com/apk/res/android"
   android:description="@string/accessibility_service_description"
-  android:accessibilityEventTypes="typeWindowStateChanged"
+  android:accessibilityEventTypes="typeWindowStateChanged|typeWindowsChanged|typeWindowContentChanged|typeViewClicked|typeViewFocused|typeViewScrolled"
   android:accessibilityFeedbackType="feedbackGeneric"
-  android:accessibilityFlags="flagDefault"
+  android:accessibilityFlags="flagDefault|flagReportViewIds|flagRetrieveInteractiveWindows|flagIncludeNotImportantViews"
+  android:canRetrieveWindowContent="true"
+  android:canPerformGestures="true"
   android:notificationTimeout="100"/>

@@ -5,5 +5,6 @@
  *              import { UserRole, ChildProfile, ... } from '@parentingmykid/shared-types'
  */
 
+export * from './domains';
 export * from './enums';
 export * from './types';

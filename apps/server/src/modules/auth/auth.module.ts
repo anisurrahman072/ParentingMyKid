@@ -22,7 +22,7 @@ import { ChildPinCryptoModule } from '../../common/child-pin-crypto/child-pin-cr
       imports: [ConfigModule],
       useFactory: (config: ConfigService) => ({
         secret: config.getOrThrow<string>('JWT_SECRET'),
-        signOptions: { expiresIn: config.get('JWT_EXPIRES_IN', '15m') },
+        signOptions: { expiresIn: config.get('JWT_EXPIRES_IN', '30d') },
       }),
       inject: [ConfigService],
     }),

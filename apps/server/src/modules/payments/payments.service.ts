@@ -22,8 +22,7 @@
 
 import { Injectable, Logger, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { Prisma } from '@prisma/client';
-import { PrismaService } from '../../database/prisma.service';
+import { DatabaseService } from '../../database/database.service';
 import { SubscriptionPlan, SubscriptionStatus } from '@parentingmykid/shared-types';
 
 interface RevenueCatWebhookEvent {
@@ -44,7 +43,7 @@ export class PaymentsService {
   private readonly logger = new Logger(PaymentsService.name);
 
   constructor(
-    private readonly prisma: PrismaService,
+    private readonly db: DatabaseService,
     private readonly config: ConfigService,
   ) {}
 
@@ -55,11 +54,7 @@ export class PaymentsService {
    * RevenueCat sends events for all subscription lifecycle changes.
    * We update our database to reflect the current subscription state.
    */
-  async handleRevenueCatWebhook(
-    payload: RevenueCatWebhookEvent,
-    signature: string,
-  ): Promise<void> {
-    // Validate webhook signature to ensure it's from RevenueCat
+  async handleRevenueCatWebhook(payload: RevenueCatWebhookEvent, signature: string): Promise<void> {
     const expectedSecret = this.config.get<string>('REVENUECAT_WEBHOOK_SECRET');
     if (signature !== expectedSecret) {
       throw new UnauthorizedException('Invalid RevenueCat webhook signature');
@@ -70,21 +65,16 @@ export class PaymentsService {
 
     this.logger.log(`RevenueCat webhook: ${event.type} for user ${userId}`);
 
-    // Find the user's family
-    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    const user = await this.db.user.findOne({ _id: userId }).lean();
     if (!user) {
       this.logger.warn(`RevenueCat webhook for unknown user: ${userId}`);
       return;
     }
 
-    const membership = await this.prisma.familyMember.findFirst({
-      where: { userId, role: 'PRIMARY' },
-    });
+    const membership = await this.db.familyMember.findOne({ userId, role: 'PRIMARY' }).lean();
     if (!membership) return;
 
-    const familyId = membership.familyId;
-
-    // Determine plan from product ID
+    const familyId = (membership as any).familyId as string;
     const plan = this.productIdToPlan(event.product_id);
 
     switch (event.type) {
@@ -113,11 +103,20 @@ export class PaymentsService {
 
   // ─── Get Current Subscription ─────────────────────────────────────────────
 
-  async getSubscription(familyId: string) {
-    return this.prisma.subscription.findUnique({
-      where: { familyId },
-      include: { events: { orderBy: { createdAt: 'desc' }, take: 5 } },
-    });
+  async getSubscription(
+    familyId: string,
+  ): Promise<(Record<string, unknown> & { events: Array<Record<string, unknown>> }) | null> {
+    const sub = await this.db.subscription.findOne({ familyId }).lean();
+    if (!sub) return null;
+    const events = await this.db.subscriptionEvent
+      .find({ subscriptionId: (sub as any)._id })
+      .sort({ createdAt: -1 })
+      .limit(5)
+      .lean();
+    return {
+      ...(sub as unknown as Record<string, unknown>),
+      events: events as unknown as Array<Record<string, unknown>>,
+    };
   }
 
   /**
@@ -125,16 +124,16 @@ export class PaymentsService {
    * Used as a guard before executing premium business logic.
    */
   async hasEntitlement(familyId: string, requiredPlan: SubscriptionPlan): Promise<boolean> {
-    const subscription = await this.prisma.subscription.findUnique({ where: { familyId } });
+    const subscription = await this.db.subscription.findOne({ familyId }).lean();
     if (!subscription) return false;
 
     const isActive = [SubscriptionStatus.ACTIVE, SubscriptionStatus.TRIAL].includes(
-      subscription.status as SubscriptionStatus,
+      (subscription as any).status as SubscriptionStatus,
     );
     if (!isActive) return false;
 
     const planHierarchy = [SubscriptionPlan.FREE, SubscriptionPlan.STANDARD, SubscriptionPlan.PRO];
-    const currentIndex = planHierarchy.indexOf(subscription.plan as SubscriptionPlan);
+    const currentIndex = planHierarchy.indexOf((subscription as any).plan as SubscriptionPlan);
     const requiredIndex = planHierarchy.indexOf(requiredPlan);
 
     return currentIndex >= requiredIndex;
@@ -151,32 +150,29 @@ export class PaymentsService {
       ? new Date(event.expiration_at_ms)
       : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
 
-    const subscription = await this.prisma.subscription.upsert({
-      where: { familyId },
-      create: {
-        familyId,
-        plan,
-        status: SubscriptionStatus.ACTIVE,
-        platform: event.store?.toLowerCase(),
-        expiresAt,
-      },
-      update: {
-        plan,
-        status: SubscriptionStatus.ACTIVE,
-        platform: event.store?.toLowerCase(),
-        expiresAt,
-        cancelledAt: null,
-      },
-    });
+    const subscription = await this.db.subscription
+      .findOneAndUpdate(
+        { familyId },
+        {
+          $set: {
+            plan,
+            status: SubscriptionStatus.ACTIVE,
+            platform: event.store?.toLowerCase(),
+            expiresAt,
+            cancelledAt: null,
+          },
+          $setOnInsert: { familyId },
+        },
+        { upsert: true, new: true },
+      )
+      .lean();
 
-    await this.prisma.subscriptionEvent.create({
-      data: {
-        subscriptionId: subscription.id,
-        eventType: event.type === 'RENEWAL' ? 'RENEWED' : 'SUBSCRIBED',
-        plan,
-        platform: event.store?.toLowerCase(),
-        rawWebhookJson: event as unknown as Prisma.InputJsonValue,
-      },
+    await this.db.subscriptionEvent.create({
+      subscriptionId: (subscription as any)._id,
+      eventType: event.type === 'RENEWAL' ? 'RENEWED' : 'SUBSCRIBED',
+      plan,
+      platform: event.store?.toLowerCase(),
+      rawWebhookJson: event,
     });
   }
 
@@ -187,28 +183,22 @@ export class PaymentsService {
   ): Promise<void> {
     const trialEnd = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);
 
-    const subscription = await this.prisma.subscription.upsert({
-      where: { familyId },
-      create: {
-        familyId,
-        plan,
-        status: SubscriptionStatus.TRIAL,
-        trialEndsAt: trialEnd,
-      },
-      update: {
-        plan,
-        status: SubscriptionStatus.TRIAL,
-        trialEndsAt: trialEnd,
-      },
-    });
+    const subscription = await this.db.subscription
+      .findOneAndUpdate(
+        { familyId },
+        {
+          $set: { plan, status: SubscriptionStatus.TRIAL, trialEndsAt: trialEnd },
+          $setOnInsert: { familyId },
+        },
+        { upsert: true, new: true },
+      )
+      .lean();
 
-    await this.prisma.subscriptionEvent.create({
-      data: {
-        subscriptionId: subscription.id,
-        eventType: 'TRIAL_STARTED',
-        plan,
-        platform: event.store?.toLowerCase(),
-      },
+    await this.db.subscriptionEvent.create({
+      subscriptionId: (subscription as any)._id,
+      eventType: 'TRIAL_STARTED',
+      plan,
+      platform: event.store?.toLowerCase(),
     });
   }
 
@@ -216,39 +206,35 @@ export class PaymentsService {
     familyId: string,
     event: RevenueCatWebhookEvent['event'],
   ): Promise<void> {
-    const subscription = await this.prisma.subscription.findUnique({ where: { familyId } });
+    const subscription = await this.db.subscription.findOne({ familyId }).lean();
     if (!subscription) return;
 
-    await this.prisma.subscription.update({
-      where: { familyId },
-      data: { cancelledAt: new Date() },
-    });
+    await this.db.subscription.findOneAndUpdate(
+      { familyId },
+      { $set: { cancelledAt: new Date() } },
+    );
 
-    await this.prisma.subscriptionEvent.create({
-      data: {
-        subscriptionId: subscription.id,
-        eventType: 'CANCELLED',
-        plan: subscription.plan as SubscriptionPlan,
-        platform: event.store?.toLowerCase(),
-      },
+    await this.db.subscriptionEvent.create({
+      subscriptionId: (subscription as any)._id,
+      eventType: 'CANCELLED',
+      plan: (subscription as any).plan as SubscriptionPlan,
+      platform: event.store?.toLowerCase(),
     });
   }
 
   private async expireSubscription(familyId: string): Promise<void> {
-    const subscription = await this.prisma.subscription.findUnique({ where: { familyId } });
+    const subscription = await this.db.subscription.findOne({ familyId }).lean();
     if (!subscription) return;
 
-    await this.prisma.subscription.update({
-      where: { familyId },
-      data: { status: SubscriptionStatus.EXPIRED, plan: SubscriptionPlan.FREE },
-    });
+    await this.db.subscription.findOneAndUpdate(
+      { familyId },
+      { $set: { status: SubscriptionStatus.EXPIRED, plan: SubscriptionPlan.FREE } },
+    );
 
-    await this.prisma.subscriptionEvent.create({
-      data: {
-        subscriptionId: subscription.id,
-        eventType: 'EXPIRED',
-        plan: SubscriptionPlan.FREE,
-      },
+    await this.db.subscriptionEvent.create({
+      subscriptionId: (subscription as any)._id,
+      eventType: 'EXPIRED',
+      plan: SubscriptionPlan.FREE,
     });
   }
 

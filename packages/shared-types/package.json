@@ -6,7 +6,7 @@
   "types": "./src/index.d.ts",
   "scripts": {
     "type-check": "tsc --noEmit",
-    "build": "tsc"
+    "build": "tsc && node scripts/sync-runtime-from-dist.js"
   },
   "devDependencies": {
     "typescript": "^5.7.3"

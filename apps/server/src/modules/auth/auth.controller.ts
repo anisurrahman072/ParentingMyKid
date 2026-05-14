@@ -139,7 +139,21 @@ export class AuthController {
     @CurrentUser() user: AuthTokenPayload,
     @Body() dto: VerifyParentalPinDto,
   ): Promise<{ valid: boolean }> {
-    return this.authService.verifyParentalPin(user.sub, dto.pin);
+    return this.authService.verifyParentalPinForJwtUser(user, dto.pin);
+  }
+
+  @ApiOperation({
+    summary:
+      'Kid session: verify parental PIN and receive parent tokens (switch device back to parent portal)',
+  })
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
+  @Post('switch-to-parent-with-pin')
+  switchToParentWithPin(
+    @CurrentUser() user: AuthTokenPayload,
+    @Body() dto: VerifyParentalPinDto,
+  ): Promise<AuthResponse> {
+    return this.authService.switchChildSessionToParentWithPin(user, dto.pin);
   }
 
   @ApiOperation({ summary: 'Sign in or register with Google ID token' })

@@ -26,7 +26,7 @@ import { apiClient } from '../../src/services/api.client';
 import { API_ENDPOINTS } from '../../src/constants/api';
 import { COLORS } from '../../src/constants/colors';
 import { SPACING } from '../../src/constants/spacing';
-import { getRoleHomeHref } from '../../src/utils/roleHomeHref';
+import { getParentPostAuthHref } from '../../src/utils/parentPostAuthHref';
 import { getResolvedActiveFamilyId } from '../../src/store/activeFamily.persistence';
 import { FamilyDashboard } from '@parentingmykid/shared-types';
 import { autoPairCurrentDevice } from '../../src/services/devicePairing.service';
@@ -42,10 +42,7 @@ export default function LoginScreen() {
   const { login, isLoading: authLoading, isAuthenticated, user } = useAuthStore();
 
   if (!authLoading && isAuthenticated && user) {
-    const href = getRoleHomeHref(user.role);
-    if (href) {
-      return <Redirect href={href} />;
-    }
+    return <Redirect href={getParentPostAuthHref(user)} />;
   }
 
   async function handleLogin() {

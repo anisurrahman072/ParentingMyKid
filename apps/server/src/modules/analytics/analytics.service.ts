@@ -8,8 +8,8 @@
  */
 
 import { Injectable, Logger } from '@nestjs/common';
-import { PrismaService } from '../../database/prisma.service';
-import { Cron, CronExpression } from '@nestjs/schedule';
+import { DatabaseService } from '../../database/database.service';
+import { Cron } from '@nestjs/schedule';
 import { Resend } from 'resend';
 import { ConfigService } from '@nestjs/config';
 
@@ -19,7 +19,7 @@ export class AnalyticsService {
   private readonly resend: Resend;
 
   constructor(
-    private readonly prisma: PrismaService,
+    private readonly db: DatabaseService,
     private readonly config: ConfigService,
   ) {
     this.resend = new Resend(this.config.get('RESEND_API_KEY'));
@@ -29,30 +29,29 @@ export class AnalyticsService {
     const since = new Date(Date.now() - days * 86400000);
 
     const [missions, moods, safetyAlerts, habits] = await Promise.all([
-      this.prisma.dailyMission.findMany({
-        where: { childId, createdAt: { gte: since } },
-        orderBy: { date: 'asc' },
-      }),
-      this.prisma.moodLog.findMany({
-        where: { childId, loggedAt: { gte: since } },
-        orderBy: { loggedAt: 'asc' },
-      }),
-      this.prisma.safetyAlert.count({
-        where: { childId, createdAt: { gte: since } },
-      }),
-      this.prisma.habitCompletion.count({
-        where: { childId, completedAt: { gte: since } },
-      }),
+      this.db.dailyMission
+        .find({ childId, createdAt: { $gte: since } })
+        .sort({ date: 1 })
+        .lean(),
+      this.db.moodLog
+        .find({ childId, loggedAt: { $gte: since } })
+        .sort({ loggedAt: 1 })
+        .lean(),
+      this.db.safetyAlert.countDocuments({ childId, createdAt: { $gte: since } }),
+      this.db.habitCompletion.countDocuments({ childId, completedAt: { $gte: since } }),
     ]);
 
-    const avgCompletion = missions.length > 0
-      ? missions.reduce((sum, m) => sum + (m.completionPct as number ?? 0), 0) / missions.length
-      : 0;
+    const avgCompletion =
+      missions.length > 0
+        ? missions.reduce((sum, m) => sum + ((m.completionPct as number) ?? 0), 0) /
+          missions.length
+        : 0;
 
-    const moodScores = moods.map((m) => m.moodScore).filter(Boolean);
-    const avgMood = moodScores.length > 0
-      ? moodScores.reduce((a, b) => a + b, 0) / moodScores.length
-      : null;
+    const moodScores = moods.map((m) => m.moodScore as number).filter(Boolean);
+    const avgMood =
+      moodScores.length > 0
+        ? moodScores.reduce((a, b) => a + b, 0) / moodScores.length
+        : null;
 
     return {
       period: `Last ${days} days`,
@@ -75,31 +74,47 @@ export class AnalyticsService {
    */
   @Cron('0 8 * * 0') // Every Sunday at 8am
   async sendWeeklyReports() {
+    return this.runWeeklyAnalytics();
+  }
+
+  /**
+   * Public entry point for weekly report generation — called by the cron job
+   * above and also exposed via POST /analytics/cron/weekly-analytics.
+   */
+  async runWeeklyAnalytics() {
     this.logger.log('Starting weekly report generation...');
 
-    const families = await this.prisma.familyGroup.findMany({
-      include: {
-        members: {
-          where: { role: 'PRIMARY' },
-          include: { user: true },
-        },
-        children: {
-          where: { wellbeingScore: { not: null } },
-        },
-      },
-    });
+    const families = await this.db.familyGroup.find().lean();
 
     let sent = 0;
     for (const family of families) {
-      const primaryParent = family.members[0];
-      if (!primaryParent?.user?.email) continue;
+      const primaryMember = await this.db.familyMember
+        .findOne({ familyId: (family as any)._id, role: 'PRIMARY' })
+        .lean();
+      if (!primaryMember) continue;
+
+      const user = await this.db.user
+        .findOne({ _id: (primaryMember as any).userId })
+        .lean();
+      if (!user?.email) continue;
+
+      const children = await this.db.childProfile
+        .find({ familyId: (family as any)._id, wellbeingScore: { $ne: null } })
+        .lean();
 
       try {
-        const report = await this.buildWeeklyReport(family);
-        await this.sendWeeklyEmail(primaryParent.user.email, primaryParent.user.name, report);
+        const report = await this.buildWeeklyReport({ ...(family as any), children });
+        await this.sendWeeklyEmail(
+          (user as any).email,
+          (user as any).name,
+          report,
+        );
         sent++;
       } catch (err) {
-        this.logger.error(`Failed to send report to family ${family.id}:`, err);
+        this.logger.error(
+          `Failed to send report to family ${(family as any)._id}:`,
+          err,
+        );
       }
     }
 
@@ -110,7 +125,7 @@ export class AnalyticsService {
     const children = [];
 
     for (const child of family.children) {
-      const analytics = await this.getChildAnalytics(child.id, 7);
+      const analytics = await this.getChildAnalytics(child._id ?? child.id, 7);
       children.push({
         name: child.name,
         wellbeingScore: child.wellbeingScore,
@@ -126,7 +141,9 @@ export class AnalyticsService {
   }
 
   private async sendWeeklyEmail(email: string, firstName: string, report: any) {
-    const childrenHtml = report.children.map((child: any) => `
+    const childrenHtml = report.children
+      .map(
+        (child: any) => `
       <div style="background:#1A1035;border-radius:12px;padding:20px;margin-bottom:16px;">
         <h3 style="color:#8B5CF6;margin:0 0 12px">${child.name}</h3>
         <p style="color:#fff;margin:4px 0">Wellbeing Score: <strong style="color:#6366F1">${child.wellbeingScore ?? 'N/A'}</strong></p>
@@ -134,7 +151,9 @@ export class AnalyticsService {
         <p style="color:#fff;margin:4px 0">Safety Alerts: <strong style="color:${child.safetyAlertsCount > 0 ? '#F87171' : '#4ADE80'}">${child.safetyAlertsCount}</strong></p>
         <p style="color:#fff;margin:4px 0">Habits Completed: <strong>${child.habitCompletions}</strong> this week</p>
       </div>
-    `).join('');
+    `,
+      )
+      .join('');
 
     await this.resend.emails.send({
       from: 'ParentingMyKid <reports@parentingmykid.com>',

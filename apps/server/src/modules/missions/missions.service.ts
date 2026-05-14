@@ -11,11 +11,15 @@
  */
 
 import { Injectable, ForbiddenException, NotFoundException, Logger } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
-import { PrismaService } from '../../database/prisma.service';
+import { DatabaseService } from '../../database/database.service';
 import { RewardsService } from '../rewards/rewards.service';
 import { NotificationsService } from '../notifications/notifications.service';
-import { MissionCategory, ProofType, NotificationType, Mission } from '@parentingmykid/shared-types';
+import {
+  MissionCategory,
+  ProofType,
+  NotificationType,
+  Mission,
+} from '@parentingmykid/shared-types';
 import { IsString, IsOptional } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
@@ -89,7 +93,7 @@ export class MissionsService {
   private readonly logger = new Logger(MissionsService.name);
 
   constructor(
-    private readonly prisma: PrismaService,
+    private readonly db: DatabaseService,
     private readonly rewardsService: RewardsService,
     private readonly notifications: NotificationsService,
   ) {}
@@ -103,13 +107,12 @@ export class MissionsService {
   async getTodaysMissions(childId: string): Promise<{ missions: Mission[] }> {
     const today = new Date().toISOString().split('T')[0];
 
-    let dailyMission = await this.prisma.dailyMission.findFirst({
-      where: { childId, date: today },
-    });
+    let dailyMission = await this.db.dailyMission.findOne({ childId, date: today }).lean();
 
     if (!dailyMission) {
-      // Generate default missions (in production, AI service generates these)
-      dailyMission = await this.generateDefaultMissions(childId, today);
+      const createdDoc = await this.generateDefaultMissions(childId, today);
+      dailyMission = await this.db.dailyMission.findById(createdDoc._id).lean();
+      if (!dailyMission) throw new NotFoundException('Failed to initialize missions');
     }
 
     const missionsJson = dailyMission.missionsJson as unknown as Mission[];
@@ -126,9 +129,7 @@ export class MissionsService {
   async completeMission(childId: string, missionId: string, dto: CompleteMissionDto) {
     const today = new Date().toISOString().split('T')[0];
 
-    const dailyMission = await this.prisma.dailyMission.findFirst({
-      where: { childId, date: today },
-    });
+    const dailyMission = await this.db.dailyMission.findOne({ childId, date: today }).lean();
 
     if (!dailyMission) throw new NotFoundException('No missions found for today');
 
@@ -153,13 +154,11 @@ export class MissionsService {
     const completionPct = (completedCount / missions.length) * 100;
 
     // Update the daily mission record
-    await this.prisma.dailyMission.update({
-      where: { id: dailyMission.id },
-      data: {
-        missionsJson: missions as unknown as Prisma.InputJsonValue,
-        completionPct,
-      },
-    });
+    await this.db.dailyMission.findOneAndUpdate(
+      { _id: dailyMission._id },
+      { missionsJson: missions, completionPct },
+      { new: true },
+    );
 
     const mission = missions[missionIndex];
 
@@ -179,14 +178,16 @@ export class MissionsService {
 
     // If photo proof, notify parent
     if (dto.proofType === ProofType.PHOTO && dto.proofUrl) {
-      const child = await this.prisma.childProfile.findUniqueOrThrow({ where: { id: childId } });
-      await this.notifications.sendToUser(child.parentId, {
-        type: NotificationType.MISSION_REMINDER,
-        title: `📸 ${child.name} completed: ${mission.title}`,
-        body: 'Tap to see their photo proof and approve it',
-        data: { screen: 'growth', childId, proofUrl: dto.proofUrl },
-        priority: 'default',
-      });
+      const child = await this.db.childProfile.findOne({ _id: childId }).lean();
+      if (child) {
+        await this.notifications.sendToUser(child.parentId, {
+          type: NotificationType.MISSION_REMINDER,
+          title: `📸 ${child.name} completed: ${mission.title}`,
+          body: 'Tap to see their photo proof and approve it',
+          data: { screen: 'growth', childId, proofUrl: dto.proofUrl },
+          priority: 'default',
+        });
+      }
     }
 
     return {
@@ -203,32 +204,34 @@ export class MissionsService {
   // ─── Streak Management ────────────────────────────────────────────────────
 
   private async updateStreak(childId: string): Promise<void> {
-    const child = await this.prisma.childProfile.findUniqueOrThrow({ where: { id: childId } });
+    const child = await this.db.childProfile.findOne({ _id: childId }).lean();
+    if (!child) return;
 
-    const today = new Date().toISOString().split('T')[0];
     const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
 
     // Check if yesterday had missions completed (to continue streak)
-    const yesterdayMissions = await this.prisma.dailyMission.findFirst({
-      where: { childId, date: yesterday },
-    });
+    const yesterdayMissions = await this.db.dailyMission
+      .findOne({ childId, date: yesterday })
+      .lean();
 
     const yesterdayCompleted = yesterdayMissions && yesterdayMissions.completionPct >= 40;
     const newStreak = yesterdayCompleted ? child.currentStreak + 1 : 1;
 
-    await this.prisma.childProfile.update({
-      where: { id: childId },
-      data: {
+    await this.db.childProfile.findOneAndUpdate(
+      { _id: childId },
+      {
         currentStreak: newStreak,
         longestStreak: Math.max(child.longestStreak, newStreak),
       },
-    });
+      { new: true },
+    );
   }
 
   // ─── Generate Default Missions ────────────────────────────────────────────
 
   private async generateDefaultMissions(childId: string, date: string) {
-    const child = await this.prisma.childProfile.findUniqueOrThrow({ where: { id: childId } });
+    const child = await this.db.childProfile.findOne({ _id: childId }).lean();
+    if (!child) throw new NotFoundException(`Child ${childId} not found`);
 
     // Build mission list with unique IDs
     const missions: Mission[] = DEFAULT_MISSIONS.map((m, index) => ({
@@ -260,15 +263,13 @@ export class MissionsService {
 
     const totalPoints = missions.reduce((sum, m) => sum + m.pointsValue, 0);
 
-    return this.prisma.dailyMission.create({
-      data: {
-        childId,
-        date,
-        missionsJson: missions as unknown as Prisma.InputJsonValue,
-        totalPoints,
-        completionPct: 0,
-        generatedByAi: false,
-      },
+    return this.db.dailyMission.create({
+      childId,
+      date,
+      missionsJson: missions,
+      totalPoints,
+      completionPct: 0,
+      generatedByAi: false,
     });
   }
 }

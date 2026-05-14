@@ -18,9 +18,9 @@
 
 import { Injectable, Logger } from '@nestjs/common';
 import { Expo, ExpoPushMessage } from 'expo-server-sdk';
-import { Cron, CronExpression } from '@nestjs/schedule';
-import { PrismaService } from '../../database/prisma.service';
-import { RedisService } from '../../common/redis/redis.service';
+import { Cron } from '@nestjs/schedule';
+import { DatabaseService } from '../../database/database.service';
+import { CacheService } from '../../common/cache/cache.service';
 import { NotificationType, PushNotificationPayload } from '@parentingmykid/shared-types';
 
 @Injectable()
@@ -29,8 +29,8 @@ export class NotificationsService {
   private readonly logger = new Logger(NotificationsService.name);
 
   constructor(
-    private readonly prisma: PrismaService,
-    private readonly redis: RedisService,
+    private readonly db: DatabaseService,
+    private readonly cache: CacheService,
   ) {
     this.expo = new Expo({ useFcmV1: true });
   }
@@ -46,22 +46,17 @@ export class NotificationsService {
     payload: PushNotificationPayload,
     options?: { skipDedup?: boolean },
   ): Promise<void> {
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-      select: { expoPushToken: true, id: true },
-    });
+    const user = await this.db.user.findById(userId).select('expoPushToken').lean();
 
     if (!user?.expoPushToken) return;
 
-    // Skip deduplication for safety-critical notifications
     const isCritical = [NotificationType.SAFETY_ALERT, NotificationType.SOS].includes(payload.type);
 
     if (!isCritical && !options?.skipDedup) {
-      // Check if same notification type was sent recently (dedup window: 1 hour)
       const dedupKey = `${userId}:${payload.type}`;
-      const alreadySent = await this.redis.wasNotificationSent(userId, dedupKey);
+      const alreadySent = await this.cache.wasNotificationSent(userId, dedupKey);
       if (alreadySent) return;
-      await this.redis.markNotificationSent(userId, dedupKey);
+      await this.cache.markNotificationSent(userId, dedupKey);
     }
 
     await this.sendToTokens([user.expoPushToken], payload);
@@ -71,87 +66,102 @@ export class NotificationsService {
    * Sends a safety alert to ALL parents in a family.
    * Used for SOS, geofence violations, and CRITICAL content alerts.
    */
-  async sendSafetyAlertToFamily(familyId: string, childId: string, payload: PushNotificationPayload): Promise<void> {
-    const family = await this.prisma.familyGroup.findUnique({
-      where: { id: familyId },
-      include: {
-        members: {
-          where: { role: { in: ['PRIMARY', 'CO_PARENT'] } },
-          include: { user: { select: { expoPushToken: true } } },
-        },
-      },
-    });
+  async sendSafetyAlertToFamily(
+    familyId: string,
+    childId: string,
+    payload: PushNotificationPayload,
+  ): Promise<void> {
+    const members = await this.db.familyMember
+      .find({ familyId, role: { $in: ['PRIMARY', 'CO_PARENT'] } })
+      .lean();
 
-    if (!family) return;
+    if (!members.length) return;
 
-    const tokens = family.members
-      .map((m) => m.user.expoPushToken)
-      .filter((t): t is string => t !== null);
+    const userIds = members.map((m) => m.userId);
+    const users = await this.db.user
+      .find({ _id: { $in: userIds }, expoPushToken: { $exists: true, $ne: null } })
+      .select('expoPushToken')
+      .lean();
+
+    const tokens = users.map((u) => u.expoPushToken).filter((t): t is string => !!t);
+    if (!tokens.length) return;
 
     await this.sendToTokens(tokens, payload);
-
-    // Log alert as read=false for each parent
     this.logger.warn(`Safety alert sent to ${tokens.length} parents for child ${childId}`);
   }
 
   // ─── Scheduled Notifications ─────────────────────────────────────────────
 
   /**
-   * Daily mission reminder — sent at 9 AM for each family's timezone.
-   * Simplified: sends to all users at 9 AM server time (UTC+6 for Bangladesh).
+   * Daily mission reminder — sent at 9 AM Bangladesh time (UTC+6 = 03:00 UTC).
    */
-  @Cron('0 3 * * *') // 9 AM Bangladesh time (UTC+6 = 03:00 UTC)
+  @Cron('0 3 * * *')
   async sendDailyMissionReminders(): Promise<void> {
     this.logger.log('Running daily mission reminder job...');
 
-    const activeChildren = await this.prisma.childProfile.findMany({
-      where: { user: { expoPushToken: { not: null } } },
-      include: { user: { select: { expoPushToken: true } }, family: true },
-      take: 1000,
-    });
+    const childProfiles = await this.db.childProfile.find({}).limit(1000).lean();
+    if (!childProfiles.length) return;
+
+    const userIds = childProfiles.map((c) => c.userId);
+    const usersWithToken = await this.db.user
+      .find({ _id: { $in: userIds }, expoPushToken: { $exists: true, $ne: null } })
+      .select('_id expoPushToken')
+      .lean();
+
+    const tokenMap = new Map(
+      usersWithToken.map((u) => [String(u._id), u.expoPushToken as string]),
+    );
 
     const today = new Date().toISOString().split('T')[0];
 
-    for (const child of activeChildren) {
-      const todayMissions = await this.prisma.dailyMission.findFirst({
-        where: { childId: child.id, date: today },
-      });
+    for (const child of childProfiles) {
+      const pushToken = tokenMap.get(child.userId);
+      if (!pushToken) continue;
 
-      if (!todayMissions || todayMissions.completionPct < 100) {
-        const remaining = Math.round(
-          ((100 - (todayMissions?.completionPct ?? 0)) / 100) *
-            ((todayMissions?.missionsJson as { total?: number })?.total ?? 5),
-        );
+      const todayMission = await this.db.dailyMission
+        .findOne({ childId: String(child._id), date: today })
+        .lean();
 
-        if (child.user.expoPushToken) {
-          await this.sendToTokens([child.user.expoPushToken], {
-            type: NotificationType.MISSION_REMINDER,
-            title: `Time to complete your missions, ${child.name}! 🌟`,
-            body: remaining > 0 ? `You have ${remaining} missions left today. Let's go!` : 'Start your missions for today!',
-            data: { screen: 'missions' },
-            priority: 'default',
-          });
-        }
+      const completionPct = (todayMission?.completionPct as number) ?? 0;
+      if (!todayMission || completionPct < 100) {
+        const total = ((todayMission?.missionsJson as { total?: number })?.total ?? 5);
+        const remaining = Math.round(((100 - completionPct) / 100) * total);
+
+        await this.sendToTokens([pushToken], {
+          type: NotificationType.MISSION_REMINDER,
+          title: `Time to complete your missions, ${child.name}! 🌟`,
+          body:
+            remaining > 0
+              ? `You have ${remaining} missions left today. Let's go!`
+              : 'Start your missions for today!',
+          data: { screen: 'missions' },
+          priority: 'default',
+        });
       }
     }
   }
 
   /**
    * Sunday evening weekly report push — triggers the shareable certificate.
+   * Runs at 8 PM Bangladesh time (14:00 UTC, Sunday).
    */
-  @Cron('0 14 * * 0') // Sunday 8 PM Bangladesh (14:00 UTC)
+  @Cron('0 14 * * 0')
   async sendWeeklyReportNotifications(): Promise<void> {
     this.logger.log('Running weekly report notification job...');
 
-    const parents = await this.prisma.user.findMany({
-      where: {
+    const parentMemberIds = await this.db.familyMember
+      .find({ role: { $in: ['PRIMARY', 'CO_PARENT'] } })
+      .distinct('userId');
+
+    const parents = await this.db.user
+      .find({
+        _id: { $in: parentMemberIds },
         role: 'PARENT',
-        expoPushToken: { not: null },
-        familyMemberships: { some: { role: { in: ['PRIMARY', 'CO_PARENT'] } } },
-      },
-      select: { id: true, expoPushToken: true, name: true },
-      take: 500,
-    });
+        expoPushToken: { $exists: true, $ne: null },
+      })
+      .select('_id expoPushToken name')
+      .limit(500)
+      .lean();
 
     for (const parent of parents) {
       if (parent.expoPushToken) {
@@ -174,10 +184,7 @@ export class NotificationsService {
       return;
     }
 
-    await this.prisma.user.update({
-      where: { id: userId },
-      data: { expoPushToken },
-    });
+    await this.db.user.findByIdAndUpdate(userId, { expoPushToken });
   }
 
   // ─── Internal Delivery ───────────────────────────────────────────────────
@@ -192,7 +199,8 @@ export class NotificationsService {
       body: payload.body,
       data: payload.data,
       sound: 'default',
-      priority: payload.priority === 'max' ? 'high' : (payload.priority as 'default' | 'high' | 'normal'),
+      priority:
+        payload.priority === 'max' ? 'high' : (payload.priority as 'default' | 'high' | 'normal'),
       channelId: payload.channelId ?? 'default',
     }));
 

@@ -42,11 +42,13 @@ grep -r "commented-for-now" apps/mobile/
 - **Restore when:** Child PIN login is re-enabled (and restore household switcher if multi-family targeting is needed again).
 
 ### 5. `apps/mobile/app/(parent)/settings/index.tsx`
+- **PIN row — "Manage my parental PIN" vs "Set my parental PIN"** routes to `settings/my-pin` when `parentalPinSet === true` (merged from `/auth/me`); change-PIN UX uses `setup-parental-security-pin?mode=change`.
+- **`ParentHouseholdSwitcherCard`** — removed so the settings screen does not show the bordered family/household switch row (family switch remains available elsewhere, e.g. Family space → "Switch to another family")
 - **Upgrade banner (lines ~144–153)** — "Upgrade to Premium" `TouchableOpacity` banner
 - **"💳 Subscription" settings row (line ~173)** — subscription management row
 - **`🆓 Free Trial` plan badge text** — changed to "✓ Active" for Milestone 1
 - **Reason:** All Milestone 1 features are free. No subscription UI is shown.
-- **Restore when:** Premium tier is launched.
+- **Restore when:** Premium tier is launched (subscriptions); restore household switcher on settings when multi-household UX on profile is desired again.
 
 ## Rules for Future Agents
 

@@ -4,4 +4,32 @@
   <string name="vpn_notification_channel">Parental network filter</string>
   <string name="vpn_notification_title">ParentingMyKid</string>
   <string name="vpn_notification_body">Network protection is active on this device</string>
+  <string name="vpn_settings_blocked_message">VPN settings are locked while ParentingMyKid protections are on. Ask a parent if you need help.</string>
+  <!-- Feature 3: quick-access overlay -->
+  <string name="overlay_notification_channel">Quick access overlay</string>
+  <string name="overlay_notification_title">PMK Quick Access</string>
+  <string name="overlay_notification_body">Tap the floating PMK button to switch modes instantly</string>
+  <!-- Kid game time quota (Accessibility + overlay HUD) -->
+  <string name="game_quota_block_message_kid">You\'ve reached today\'s play time for this game. Time to take a break!</string>
+  <string name="game_quota_block_message_parent">Play time for this game is used up for today.</string>
+  <string name="game_quota_return_body">You used your play time wisely today. We\'ll have more fun tomorrow — rest and come back fresh!</string>
+  <string name="game_hud_panel_title">Screen time snapshot</string>
+  <string name="game_hud_screen_today">On-screen time today (excluding ParentingMyKid)</string>
+  <string name="game_hud_this_app">This game · %1$s</string>
+  <string name="game_hud_used_of">Used %1$s · limit %2$s</string>
+  <string name="game_hud_remaining">Time left in this game\'s budget</string>
+  <string name="game_hud_overlay_compact">GAME TIMER %1$s</string>
+  <string name="game_hud_overlay_kid_mode_ambient">Kid mode on · tap for snapshot</string>
+  <string name="game_hud_ambient_explainer">You\'re in Kid mode. Play-time limits appear when you open a game.</string>
+  <string name="game_hud_ambient_hint">Kid mode floating ribbon</string>
+  <string name="game_hud_open_app">Open ParentingMyKid</string>
+  <string name="game_hud_close">Got it</string>
+  <!-- Kid play-time foreground notification (status shade) -->
+  <string name="kid_playtime_fg_channel">Kid play time timer</string>
+  <string name="kid_playtime_fg_title">Play time remaining</string>
+  <string name="kid_playtime_fg_loading">Checking today\'s play time\u2026</string>
+  <string name="kid_playtime_fg_idle_body">Kid mode is on. Open a game to see remaining play time.</string>
+  <string name="youtube_shorts_blocked_title">BLOCKED BY PARENT</string>
+  <string name="official_youtube_shorts_blocked_message">YouTube Shorts / Reels are turned off for you. Regular videos are OK when your parent allows YouTube.</string>
+  <string name="official_youtube_long_form_blocked_message">Long videos are not allowed on this device by your parent.</string>
 </resources>

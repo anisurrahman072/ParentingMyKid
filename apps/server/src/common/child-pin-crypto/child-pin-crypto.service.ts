@@ -7,8 +7,8 @@ const KDF_SALT = 'pmk-child-pin-v1';
 const KEY_LEN = 32;
 
 /**
- * Reversible encryption for child PINs so parents can see digits after reinstall.
- * Login still uses bcrypt (`pinHash`) only — this field is for parent UI recovery.
+ * Reversible encryption for child PINs (`pinEnc`) and parental PIN reminder (`parentalPinEnc`).
+ * Login still uses bcrypt (`pinHash` / `parentalPinHash`) only — encrypted fields are for parent UI recovery.
  */
 @Injectable()
 export class ChildPinCryptoService {

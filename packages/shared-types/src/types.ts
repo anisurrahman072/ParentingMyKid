@@ -90,6 +90,8 @@ export interface UserProfile {
   familyIds?: string[];
   /** Set to false until parent completes parental PIN setup (Milestone 1) */
   parentalPinSet?: boolean;
+  /** Parental PIN digits when server has `parentalPinEnc` (requires `CHILD_PIN_ENCRYPTION_KEY`); same pattern as child `kidPinDigits`. */
+  parentalPinDigits?: string;
   /** Family religion preference — determines content filtering for kids */
   religion?: 'ISLAM' | 'CHRISTIAN' | 'OTHER';
   /** Set when role === CHILD — ChildProfile id for API paths */
@@ -456,10 +458,30 @@ export interface ScreenTimeControls {
   controlsVersion?: number;
   /** Native enforcement (Accessibility / policy cache on child device) */
   appGuardEnabled?: boolean;
+  /** Block all external apps — home screen allowed, every other app is blocked */
+  blockAllAppsEnabled?: boolean;
   stopInternetEnabled?: boolean;
+  /** IMMEDIATE applies VPN full block as soon as stopInternetEnabled is on; DELAYED waits until stopInternetBlockStartsAtUtc */
+  stopInternetActivation?: 'IMMEDIATE' | 'DELAYED' | string;
+  /** When activation is DELAYED, countdown length in minutes */
+  stopInternetDelayedMinutes?: number;
+  /** When DELAYED: ISO time when blocking becomes effective */
+  stopInternetBlockStartsAtUtc?: string | null;
+  /** When true, allowed/blocked domain lists apply via device VPN (DNS) */
+  websiteFilteringEnabled?: boolean;
+  /** WHITELIST or BLACKLIST — which list is active when website filtering is on */
+  websiteFilterMode?: 'WHITELIST' | 'BLACKLIST' | string;
   silentCameraEnabled?: boolean;
   blockedDomains?: string[];
   allowedDomains?: string[];
+  /** Block Quick Settings / network Settings when kid mode enforces */
+  blockNetworkChanges?: boolean;
+  /** When false, all apps tagged as games on the device should be blocked via policy */
+  gamesEnabled?: boolean;
+  /** Parsed `gameSettingsJson` — limits, per-app caps, kid celebration line */
+  gameSettings?: Record<string, unknown>;
+  /** Video Manager JSON blob — mirrors DB `screen_time_controls.videoSettings` */
+  videoSettings?: Record<string, unknown> | null;
 }
 
 // ─── AI & Growth Plan ─────────────────────────────────────────────────────────

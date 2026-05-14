@@ -3,7 +3,10 @@
  * Access tokens are still validated by the server on each request.
  */
 
-function decodeJwtPayload(token: string): { exp?: number } | null {
+import type { UserProfile } from '@parentingmykid/shared-types';
+import { UserRole } from '@parentingmykid/shared-types';
+
+function decodeJwtPayload(token: string): Record<string, unknown> | null {
   try {
     const parts = token.split('.');
     if (parts.length < 2) return null;
@@ -11,10 +14,31 @@ function decodeJwtPayload(token: string): { exp?: number } | null {
     const json = atob(
       b64.length % 4 === 0 ? b64 : b64 + '='.repeat(4 - (b64.length % 4)),
     );
-    return JSON.parse(json) as { exp?: number };
+    return JSON.parse(json) as Record<string, unknown>;
   } catch {
     return null;
   }
+}
+
+/**
+ * Minimal profile from access JWT when /auth/me cannot be reached (offline / flaky network).
+ * Not verified — same trust as any client-held token.
+ */
+export function decodeAccessTokenProfile(token: string | null): UserProfile | null {
+  if (!token) return null;
+  const p = decodeJwtPayload(token);
+  if (!p || typeof p.sub !== 'string' || typeof p.email !== 'string' || p.role === undefined) {
+    return null;
+  }
+  const iatSec = typeof p.iat === 'number' ? p.iat : Math.floor(Date.now() / 1000);
+  return {
+    id: p.sub,
+    email: p.email,
+    name: typeof p.name === 'string' ? p.name : p.email.split('@')[0] || 'Parent',
+    role: p.role as UserRole,
+    createdAt: new Date(iatSec * 1000).toISOString(),
+    familyIds: Array.isArray(p.familyIds) ? (p.familyIds as string[]) : [],
+  };
 }
 
 /**
@@ -23,7 +47,8 @@ function decodeJwtPayload(token: string): { exp?: number } | null {
 export function isAccessTokenUsable(token: string | null, skewSec = 90): boolean {
   if (!token) return false;
   const p = decodeJwtPayload(token);
-  if (p?.exp == null) return true;
-  const expMs = p.exp * 1000;
+  const exp = p?.exp;
+  if (typeof exp !== 'number') return true;
+  const expMs = exp * 1000;
   return Date.now() < expMs - skewSec * 1000;
 }

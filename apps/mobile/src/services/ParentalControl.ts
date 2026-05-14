@@ -35,6 +35,14 @@ export async function setPolicyCache(policyJson: string): Promise<void> {
   } catch {}
 }
 
+/** Stops VPN/overlay and clears native enforcement prefs (account + server rules unchanged). Android only. */
+export async function releaseDeviceEnforcementState(): Promise<void> {
+  try {
+    const mod = require('../../modules/parental-control/src/ParentalControlModule');
+    await mod.releaseDeviceEnforcementState();
+  } catch {}
+}
+
 export async function getInstalledApps() {
   try {
     const mod = require('../../modules/parental-control/src/ParentalControlModule');
@@ -154,6 +162,26 @@ export async function requestVpnPermission(): Promise<boolean> {
   }
 }
 
+/** True when app is exempt from Android battery optimization (Doze). Helps VPN/foreground services stay reliable. */
+export async function hasBatteryOptimizationExemption(): Promise<boolean> {
+  try {
+    const mod = require('../../modules/parental-control/src/ParentalControlModule');
+    return await mod.hasBatteryOptimizationExemption();
+  } catch {
+    return false;
+  }
+}
+
+/** Opens system battery optimization exemption flow (Android). */
+export async function requestBatteryOptimizationExemption(): Promise<void> {
+  try {
+    const mod = require('../../modules/parental-control/src/ParentalControlModule');
+    await mod.requestBatteryOptimizationExemption();
+  } catch {
+    /* native missing */
+  }
+}
+
 /**
  * Opens full App info (APPLICATION_DETAILS_SETTINGS). Order matters on OEM skins:
  * 1) Native `openAppSettings()` uses current Activity (no FLAG_ACTIVITY_NEW_TASK when possible — fixes ⋮ on many devices)
@@ -178,4 +206,34 @@ export async function openAppSettings(): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+/** Android kid-scoped on-device totals (JSON object string pkg -> ms) */
+export async function getKidTodayUsage(kidId: string): Promise<string> {
+  try {
+    const mod = require('../../modules/parental-control/src/ParentalControlModule');
+    return typeof mod.getKidTodayUsage === 'function' ? await mod.getKidTodayUsage(kidId) : '{}';
+  } catch {
+    return '{}';
+  }
+}
+
+export async function getPendingUsageSessions(kidId: string): Promise<string> {
+  try {
+    const mod = require('../../modules/parental-control/src/ParentalControlModule');
+    return typeof mod.getPendingUsageSessions === 'function'
+      ? await mod.getPendingUsageSessions(kidId)
+      : '[]';
+  } catch {
+    return '[]';
+  }
+}
+
+export async function markUsageSessionsSynced(kidId: string, upToEpochMs: number): Promise<void> {
+  try {
+    const mod = require('../../modules/parental-control/src/ParentalControlModule');
+    if (typeof mod.markUsageSessionsSynced === 'function') {
+      await mod.markUsageSessionsSynced(kidId, upToEpochMs);
+    }
+  } catch {}
 }

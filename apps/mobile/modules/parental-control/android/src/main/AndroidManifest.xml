@@ -7,10 +7,28 @@
   <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW"/>
   <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
   <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE"/>
+  <!-- Feature 3: quick-access overlay service type -->
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE"/>
   <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
   <uses-permission android:name="android.permission.BIND_VPN_SERVICE"/>
   <uses-permission android:name="android.permission.CAMERA"/>
   <uses-permission android:name="android.permission.INTERNET"/>
+  <!-- Required to read active network DNS servers so the VPN can intercept OEM DNS bypass -->
+  <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
+  <uses-permission android:name="android.permission.ACCESS_WIFI_STATE"/>
+  <uses-permission android:name="android.permission.CHANGE_WIFI_STATE"/>
+
+  <!--
+    Background execution permissions:
+    - RECEIVE_BOOT_COMPLETED: restart overlay service after device reboot
+    - REQUEST_IGNORE_BATTERY_OPTIMIZATIONS: request "run in background" exemption (Doze mode)
+    - WAKE_LOCK: keep CPU active briefly while overlay handles user interaction
+    These are equivalent to the "App can run in background" permission seen in parental control
+    apps like KHAF KIDS. Required for the overlay to survive screen-off and device restarts.
+  -->
+  <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
+  <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"/>
+  <uses-permission android:name="android.permission.WAKE_LOCK"/>
 
   <application>
     <service
@@ -36,6 +54,46 @@
         <action android:name="android.net.VpnService"/>
       </intent-filter>
     </service>
+
+    <!--
+      Feature 3: floating quick-access overlay.
+      Runs as a foreground service with specialUse type (see Google Play parental-control exemption).
+      The <property> tag is required by the Play Store review process to justify specialUse.
+    -->
+    <service
+      android:name="expo.modules.parentalcontrol.ParentalOverlayService"
+      android:exported="false"
+      android:foregroundServiceType="specialUse">
+      <property
+        android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+        android:value="ParentalControlQuickAccess"/>
+    </service>
+
+    <!-- Kid Mode: ongoing notification with per-second play-time countdown (works without draw-over). -->
+    <service
+      android:name="expo.modules.parentalcontrol.KidPlaytimeTimerFgService"
+      android:exported="false"
+      android:foregroundServiceType="specialUse">
+      <property
+        android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+        android:value="ParentalKidPlaytimeTimer"/>
+    </service>
+
+    <!--
+      BootReceiver: starts the overlay service after device reboot if the parent
+      had it enabled. Also handles Huawei "quick boot" and HTC "quick boot" events.
+    -->
+    <receiver
+      android:name="expo.modules.parentalcontrol.BootReceiver"
+      android:exported="true"
+      android:enabled="true">
+      <intent-filter>
+        <action android:name="android.intent.action.BOOT_COMPLETED"/>
+        <action android:name="android.intent.action.QUICKBOOT_POWERON"/>
+        <action android:name="com.htc.intent.action.QUICKBOOT_POWERON"/>
+        <category android:name="android.intent.category.DEFAULT"/>
+      </intent-filter>
+    </receiver>
   </application>
 
 </manifest>

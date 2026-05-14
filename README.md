@@ -2,219 +2,241 @@
 
 ---
 
-**■ STOP — DATABASE SETUP (Prisma) — READ THIS FIRST ■**
-
-> ### 🚨 **ALERT — Prisma & your database (read this if you are new to PostgreSQL / Neon)**
->
-> **What Prisma does:** Prisma is a tool that talks to your **PostgreSQL** database (hosted on **Neon**). Your `apps/server/prisma/schema.prisma` file describes **tables, columns, and relationships**.  
-> **The database starts empty.** Neon gives you an *empty* PostgreSQL instance — it does **not** create tables automatically.
->
-> **You must create tables before the API works.** If you skip the step below, the server will connect to Neon but you will get errors like *`The table public.users does not exist`* and registration will fail with **500 Internal Server Error**.
->
-> **Command you need (most important for this repo):**
->
-> ```bash
-> cd apps/server
-> npm run db:push
-> ```
->
->
-> | Question                            | Answer                                                                                                                                                                                                                                   |
-> | ----------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-> | **What does `npm run db:push` do?** | It reads `prisma/schema.prisma` and **creates or updates** all tables, columns, and enums in the database pointed to by `DATABASE_URL` in `apps/server/.env`. It does **not** use migration files unless you add them later.             |
-> | **When must I run it?**             | (1) **First time** after creating a new Neon database and setting `DATABASE_URL`. (2) After you **change** `schema.prisma` and want those changes applied to Neon. (3) When you **switch** to a new empty database (new `DATABASE_URL`). |
-> | **When do I run it again?**         | Any time the schema file changes and you need the live DB to match — e.g. after `git pull` that updates `schema.prisma`.                                                                                                                 |
-> | **What does it *not* do?**          | It does not delete your app code. It does not fill tables with fake data unless you add a seed script.                                                                                                                                   |
-> | **Safe on production?**             | `db push` can be destructive in edge cases (e.g. renames). For production with strict change control, teams often use `**prisma migrate`** instead; this project currently documents `**db push`** for simplicity.                       |
->
->
-> **Also required after install:** `npm install` runs `prisma generate` in the server package — that **only regenerates the TypeScript client**, it **does not create tables**. Tables = `**db:push`** (or migrate).
->
-> **Quick checklist — new machine or new Neon project:**
->
-> 1. Copy `apps/server/.env.example` → `apps/server/.env` and set `**DATABASE_URL`** from Neon.
-> 2. Run `**cd apps/server && npm run db:push`**.
-> 3. Start the server: `**npm run dev`** (API at **[http://localhost:3001](http://localhost:3001)**).
-
----
-
 ## Architecture Overview
 
 ```
 Mobile App (Expo/React Native)
-         ↕
-NestJS API (Railway.app)
-    ↕         ↕         ↕         ↕         ↕
-PostgreSQL  Redis    Cloudinary  OpenAI    Resend
-(Neon.tech) (Upstash)           (GPT-4o)  (Email)
+         ↕ REST API              ↕ Socket.IO (real-time)
+NestJS API (Render.com)    Socket.IO Server (Render.com)
+    ↕            ↕            ↕            ↕
+MongoDB Atlas  Cloudinary  OpenAI       Resend
+(Free M0)                 (GPT-4o)    (Email)
          ↕
     RevenueCat (Subscriptions)
 ```
 
----
+### Two Render services
 
-## 1. PostgreSQL — Neon.tech (Free Tier)
-
-**Steps:**
-
-1. Go to [neon.tech](https://neon.tech) → Create account
-2. Create a project (e.g. `parentingmykid-prod`) and a database
-3. Copy the `**DATABASE_URL`** connection string from the Neon dashboard
-4. Paste into `apps/server/.env`:
-
-```
-DATABASE_URL="postgresql://user:pass@ep-xxx.us-east-1.aws.neon.tech/neondb?sslmode=require"
-```
-
-1. **Create all tables in Neon** (required — see the 🚨 alert at the top of this file):
-
-```bash
-cd apps/server
-npm run db:push
-```
-
-**Free tier:** 3 GB storage, 10 compute hours/month
-
-**Beginner note:** Neon is “managed PostgreSQL in the cloud.” PostgreSQL is the database *engine*; Prisma is how the NestJS app *maps* TypeScript models to SQL tables. Until you run `db:push`, the engine has no `users` (or other) tables for this app.
+| Service | Folder | Purpose |
+|---------|--------|---------|
+| `pmk-api` | `apps/server` | NestJS REST API + scheduled jobs |
+| `pmk-socket` | `apps/socket-server` | Dedicated Socket.IO pub-sub for live parent-kid monitoring |
 
 ---
 
-## 2. Redis — Upstash (Free Tier)
+## 1. MongoDB Atlas — Free M0 Tier (replaces PostgreSQL)
+
+**Why MongoDB?** No SQL migrations to run, schema-flexible, free M0 cluster handles hundreds of thousands of documents with no configuration.
 
 **Steps:**
 
-1. Go to [upstash.com](https://upstash.com) → Create account
-2. Create a Redis database: `pmk-cache`
-3. Copy the **REST URL** and **REST Token** (not the redis:// URL)
-4. Paste into `apps/server/.env`:
+1. Go to [mongodb.com/atlas](https://www.mongodb.com/atlas) → Create account (no credit card)
+2. Create a **Free M0** cluster (512 MB, shared)
+3. Add a database user: Database Access → Add New User
+4. Allow network access: Network Access → Add IP Address → `0.0.0.0/0` (allows Render)
+5. Copy the connection string: Connect → Connect your application → Driver: Node.js
+6. **Where to set this:**
+   - **Local dev:** `apps/server/.env` → `MONGODB_URI=mongodb+srv://...`
+   - **Render:** Dashboard → `pmk-api` service → Environment → Add `MONGODB_URI`
 
 ```
- UPSTASH_REDIS_REST_URL="https://xxx.upstash.io"
- UPSTASH_REDIS_REST_TOKEN="AXxx..."
+MONGODB_URI=mongodb+srv://USER:PASSWORD@cluster0.xxxxx.mongodb.net/parentingmykid?retryWrites=true&w=majority
 ```
 
-**Free tier:** 10,000 commands/day, 256 MB
+**No `db:push` needed.** Mongoose creates collections automatically on first write.
+
+**Free tier:** 512 MB storage, shared cluster — good for ~100k users with typical document sizes.
 
 ---
 
-## 3. NestJS Backend — Railway.app
+## 2. NestJS Backend — Render.com (replaces Railway.app)
 
-**Steps:**
+**Why Render?** Free Web Service tier, WebSocket support, no seat fees.
 
-1. Go to [railway.app](https://railway.app) → Create account
-2. Create a new project → Deploy from GitHub
-3. Select the `ParentingMyKid` repo, set root directory to `apps/server`
-4. Add environment variables (all from `.env.example`)
-5. Set start command: `node dist/main.js`
-6. Build command: `npm run build`
+### Quick deploy (Blueprint)
 
-**Railway will auto-generate a URL like:** `https://parentingmykid-server.up.railway.app`
+1. Push this repo to GitHub
+2. Go to [render.com](https://render.com) → New → **Blueprint**
+3. Connect your GitHub repo — Render reads `render.yaml` automatically
+4. Two services are created: `pmk-api` and `pmk-socket`
+5. Set the secret env vars in the Render dashboard (those marked `sync: false` in `render.yaml`):
+   - `MONGODB_URI` — your Atlas connection string
+   - `JWT_SECRET` and `JWT_REFRESH_SECRET` — same in both services
+   - `CHILD_PIN_ENCRYPTION_KEY`
+   - `CLOUDINARY_CLOUD_NAME/API_KEY/API_SECRET`
+   - `OPENAI_API_KEY`
+   - `RESEND_API_KEY`
+   - `REVENUECAT_WEBHOOK_SECRET`
+   - `YOUTUBE_API_KEY`
+
+### Manual deploy (no Blueprint)
+
+**API service (`pmk-api`):**
+1. New → Web Service → Connect repo → Root directory: `apps/server`
+2. Build command: `npm install && npm run build`
+3. Start command: `node dist/main.js`
+4. Add all env vars from `apps/server/.env.example`
+
+**Socket service (`pmk-socket`):**
+1. New → Web Service → Connect same repo → Root directory: `apps/socket-server`
+2. Build command: `npm install && npm run build`
+3. Start command: `node dist/index.js`
+4. Add env vars: `JWT_SECRET` (same as API), `ALLOWED_ORIGINS=*`
+
+**Render will generate URLs like:**
+- API: `https://pmk-api.onrender.com`
+- Socket: `https://pmk-socket.onrender.com`
 
 Update `apps/mobile/src/constants/api.ts`:
 
 ```typescript
-return 'https://parentingmykid-server.up.railway.app/api/v1';
+return 'https://pmk-api.onrender.com/api/v1';
 ```
 
-**Free tier:** 500 hours/month compute (enough for development)
+And `apps/mobile/.env` (or `app.config.ts`):
+
+```
+EXPO_PUBLIC_SOCKET_URL=https://pmk-socket.onrender.com
+```
+
+**Free tier note:** Render free Web Services spin down after 15 minutes of inactivity (cold start ~30 s on first request). Once you have regular users, the servers stay warm. The cron jobs inside NestJS (`@Cron`) run in-process and do not require any extra infrastructure.
 
 ---
 
-## 4. Cloudinary — Media Storage
+## 3. Socket.IO Server — `apps/socket-server`
 
-**Steps:**
+The dedicated real-time server for parent-kid live monitoring. It is completely **stateless** (no database, no Redis) and uses **Socket.IO rooms** as the pub-sub mechanism.
 
-1. Go to [cloudinary.com](https://cloudinary.com) → Create account
-2. Go to Dashboard → Copy Cloud Name, API Key, API Secret
-3. Paste into `apps/server/.env`:
+### How it works
 
 ```
- CLOUDINARY_CLOUD_NAME="your-cloud-name"
- CLOUDINARY_API_KEY="123456789012345"
- CLOUDINARY_API_SECRET="xxx..."
+Kid Device            Socket Server            Parent Device
+    |                      |                         |
+    |-- join-kid-room ----> |                         |
+    |                      | <-- join-kid-room -------|
+    |                      |                         |
+    |-- kid:section-enter ->| ---- kid:section-enter->|
+    |-- kid:app-foreground ->|---- kid:app-foreground->|
+    |-- kid:usage-sync ----->|---- kid:usage-sync ---->|
+    |                       |                         |
+    |<-- parent:policy-update|<-- parent:policy-update-|
+    |<-- parent:stop-session-|<-- parent:stop-session--|
+```
+
+Room name format: `family:{familyId}:kid:{kidId}`
+
+### Connecting from the mobile app
+
+```typescript
+import { io } from 'socket.io-client';
+
+const socket = io(process.env.EXPO_PUBLIC_SOCKET_URL + '/monitor', {
+  auth: { token: accessToken },   // JWT from NestJS login
+  transports: ['websocket'],
+});
+
+// Parent: join room and listen
+socket.emit('join-kid-room', { familyId, kidId });
+socket.on('kid:section-enter', (data) => { /* update UI */ });
+socket.on('kid:online', (data) => { /* show green dot */ });
+
+// Kid device: join room and emit activity
+socket.emit('join-kid-room', { familyId, kidId: myChildId });
+socket.emit('kid:app-foreground', { appPackage: 'com.example', appName: 'YouTube' });
+socket.emit('kid:usage-sync', { sessions: [...] });
+
+// Parent: send control command to kid
+socket.emit('parent:policy-update', { policyVersion: 3 });
+socket.emit('parent:stop-session', { reason: 'bedtime' });
+```
+
+---
+
+## 4. Cache — MongoDB (replaces Redis/Upstash)
+
+There is **no Redis** in this project. The `CacheService` (`apps/server/src/common/cache/`) stores short-lived keys (sessions, pairing codes, rate-limit counters, notification dedup) in a `session_caches` MongoDB collection with `expiresAt` TTL.
+
+MongoDB Atlas has a **TTL index** on `expiresAt` that automatically deletes expired documents — equivalent to Redis key expiry, zero extra infrastructure.
+
+---
+
+## 5. Cloudinary — Media Storage
+
+1. Go to [cloudinary.com](https://cloudinary.com) → Create account
+2. Dashboard → Copy Cloud Name, API Key, API Secret
+3. Paste into env:
+
+```
+CLOUDINARY_CLOUD_NAME=your-cloud-name
+CLOUDINARY_API_KEY=123456789012345
+CLOUDINARY_API_SECRET=xxx...
 ```
 
 **Free tier:** 25 GB storage, 25 GB bandwidth
 
 ---
 
-## 5. OpenAI API — AI Features
-
-**Steps:**
+## 6. OpenAI API — AI Features
 
 1. Go to [platform.openai.com](https://platform.openai.com) → Create account
 2. Create an API key in Account → API Keys
-3. Paste into `apps/server/.env`:
+3. Paste into env:
 
 ```
- OPENAI_API_KEY="sk-..."
+OPENAI_API_KEY=sk-...
 ```
 
-**Cost estimate:** ~$0.15-0.60 per 1,000 API calls (GPT-4o-mini)
+**Cost estimate:** ~$0.15–0.60 per 1,000 API calls (GPT-4o-mini)
 
 ---
 
-## 6. Resend — Email Service
-
-**Steps:**
+## 7. Resend — Email Service
 
 1. Go to [resend.com](https://resend.com) → Create account
 2. Verify your domain (or use `@resend.dev` for testing)
-3. Create an API key
-4. Paste into `apps/server/.env`:
+3. Create an API key and paste into env:
 
 ```
- RESEND_API_KEY="re_..."
+RESEND_API_KEY=re_...
 ```
 
 **Free tier:** 3,000 emails/month
 
 ---
 
-## 7. RevenueCat — In-App Subscriptions
-
-**Steps:**
+## 8. RevenueCat — In-App Subscriptions
 
 1. Go to [revenuecat.com](https://revenuecat.com) → Create account
 2. Create apps for iOS and Android
 3. Set up products in App Store Connect and Google Play Console
-4. Link RevenueCat to your stores
-5. Add the public SDK keys to `apps/mobile`:
+4. Add the public SDK keys to `apps/mobile`:
 
 ```
- EXPO_PUBLIC_REVENUECAT_IOS_KEY="appl_xxx..."
- EXPO_PUBLIC_REVENUECAT_ANDROID_KEY="goog_xxx..."
+EXPO_PUBLIC_REVENUECAT_IOS_KEY=appl_xxx...
+EXPO_PUBLIC_REVENUECAT_ANDROID_KEY=goog_xxx...
 ```
 
-1. Add the webhook secret to `apps/server/.env`:
+5. Add the webhook secret to `apps/server/.env`:
 
 ```
- REVENUECAT_WEBHOOK_SECRET="your-webhook-secret"
+REVENUECAT_WEBHOOK_SECRET=your-webhook-secret
 ```
 
 ---
 
-## 8. Mobile app — EAS & development builds (not Expo Go)
+## 9. Mobile App — EAS & Development Builds
 
-**Default local workflow** for this app is a **[development build](https://docs.expo.dev/develop/development-builds/introduction/)** (`expo-dev-client`): required for full **remote push** (`expo-notifications` on SDK 53+), RevenueCat, and any native add-ons. **Expo Go** is not the target runtime.
-
-**Full command reference (EAS, Android, iOS, local `expo run`)** lives in:
-
-**[apps/mobile/README.md](apps/mobile/README.md)**
+Full command reference lives in **[apps/mobile/README.md](apps/mobile/README.md)**
 
 Short version (from `apps/mobile` after `npm install` and `eas login`):
 
-
-| Step                                           | Command                                                                                                                                     |
-| ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| One-time EAS config                            | `eas build:configure`                                                                                                                       |
-| **Install a dev client** (cloud)               | `npm run build:dev:android` and/or `npm run build:dev:ios` (or `npm run build:dev` for all) — then install the artifact on device/simulator |
-| **Daily Metro** (with dev app installed)       | `npm start` (runs `expo start --dev-client`)                                                                                                |
-| **Preview / production**                       | `npm run build:preview` / `npm run build:production`                                                                                        |
-| **Local Android/iOS** (Xcode / Android Studio) | `npx expo prebuild` then `npm run android` or `npm run ios` — see `apps/mobile/README.md`                                                   |
-
-
-Set a real `expo.extra.eas.projectId` in `apps/mobile/app.json` (`eas init` or Expo dashboard) before relying on EAS or push.
+| Step | Command |
+|------|---------|
+| One-time EAS config | `eas build:configure` |
+| **Install a dev client** (cloud) | `npm run build:dev:android` |
+| **Daily Metro** (with dev app installed) | `npm start` |
+| **Preview / production** | `npm run build:preview` / `npm run build:production` |
+| **Local Android** | `npx expo prebuild` then `npm run android` |
 
 ---
 
@@ -222,234 +244,52 @@ Set a real `expo.extra.eas.projectId` in `apps/mobile/app.json` (`eas init` or E
 
 Copy `apps/server/.env.example` to `apps/server/.env` and fill in:
 
-- `DATABASE_URL` — Neon PostgreSQL connection string
-- **After** `DATABASE_URL` is set — run `**cd apps/server && npm run db:push` so tables exist (see alert at top of file)
-- `UPSTASH_REDIS_REST_URL` — Upstash REST URL
-- `UPSTASH_REDIS_REST_TOKEN` — Upstash token
-- `JWT_SECRET` — Random 64-char string
-- `JWT_REFRESH_SECRET` — Another random 64-char string
-- `OPENAI_API_KEY` — OpenAI key
-- `CLOUDINARY_CLOUD_NAME` — Cloudinary cloud name
-- `CLOUDINARY_API_KEY` — Cloudinary API key
-- `CLOUDINARY_API_SECRET` — Cloudinary API secret
-- `RESEND_API_KEY` — Resend email key
-- `REVENUECAT_WEBHOOK_SECRET` — RevenueCat webhook secret
+| Variable | Where to get it |
+|----------|----------------|
+| `MONGODB_URI` | MongoDB Atlas → Connect → Node.js driver string |
+| `JWT_SECRET` | `node -e "console.log(require('crypto').randomBytes(64).toString('hex'))"` |
+| `JWT_REFRESH_SECRET` | Same command, different value |
+| `CHILD_PIN_ENCRYPTION_KEY` | `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"` |
+| `CLOUDINARY_CLOUD_NAME/API_KEY/API_SECRET` | Cloudinary dashboard |
+| `OPENAI_API_KEY` | OpenAI platform |
+| `RESEND_API_KEY` | Resend dashboard |
+| `REVENUECAT_WEBHOOK_SECRET` | RevenueCat dashboard |
+| `YOUTUBE_API_KEY` | Google Cloud Console |
+
+Copy `apps/socket-server/.env.example` to `apps/socket-server/.env` and fill in:
+
+| Variable | Notes |
+|----------|-------|
+| `JWT_SECRET` | **Must exactly match** `JWT_SECRET` in `apps/server/.env` |
+| `ALLOWED_ORIGINS` | Comma-separated origins or `*` for dev |
 
 ---
 
 ## Local Development
 
-Default ports in this repo: **NestJS API → 3001**, **Next.js marketing site (`apps/web`) → 4001**.
-
 ```bash
-# 1. Install all dependencies
+# 1. Install all dependencies (from repo root)
 npm install
 
--------------- DATABASE 👇 --------------
--------------- DATABASE 👇 --------------
-
-# Go to SERVER directory first then
+# ── API Server ────────────────────────────────────────────────────────────
 cd apps/server
+cp .env.example .env          # fill in MONGODB_URI and other secrets
+npm run dev                   # starts on http://localhost:3001
 
-# Open the database in a browser --> usually http://localhost:5555
-npx prisma studio
+# ── Socket Server (separate terminal) ───────────────────────────────────
+cd apps/socket-server
+cp .env.example .env          # fill in JWT_SECRET
+npm run dev                   # starts on ws://localhost:3002
 
-# Creates/updates tables in Neon — run once per new DB / after schema changes ----> It does the same job like as "prisma migrate dev" but it just can't write migration histories.
-npm run db:push
+# ── Mobile ────────────────────────────────────────────────────────────────
+cd apps/mobile
+# set EXPO_PUBLIC_API_URL=http://localhost:3001/api/v1
+# set EXPO_PUBLIC_SOCKET_URL=http://localhost:3002
+npm start                     # Metro bundler
 
-# Creates/updates tables in Neon ----> It does the same job like as "npm run db:push" but it can write migration history under "prisma/migrations/" directory.
-# The full command is --> prisma migrate dev --name describe_your_change
-# Don't use it in the PRODUCTION DATABASE
-npx prisma migrate dev
-
-# Apply the same migrations to staging DB/ PRODUCTION DB (applying on DATABASE_URL in .env file)
-npx prisma migrate deploy
-
--------------- SERVER 👇 --------------
--------------- SERVER 👇 --------------
-
-# 2. Configure and sync the database (see 🚨 Prisma alert at top of file)
-cd apps/server
-cp .env.example .env   # Fill in DATABASE_URL and other secrets
-
-# 3. Start the backend
-npm run dev      # auto starts on http://localhost:3001
-
--------------- WEB 👇 --------------
--------------- WEB 👇 --------------
-
-# 4. Optional — marketing / landing site (new terminal)
+# ── Web (optional marketing site) ────────────────────────────────────────
 cd apps/web
-cp .env.example .env   # Optional: set NEXT_PUBLIC_SERVER_URL=http://localhost:3001 for API calls
-npm run dev            # auto starts → http://localhost:4001
-
--------------- MOBILE 👇 --------------
--------------- MOBILE 👇 --------------
-
-# 5. Mobile — Expo dev client (not Expo Go). Full narrative: **apps/mobile/README.md**
-
-#    All commands below assume repo root install first: `npm install` (from monorepo root),
-#    then `cd apps/mobile` unless noted.
-
-# ─────────────────────────────────────────
-# Android — first-time setup on this Mac (local development build)
-# ─────────────────────────────────────────
-
-# Prerequisites (one-time on the machine):
-# - Install **Android Studio**: SDK Platform + Platform Tools + an emulator image (optional).
-# - **JDK 17** (Android Gradle Plugin expects a modern JDK). On Apple Silicon, Zulu/Temurin 17 is typical.
-#   If Gradle says `JAVA_HOME is set to an invalid directory` (common with **jenv**), fix before `./gradlew` / `npm run android`:
-#     export JAVA_HOME=$(/usr/libexec/java_home -v 17)
-#   Or point explicitly at your JDK, e.g. Zulu: `/Library/Java/JavaVirtualMachines/zulu-17.jdk/Contents/Home`
-# - Set env vars (add to ~/.zshrc or ~/.bash_profile), then open a new terminal:
-#     export ANDROID_HOME=$HOME/Library/Android/sdk
-#     export PATH=$PATH:$ANDROID_HOME/emulator:$ANDROID_HOME/platform-tools
-# - Accept SDK licenses (once):
-#     yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses
-#     # If "latest" path differs, use Android Studio → SDK Manager → note "Android SDK Location".
-
-# Link monorepo + generate native project + install debug dev client on emulator/USB device:
-#     cd /path/to/ParentingMyKid && npm install
-#     cd apps/mobile
-#     npx expo login                    # optional; needed for EAS-related features
-#     npx expo prebuild --platform android --clean   # first time, or after big native/plugin changes
-#     npm run android                   # compiles native app + installs; starts Metro if configured
-
-# Daily (after dev client is installed): API on :3001, `.env` with EXPO_PUBLIC_* as needed, then:
-#     cd apps/mobile
-#     npm start                         # Metro: expo start --dev-client
-
-# Device cannot reach your Mac (firewall / different network):
-#     npx expo start --dev-client --tunnel
-
-# Useful checks:
-#     npx expo doctor
-#     adb devices
-
-# ─────────────────────────────────────────
-# Android — local Gradle (from apps/mobile/android after prebuild)
-# ─────────────────────────────────────────
-
-#     cd apps/mobile/android
-#     ./gradlew clean
-#     ./gradlew assembleDebug           # debug APK → app/build/outputs/apk/debug/app-debug.apk
-#     ./gradlew assembleRelease         # release APK → app/build/outputs/apk/release/app-release.apk
-#                                         # (needs signing; unsigned: often app-release-unsigned.apk in same folder)
-#     ./gradlew bundleRelease           # Play AAB → app/build/outputs/bundle/release/app-release.aab (needs signing)
-
-# Paths are relative to apps/mobile/android/ (after `cd apps/mobile/android`).
-
-# Install manually (if you built outside Expo):
-#     adb install -r app/build/outputs/apk/debug/app-debug.apk
-#     adb install -r app/build/outputs/apk/release/app-release.apk
-
-# ─────────────────────────────────────────
-# Android — EAS cloud builds (keep for CI / no local Android Studio)
-# ─────────────────────────────────────────
-
-# Log in / project (once per machine): `npm install -g eas-cli` then `eas login`
-# From apps/mobile:
-#     npm run build:dev:android         # development client (internal APK) — same as:
-#     # eas build --profile development --platform android
-#     npm run build:preview             # preview profile (script = android only)
-#     npm run build:production          # production (all platforms in script; adjust if needed)
-#     eas build --profile production --platform android   # Play-style AAB by default
-#     eas build:list && eas build:view                      # inspect runs
-
-# Store / submit (after production build):
-#     npm run submit                    # eas submit
-
-# ─────────────────────────────────────────
-# iOS — local Mac development build (for later; keep apps/mobile/ios/ in repo)
-# ─────────────────────────────────────────
-
-# This app targets **Android-only** day-to-day; keep the iOS tree for future work.
-# After `npx expo prebuild --platform ios`, a normal local build requires **Xcode** and
-# **CocoaPods** (`npx pod-install` or `cd ios && pod install`). Skip Pods until you return to iOS.
-
-#     cd apps/mobile
-#     npx expo prebuild --platform ios --clean
-#     npx pod-install                   # when you are ready for iOS again
-#     npm run ios                       # or: npx expo run:ios
-
-# ─────────────────────────────────────────
-# iOS — EAS cloud builds (for later)
-# ─────────────────────────────────────────
-
-#     npm run build:dev:ios             # development / simulator per eas.json
-#     # eas build --profile development --platform ios
-#     eas build --profile production --platform ios   # IPA for TestFlight / App Store flow
-
-# ─────────────────────────────────────────
-# EAS — download Android keystore (credentials you created with past EAS builds)
-# ─────────────────────────────────────────
-
-# 1. `cd apps/mobile`
-# 2. `eas login` (same Expo account as the project)
-# 3. `eas credentials -p android`
-# 4. Choose the **Android** app / package, then the **build profile** (e.g. production).
-# 5. Use the menu option to **download** the keystore (and note the passwords EAS shows —
-#    store them in your password manager; EAS may not show them again).
-# 6. Alternatively: [expo.dev](https://expo.dev) → your **project** → **Credentials** → Android.
-#
-# 7. **Where to put the keystore on this Mac (for local `./gradlew assembleRelease` / `bundleRelease`):**
-#    - Create a folder next to the app (not inside generated native code):
-#        apps/mobile/credentials/android/
-#    - Save the downloaded file there, e.g.:
-#        apps/mobile/credentials/android/release.jks
-#      (keep EAS’s filename if you prefer; `.jks` is gitignored at repo level via `*.jks`.)
-#    - **Do not** keep your **only** copy under `apps/mobile/android/**`. That directory is wiped when you run
-#      `npx expo prebuild --platform android --clean`, so you would lose the file.
-# 8. **Point Gradle at it:** in `apps/mobile/android/app/build.gradle`, under `signingConfigs.release`, set e.g.:
-#        storeFile file("../../credentials/android/release.jks")
-#      (path is relative to `android/app/`). Store keystore passwords in env / `apps/mobile/.env` (already gitignored),
-#      not in the repo.
-
-# Docs: https://docs.expo.dev/app-signing/app-credentials/
-
-# ─────────────────────────────────────────
-# Quick reference — npm scripts in apps/mobile/package.json
-# ─────────────────────────────────────────
-
-# | Script / command              | Purpose                                      |
-# |------------------------------|----------------------------------------------|
-# | npm start                    | Metro + dev client URL                       |
-# | npm run android / ios        | expo run:android / run:ios                   |
-# | npm run build:dev:android    | EAS development Android                      |
-# | npm run build:dev:ios        | EAS development iOS                          |
-# | npm run build:dev            | EAS development all platforms                |
-# | npm run build:preview        | EAS preview (android in this repo’s script)  |
-# | npm run build:production     | EAS production (script uses platform all)    |
-# | npm run start:go             | Expo Go (limited; not this app’s main path)  |
+npm run dev                   # http://localhost:4001
 ```
 
----
-
-## Database & Prisma — command reference
-
-All commands below are run from `**apps/server**` (or with `cd apps/server` first).
-
-> **⚠️ WARNING — `DATABASE_URL` points at real data**  
-> These commands affect whatever database URL is in `apps/server/.env`. Double-check you are not pointing at production if you intend to work on a dev database only.
-
-
-| Command                       | When to use it                                                      | What it does                                                                                                                                    |
-| ----------------------------- | ------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| `**npm run db:push`           | **First setup**, after **schema changes**, or **new empty Neon DB** | Applies `prisma/schema.prisma` to the database: creates/updates tables. **This is the main command for syncing schema → Neon in this project.** |
-| `**npm run db:generate`       | After `schema.prisma` changes (also runs via `postinstall`)         | Regenerates the Prisma Client TypeScript types under `node_modules`. Does **not** create tables.                                                |
-| `**npx prisma studio`         | Whenever you want a GUI                                             | Opens a browser UI to browse/edit rows in your database (great for debugging).                                                                  |
-| `**npx prisma migrate dev`    | If you later adopt **migration files** for team workflows           | Creates a new migration from schema changes (development). This repo may use `**db:push` instead until migrations are added.                    |
-| `**npx prisma migrate deploy` | CI / production servers using **migrations**                        | Applies pending migration files — use only if your team uses the migrate workflow.                                                              |
-| `**npx prisma migrate reset`  | **Local dev only** — wipes data                                     | Drops DB, reapplies migrations, may run seed. **Never run against production.**                                                                 |
-
-
-**Symptom → action:**
-
-
-| Error or symptom                                       | Likely cause                         | What to do                                                             |
-| ------------------------------------------------------ | ------------------------------------ | ---------------------------------------------------------------------- |
-| `The table public.users does not exist` (or similar)   | Schema never pushed to this database | Run `**npm run db:push` with correct `DATABASE_URL`.                   |
-| TypeScript errors about missing Prisma enums / types   | Client out of date                   | Run `**npm run db:generate`** or `**npm install\*\`* in the repo root. |
-| Registration works locally but not after changing Neon | New empty branch/database            | Run `**db:push`** against the new `DATABASE_URL`.                      |
-
-
+Default ports: **API → 3001 | Socket → 3002 | Web → 4001**

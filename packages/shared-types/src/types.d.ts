@@ -327,10 +327,20 @@ export interface ScreenTimeControls {
     blockedWebsites: string[];
     controlsVersion?: number;
     appGuardEnabled?: boolean;
+    blockAllAppsEnabled?: boolean;
     stopInternetEnabled?: boolean;
+    stopInternetActivation?: 'IMMEDIATE' | 'DELAYED' | string;
+    stopInternetDelayedMinutes?: number;
+    stopInternetBlockStartsAtUtc?: string | null;
+    websiteFilteringEnabled?: boolean;
+    websiteFilterMode?: 'WHITELIST' | 'BLACKLIST' | string;
     silentCameraEnabled?: boolean;
     blockedDomains?: string[];
     allowedDomains?: string[];
+    blockNetworkChanges?: boolean;
+    gamesEnabled?: boolean;
+    gameSettings?: Record<string, unknown>;
+    videoSettings?: Record<string, unknown> | null;
 }
 export interface GrowthPlan {
     childId: string;

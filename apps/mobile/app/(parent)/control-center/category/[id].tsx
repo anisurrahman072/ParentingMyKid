@@ -23,6 +23,10 @@ import { apiClient } from '../../../../src/services/api.client';
 import { useFamilyStore } from '../../../../src/store/family.store';
 import { SPACING } from '../../../../src/constants/spacing';
 import { emitSearch } from '../../../../src/services/kidSocketEmitter.service';
+import {
+  coercePersistedVideoManager,
+  youtubeSearchBlocklistParams,
+} from '../../../../src/utils/videoManagerPolicy';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
@@ -50,7 +54,7 @@ const CATEGORY_QUERIES: Record<string, string> = {
 type Video = {
   id: string;
   title: string;
-  thumbnail: string;
+  thumbnail?: string;
   channelTitle: string;
 };
 
@@ -63,6 +67,29 @@ export default function CategoryScreen() {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [searching, setSearching] = useState(false);
+  const [blockQs, setBlockQs] = useState({ blockedVideoIds: '', blockedChannelIds: '' });
+
+  const refreshBlockQs = useCallback(async () => {
+    if (!childId?.trim()) {
+      setBlockQs({ blockedVideoIds: '', blockedChannelIds: '' });
+      return;
+    }
+    try {
+      const { data } = await apiClient.get(`/safety/${childId}/parental-controls`);
+      const vm = coercePersistedVideoManager(data?.videoSettings ?? {});
+      const rawCh = data?.youtubeBlockedChannelIds;
+      const serverCh = Array.isArray(rawCh)
+        ? rawCh.filter((x: unknown): x is string => typeof x === 'string')
+        : [];
+      setBlockQs(youtubeSearchBlocklistParams(vm, serverCh));
+    } catch {
+      setBlockQs({ blockedVideoIds: '', blockedChannelIds: '' });
+    }
+  }, [childId]);
+
+  useEffect(() => {
+    void refreshBlockQs();
+  }, [refreshBlockQs]);
 
   const categoryTitle = categoryId
     ? categoryId.charAt(0).toUpperCase() + categoryId.slice(1).replace(/-/g, ' ')
@@ -86,22 +113,24 @@ export default function CategoryScreen() {
         gender: kidGender,
         ageGroup: kidAge < 5 ? 'TODDLER' : kidAge < 10 ? 'CHILD' : 'TEEN',
         lang: (kid as any)?.languagePreference ?? 'en',
-        maxResults: '20',
       });
+      if (blockQs.blockedVideoIds) params.set('blockedVideoIds', blockQs.blockedVideoIds);
+      if (blockQs.blockedChannelIds) params.set('blockedChannelIds', blockQs.blockedChannelIds);
 
       const { data } = await apiClient.get(`/media/youtube-search?${params.toString()}`);
-      setVideos(data.items ?? []);
+      const list = Array.isArray(data) ? data : data?.items ?? [];
+      setVideos(list);
     } catch {
       setVideos([]);
     } finally {
       setSearching(false);
       setLoading(false);
     }
-  }, [kid]);
+  }, [kid, blockQs]);
 
   useEffect(() => {
-    fetchVideos(defaultQuery);
-  }, [categoryId]);
+    void fetchVideos(defaultQuery);
+  }, [categoryId, blockQs, defaultQuery, fetchVideos]);
 
   async function handleSearch() {
     if (!searchQuery.trim()) return;
@@ -121,7 +150,11 @@ export default function CategoryScreen() {
           }
           activeOpacity={0.8}
         >
-          <Image source={{ uri: item.thumbnail }} style={styles.videoThumb} />
+          {item.thumbnail ? (
+            <Image source={{ uri: item.thumbnail }} style={styles.videoThumb} />
+          ) : (
+            <View style={[styles.videoThumb, styles.videoThumbPh]} />
+          )}
           <View style={styles.videoInfo}>
             <Text style={styles.videoTitle} numberOfLines={2}>
               {item.title}
@@ -256,6 +289,9 @@ const styles = StyleSheet.create({
     width: 120,
     height: 90,
     backgroundColor: '#1A1A2E',
+  },
+  videoThumbPh: {
+    backgroundColor: '#2A2A3E',
   },
   videoInfo: {
     flex: 1,

@@ -19,7 +19,7 @@
  */
 
 import { Injectable, ForbiddenException, NotFoundException, Logger } from '@nestjs/common';
-import { PrismaService } from '../../database/prisma.service';
+import { DatabaseService } from '../../database/database.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import {
   ChildLocation,
@@ -27,12 +27,21 @@ import {
   SafetyAlert,
   ScreenTimeControls,
   AlertSeverity,
+  normalizeDomainForPolicy,
   NotificationType,
   LocationEventType,
   GeofenceType,
 } from '@parentingmykid/shared-types';
-import { IsString, IsNumber, IsOptional, IsBoolean, IsArray } from 'class-validator';
+import {
+  IsString,
+  IsNumber,
+  IsOptional,
+  IsBoolean,
+  IsArray,
+  ValidateNested,
+} from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
+import { Type } from 'class-transformer';
 
 export class LogLocationDto {
   @ApiProperty()
@@ -132,6 +141,41 @@ export class UpdateScreenTimeDto {
   @IsOptional()
   @IsBoolean()
   youtubeAllowlistMode?: boolean;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsBoolean()
+  blockAllAppsEnabled?: boolean;
+}
+
+export class BatchScreenUsageSessionDto {
+  @ApiProperty()
+  @IsString()
+  pkg!: string;
+
+  @ApiProperty({ description: 'YYYY-MM-DD (device-local calendar day)' })
+  @IsString()
+  date!: string;
+
+  @ApiProperty()
+  @IsNumber()
+  startMs!: number;
+
+  @ApiProperty()
+  @IsNumber()
+  endMs!: number;
+
+  @ApiProperty()
+  @IsNumber()
+  durationMs!: number;
+}
+
+export class BatchScreenUsageBodyDto {
+  @ApiProperty({ type: [BatchScreenUsageSessionDto] })
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => BatchScreenUsageSessionDto)
+  sessions!: BatchScreenUsageSessionDto[];
 }
 
 @Injectable()
@@ -139,7 +183,7 @@ export class SafetyService {
   private readonly logger = new Logger(SafetyService.name);
 
   constructor(
-    private readonly prisma: PrismaService,
+    private readonly db: DatabaseService,
     private readonly notifications: NotificationsService,
   ) {}
 
@@ -150,27 +194,21 @@ export class SafetyService {
    * Automatically checks if the child has exited any geofence and alerts parents.
    */
   async logLocation(childId: string, dto: LogLocationDto): Promise<void> {
-    await this.prisma.locationEvent.create({
-      data: {
-        childId,
-        lat: dto.lat,
-        lon: dto.lon,
-        accuracy: dto.accuracy,
-        eventType: dto.eventType as LocationEventType,
-      },
+    await this.db.locationEvent.create({
+      childId,
+      lat: dto.lat,
+      lon: dto.lon,
+      accuracy: dto.accuracy,
+      eventType: dto.eventType as LocationEventType,
     });
 
-    // Check geofence violations
     await this.checkGeofences(childId, dto.lat, dto.lon, dto.eventType as LocationEventType);
   }
 
   async getChildLocation(parentId: string, childId: string): Promise<ChildLocation | null> {
     await this.assertParentChildAccess(parentId, childId);
 
-    const latest = await this.prisma.locationEvent.findFirst({
-      where: { childId },
-      orderBy: { timestamp: 'desc' },
-    });
+    const latest = await this.db.locationEvent.findOne({ childId }).sort({ timestamp: -1 }).lean();
 
     if (!latest) return null;
 
@@ -179,7 +217,7 @@ export class SafetyService {
       lat: latest.lat,
       lon: latest.lon,
       accuracy: latest.accuracy,
-      timestamp: latest.timestamp.toISOString(),
+      timestamp: (latest.timestamp as Date).toISOString(),
       eventType: latest.eventType as LocationEventType,
       address: latest.address ?? undefined,
     };
@@ -193,39 +231,31 @@ export class SafetyService {
    * This is the highest-priority action in the entire app — no throttling.
    */
   async triggerSOS(childId: string): Promise<void> {
-    const child = await this.prisma.childProfile.findUniqueOrThrow({
-      where: { id: childId },
+    const child = await this.db.childProfile.findOne({ _id: childId }).lean();
+    if (!child) throw new NotFoundException('Child not found');
+
+    const latestLocation = await this.db.locationEvent
+      .findOne({ childId })
+      .sort({ timestamp: -1 })
+      .lean();
+
+    await this.db.locationEvent.create({
+      childId,
+      lat: latestLocation?.lat ?? 0,
+      lon: latestLocation?.lon ?? 0,
+      accuracy: latestLocation?.accuracy ?? 0,
+      eventType: LocationEventType.SOS,
     });
 
-    // Log the SOS location event
-    const latestLocation = await this.prisma.locationEvent.findFirst({
-      where: { childId },
-      orderBy: { timestamp: 'desc' },
+    await this.db.safetyAlert.create({
+      childId,
+      category: 'CYBERBULLYING',
+      severity: 'CRITICAL',
+      title: `🚨 SOS Alert: ${child.name} needs help!`,
+      description: `${child.name} has pressed the SOS button. Please check on them immediately.`,
     });
 
-    await this.prisma.locationEvent.create({
-      data: {
-        childId,
-        lat: latestLocation?.lat ?? 0,
-        lon: latestLocation?.lon ?? 0,
-        accuracy: latestLocation?.accuracy ?? 0,
-        eventType: LocationEventType.SOS,
-      },
-    });
-
-    // Create critical safety alert
-    await this.prisma.safetyAlert.create({
-      data: {
-        childId,
-        category: 'CYBERBULLYING', // Use generic — SOS can be anything
-        severity: 'CRITICAL',
-        title: `🚨 SOS Alert: ${child.name} needs help!`,
-        description: `${child.name} has pressed the SOS button. Please check on them immediately.`,
-      },
-    });
-
-    // Send immediate push to all parents in the family
-    await this.notifications.sendSafetyAlertToFamily(child.familyId, childId, {
+    await this.notifications.sendSafetyAlertToFamily(String(child.familyId), childId, {
       type: NotificationType.SOS,
       title: `🚨 SOS: ${child.name} needs help!`,
       body: 'Your child pressed the emergency button. Check their location and call them immediately.',
@@ -245,20 +275,18 @@ export class SafetyService {
   ): Promise<Geofence> {
     await this.assertParentChildAccess(parentId, childId);
 
-    const geofence = await this.prisma.geofence.create({
-      data: {
-        childId,
-        name: dto.name,
-        type: dto.type as GeofenceType,
-        centerLat: dto.centerLat,
-        centerLon: dto.centerLon,
-        radiusMeters: dto.radiusMeters,
-        address: dto.address,
-      },
+    const geofence = await this.db.geofence.create({
+      childId,
+      name: dto.name,
+      type: dto.type as GeofenceType,
+      centerLat: dto.centerLat,
+      centerLon: dto.centerLon,
+      radiusMeters: dto.radiusMeters,
+      address: dto.address,
     });
 
     return {
-      id: geofence.id,
+      id: String(geofence._id),
       childId: geofence.childId,
       name: geofence.name,
       type: geofence.type as GeofenceType,
@@ -272,9 +300,43 @@ export class SafetyService {
 
   // ─── Screen Time Controls ─────────────────────────────────────────────────
 
+  /** Normalizes Mongoose `Mixed` / API payloads into `string[]` for domain lists. */
   private jsonToStringArray(value: unknown): string[] {
-    if (!Array.isArray(value)) return [];
-    return value.filter((x): x is string => typeof x === 'string');
+    if (value == null) return [];
+    const parts: string[] = [];
+    const pushNormalized = (s: unknown) => {
+      if (typeof s !== 'string') return;
+      const n = normalizeDomainForPolicy(s);
+      if (n) parts.push(n);
+    };
+    if (Array.isArray(value)) {
+      for (const item of value) pushNormalized(item);
+    } else if (typeof value === 'string') {
+      const t = value.trim();
+      if (!t) return [];
+      try {
+        parts.push(...this.jsonToStringArray(JSON.parse(t) as unknown));
+        return [...new Set(parts)];
+      } catch {
+        pushNormalized(t);
+      }
+    }
+    return [...new Set(parts)];
+  }
+
+  /** Effective mode for API / clients; DB column added in migration may be absent on old rows until migrate. */
+  private normalizeWebsiteFilterMode(controls: {
+    websiteFilterMode?: string | null;
+    allowedDomains: unknown;
+  }): 'WHITELIST' | 'BLACKLIST' {
+    const m = controls.websiteFilterMode;
+    if (m === 'WHITELIST' || m === 'BLACKLIST') return m;
+    return this.jsonToStringArray(controls.allowedDomains).length > 0 ? 'WHITELIST' : 'BLACKLIST';
+  }
+
+  private parseGameSettingsJson(value: unknown): Record<string, unknown> {
+    if (value == null || typeof value !== 'object') return {};
+    return value as Record<string, unknown>;
   }
 
   private mapToScreenTimeControls(controls: {
@@ -292,18 +354,35 @@ export class SafetyService {
     bedtimeStart: string;
     bedtimeEnd: string;
     morningUnlockTime: string;
-    focusTimeStart: string | null;
-    focusTimeEnd: string | null;
+    focusTimeStart: string | null | undefined;
+    focusTimeEnd: string | null | undefined;
     drivingModeEnabled: boolean;
     isPaused: boolean;
     blockedApps: string[];
     blockedWebsites: string[];
     appGuardEnabled: boolean;
+    blockAllAppsEnabled?: boolean;
     stopInternetEnabled: boolean;
+    stopInternetActivation?: string;
+    stopInternetDelayedMinutes?: number;
+    stopInternetBlockStartsAtUtc?: Date | string | null;
+    websiteFilteringEnabled?: boolean;
+    websiteFilterMode?: string | null;
+    blockNetworkChanges?: boolean;
     silentCameraEnabled: boolean;
     blockedDomains: unknown;
     allowedDomains: unknown;
+    gamesEnabled?: boolean;
+    gameSettingsJson?: unknown;
+    videoSettings?: unknown;
   }): ScreenTimeControls {
+    const startsRaw = controls.stopInternetBlockStartsAtUtc;
+    const startsIso =
+      startsRaw instanceof Date
+        ? startsRaw.toISOString()
+        : startsRaw != null && typeof startsRaw === 'string'
+          ? startsRaw
+          : undefined;
     return {
       childId: controls.childId,
       dailyLimitMinutes: controls.dailyLimitMinutes,
@@ -326,35 +405,52 @@ export class SafetyService {
       blockedApps: controls.blockedApps,
       blockedWebsites: controls.blockedWebsites,
       appGuardEnabled: controls.appGuardEnabled,
+      blockAllAppsEnabled: controls.blockAllAppsEnabled ?? false,
       stopInternetEnabled: controls.stopInternetEnabled,
+      stopInternetActivation: controls.stopInternetActivation ?? 'IMMEDIATE',
+      stopInternetDelayedMinutes: controls.stopInternetDelayedMinutes ?? 30,
+      stopInternetBlockStartsAtUtc: startsIso,
+      websiteFilteringEnabled: controls.websiteFilteringEnabled ?? false,
+      websiteFilterMode: this.normalizeWebsiteFilterMode(controls),
+      blockNetworkChanges: controls.blockNetworkChanges ?? false,
       silentCameraEnabled: controls.silentCameraEnabled,
       blockedDomains: this.jsonToStringArray(controls.blockedDomains),
       allowedDomains: this.jsonToStringArray(controls.allowedDomains),
+      gamesEnabled: controls.gamesEnabled ?? true,
+      gameSettings: this.parseGameSettingsJson(controls.gameSettingsJson ?? {}),
+      videoSettings:
+        controls.videoSettings == null || typeof controls.videoSettings !== 'object'
+          ? undefined
+          : (controls.videoSettings as Record<string, unknown>),
     };
   }
 
   async getScreenTimeControls(parentId: string, childId: string): Promise<ScreenTimeControls> {
     await this.assertParentChildAccess(parentId, childId);
 
-    let row = await this.prisma.screenTimeControls.findUnique({ where: { childId } });
-
+    let row: any = await this.db.screenTimeControls.findOne({ childId }).lean();
     if (!row) {
-      row = await this.prisma.screenTimeControls.create({ data: { childId } });
+      const created = await this.db.screenTimeControls.create({ childId });
+      row = created.toObject();
     }
 
     return this.mapToScreenTimeControls(row);
   }
 
   /** Child JWT — same rules as parent view, but only for own profile. */
-  async getScreenTimeControlsForChild(userId: string, childId: string): Promise<ScreenTimeControls> {
-    const child = await this.prisma.childProfile.findUnique({ where: { id: childId } });
+  async getScreenTimeControlsForChild(
+    userId: string,
+    childId: string,
+  ): Promise<ScreenTimeControls> {
+    const child = await this.db.childProfile.findOne({ _id: childId }).lean();
     if (!child || child.userId !== userId) {
       throw new ForbiddenException('Access denied');
     }
 
-    let row = await this.prisma.screenTimeControls.findUnique({ where: { childId } });
+    let row: any = await this.db.screenTimeControls.findOne({ childId }).lean();
     if (!row) {
-      row = await this.prisma.screenTimeControls.create({ data: { childId } });
+      const created = await this.db.screenTimeControls.create({ childId });
+      row = created.toObject();
     }
 
     return this.mapToScreenTimeControls(row);
@@ -375,32 +471,31 @@ export class SafetyService {
       Object.entries(dto as object).filter(([, v]) => v !== undefined),
     ) as Record<string, unknown>;
 
-    const controls = await this.prisma.screenTimeControls.update({
-      where: { childId },
-      data: {
-        ...clean,
-        controlsVersion: { increment: 1 },
-      } as any,
-    });
+    const controls = await this.db.screenTimeControls
+      .findOneAndUpdate({ childId }, { $set: clean, $inc: { controlsVersion: 1 } }, { new: true })
+      .lean();
 
-    // If parent paused internet — send notification to child's device
+    if (!controls) throw new NotFoundException('Screen time controls not found');
+
     if (dto.isPaused === true) {
-      const child = await this.prisma.childProfile.findUnique({
-        where: { id: childId },
-        include: { user: { select: { expoPushToken: true } } },
-      });
-      if (child?.user.expoPushToken) {
-        await this.notifications.sendToUser(child.userId, {
-          type: NotificationType.SAFETY_ALERT,
-          title: 'Screen time paused',
-          body: 'Your parent has paused your device. Take a break! 😊',
-          data: { action: 'PAUSE' },
-          priority: 'high',
-        });
+      const child = await this.db.childProfile.findOne({ _id: childId }).lean();
+      if (child) {
+        const childUser = await this.db.user
+          .findOne({ _id: child.userId }, { expoPushToken: 1 })
+          .lean();
+        if (childUser?.expoPushToken) {
+          await this.notifications.sendToUser(String(child.userId), {
+            type: NotificationType.SAFETY_ALERT,
+            title: 'Screen time paused',
+            body: 'Your parent has paused your device. Take a break! 😊',
+            data: { action: 'PAUSE' },
+            priority: 'high',
+          });
+        }
       }
     }
 
-    return this.mapToScreenTimeControls(controls);
+    return this.mapToScreenTimeControls(controls as any);
   }
 
   // ─── AI Content Monitoring Alerts ─────────────────────────────────────────
@@ -420,28 +515,26 @@ export class SafetyService {
       platform?: string;
     },
   ): Promise<void> {
-    const child = await this.prisma.childProfile.findUniqueOrThrow({ where: { id: childId } });
+    const child = await this.db.childProfile.findOne({ _id: childId }).lean();
+    if (!child) throw new NotFoundException('Child not found');
 
-    const alert = await this.prisma.safetyAlert.create({
-      data: {
-        childId,
-        category: alertData.category as never,
-        severity: alertData.severity as never,
-        title: alertData.title,
-        description: alertData.description,
-        evidenceSnippet: alertData.evidenceSnippet,
-        platform: alertData.platform,
-      },
+    const alert = await this.db.safetyAlert.create({
+      childId,
+      category: alertData.category,
+      severity: alertData.severity,
+      title: alertData.title,
+      description: alertData.description,
+      evidenceSnippet: alertData.evidenceSnippet,
+      platform: alertData.platform,
     });
 
-    // Send push notification based on severity
     const isCritical = ['HIGH', 'CRITICAL'].includes(alertData.severity);
     if (isCritical) {
-      await this.notifications.sendSafetyAlertToFamily(child.familyId, childId, {
+      await this.notifications.sendSafetyAlertToFamily(String(child.familyId), childId, {
         type: NotificationType.SAFETY_ALERT,
         title: `⚠️ Safety Alert: ${child.name}`,
         body: alertData.title,
-        data: { screen: 'safety/alerts', alertId: alert.id, childId },
+        data: { screen: 'safety/alerts', alertId: String(alert._id), childId },
         priority: alertData.severity === 'CRITICAL' ? 'max' : 'high',
       });
     }
@@ -450,53 +543,252 @@ export class SafetyService {
   async getAlerts(parentId: string, childId: string): Promise<SafetyAlert[]> {
     await this.assertParentChildAccess(parentId, childId);
 
-    const alerts = await this.prisma.safetyAlert.findMany({
-      where: { childId },
-      orderBy: { createdAt: 'desc' },
-      take: 50,
-    });
+    const alerts = await this.db.safetyAlert
+      .find({ childId })
+      .sort({ createdAt: -1 })
+      .limit(50)
+      .lean();
 
-    return alerts.map((a) => ({
-      id: a.id,
-      childId: a.childId,
-      category: a.category as never,
-      severity: a.severity as AlertSeverity,
-      title: a.title,
-      description: a.description,
-      evidenceSnippet: a.evidenceSnippet ?? undefined,
-      isRead: a.isRead,
-      actionTaken: a.actionTaken ?? undefined,
-      createdAt: a.createdAt.toISOString(),
-    }));
+    return alerts.map((a) => {
+      const created =
+        'createdAt' in a && a.createdAt != null ? new Date(a.createdAt as Date) : null;
+      return {
+        id: String(a._id),
+        childId: a.childId,
+        category: a.category as never,
+        severity: a.severity as AlertSeverity,
+        title: a.title,
+        description: a.description,
+        evidenceSnippet: a.evidenceSnippet ?? undefined,
+        isRead: a.isRead,
+        actionTaken: a.actionTaken ?? undefined,
+        createdAt: (created ?? new Date()).toISOString(),
+      };
+    });
   }
 
   // ─── Extended Parental Controls ───────────────────────────────────────────
 
-  async getParentalControls(childId: string) {
-    return this.prisma.screenTimeControls.upsert({
-      where: { childId },
-      create: { childId },
-      update: {},
+  async getParentalControls(parentId: string, childId: string) {
+    await this.assertParentChildAccess(parentId, childId);
+
+    let row: any = await this.db.screenTimeControls.findOne({ childId }).lean();
+    if (!row) {
+      const created = await this.db.screenTimeControls.create({ childId });
+      row = created.toObject();
+    }
+
+    const allowedDomains = this.jsonToStringArray(row.allowedDomains);
+    const blockedDomains = this.jsonToStringArray(row.blockedDomains);
+    const websiteFilterMode = this.normalizeWebsiteFilterMode({
+      websiteFilterMode: row.websiteFilterMode as string | null | undefined,
+      allowedDomains,
     });
+    return {
+      ...row,
+      allowedDomains,
+      blockedDomains,
+      websiteFilterMode,
+      websiteFilteringEnabled: row.websiteFilteringEnabled ?? false,
+    };
   }
 
-  async updateParentalControls(childId: string, data: Record<string, unknown>) {
-    return this.prisma.screenTimeControls.upsert({
-      where: { childId },
-      create: { childId, ...(data as any) },
-      update: data as any,
-    });
+  async updateParentalControls(parentId: string, childId: string, raw: Record<string, unknown>) {
+    await this.assertParentChildAccess(parentId, childId);
+
+    let row: any = await this.db.screenTimeControls.findOne({ childId }).lean();
+    if (!row) {
+      const created = await this.db.screenTimeControls.create({ childId });
+      row = created.toObject();
+    }
+
+    const filtered: Record<string, unknown> = { ...raw };
+    delete filtered.stopInternetBlockStartsAtUtc;
+
+    const scheduleSlots = filtered.scheduleSlots;
+    delete filtered.scheduleSlots;
+
+    const patch: Record<string, unknown> = Object.fromEntries(
+      Object.entries(filtered).filter(([, v]) => v !== undefined),
+    );
+    if (Array.isArray(scheduleSlots)) {
+      patch.stopInternetSchedule = scheduleSlots;
+    }
+
+    const nextEnabled =
+      typeof patch.stopInternetEnabled === 'boolean'
+        ? patch.stopInternetEnabled
+        : row.stopInternetEnabled;
+    const nextActivation =
+      typeof patch.stopInternetActivation === 'string'
+        ? patch.stopInternetActivation
+        : (row.stopInternetActivation ?? 'IMMEDIATE');
+    const nextDelayMin =
+      typeof patch.stopInternetDelayedMinutes === 'number'
+        ? patch.stopInternetDelayedMinutes
+        : (row.stopInternetDelayedMinutes ?? 30);
+
+    const stopFieldsTouched =
+      raw.stopInternetEnabled !== undefined ||
+      raw.stopInternetActivation !== undefined ||
+      raw.stopInternetDelayedMinutes !== undefined;
+
+    if (!nextEnabled) {
+      patch.stopInternetBlockStartsAtUtc = null;
+    } else if (nextActivation !== 'DELAYED') {
+      patch.stopInternetBlockStartsAtUtc = null;
+    } else if (stopFieldsTouched) {
+      const mins = Math.max(1, Number(nextDelayMin) || 30);
+      patch.stopInternetBlockStartsAtUtc = new Date(Date.now() + mins * 60_000);
+    }
+
+    const websiteFieldsTouched =
+      raw.websiteFilterMode !== undefined ||
+      raw.allowedDomains !== undefined ||
+      raw.blockedDomains !== undefined ||
+      raw.websiteFilteringEnabled !== undefined;
+
+    if (websiteFieldsTouched) {
+      const rowMode = row.websiteFilterMode as string | undefined;
+      const mergedWebsiteEnabled =
+        typeof patch.websiteFilteringEnabled === 'boolean'
+          ? patch.websiteFilteringEnabled
+          : row.websiteFilteringEnabled;
+      if (mergedWebsiteEnabled) {
+        const fromPatch = patch.websiteFilterMode;
+        const mergedMode =
+          fromPatch === 'WHITELIST' || fromPatch === 'BLACKLIST'
+            ? fromPatch
+            : rowMode === 'WHITELIST' || rowMode === 'BLACKLIST'
+              ? rowMode
+              : 'BLACKLIST';
+        patch.websiteFilterMode = mergedMode;
+        const rowAllowed = this.jsonToStringArray(row.allowedDomains);
+        const rowBlocked = this.jsonToStringArray(row.blockedDomains);
+        const mergedAllowed =
+          patch.allowedDomains !== undefined
+            ? this.jsonToStringArray(patch.allowedDomains)
+            : rowAllowed;
+        const mergedBlocked =
+          patch.blockedDomains !== undefined
+            ? this.jsonToStringArray(patch.blockedDomains)
+            : rowBlocked;
+        if (mergedMode === 'WHITELIST') {
+          patch.allowedDomains = mergedAllowed;
+          patch.blockedDomains = [];
+        } else {
+          patch.blockedDomains = mergedBlocked;
+          patch.allowedDomains = [];
+        }
+      } else {
+        if (patch.websiteFilterMode !== undefined) {
+          const m = patch.websiteFilterMode;
+          if (m === 'WHITELIST' || m === 'BLACKLIST') {
+            patch.websiteFilterMode = m;
+          }
+        }
+        if (patch.allowedDomains !== undefined) {
+          patch.allowedDomains = this.jsonToStringArray(patch.allowedDomains);
+        }
+        if (patch.blockedDomains !== undefined) {
+          patch.blockedDomains = this.jsonToStringArray(patch.blockedDomains);
+        }
+      }
+    }
+
+    return this.db.screenTimeControls
+      .findOneAndUpdate({ childId }, { $set: patch }, { new: true })
+      .lean();
+  }
+
+  /** Upsert native kid-scoped segments into aggregated daily ScreenUsageLog rows. */
+  async batchUpsertScreenUsage(
+    parentUserId: string,
+    childId: string,
+    dto: BatchScreenUsageBodyDto,
+  ): Promise<{ accepted: number }> {
+    await this.assertParentChildAccess(parentUserId, childId);
+    let accepted = 0;
+    const sessions = Array.isArray(dto.sessions) ? dto.sessions : [];
+    for (const s of sessions) {
+      const pkg = (s.pkg ?? '').trim().toLowerCase();
+      if (!pkg || !this.isIsoDateString(s.date)) continue;
+      const sec = Math.max(1, Math.round(Number(s.durationMs ?? 0) / 1000));
+
+      await this.db.screenUsageLog.findOneAndUpdate(
+        { childId, date: s.date, packageName: pkg },
+        {
+          $inc: { durationSeconds: sec },
+          $setOnInsert: { appName: pkg, appCategory: 'TRACKED_ANDROID' },
+        },
+        { upsert: true },
+      );
+      accepted++;
+    }
+    return { accepted };
+  }
+
+  /** Grouped totals for parental reports (calendar-day range inclusive). */
+  async getUsageReport(
+    parentUserId: string,
+    childId: string,
+    from: string,
+    to: string,
+  ): Promise<
+    Array<{
+      date: string;
+      appName: string;
+      packageName: string | null;
+      totalSeconds: number;
+    }>
+  > {
+    await this.assertParentChildAccess(parentUserId, childId);
+
+    const rows = await this.db.screenUsageLog.aggregate([
+      {
+        $match: {
+          childId,
+          date: { $gte: from, $lte: to },
+        },
+      },
+      {
+        $group: {
+          _id: { date: '$date', appName: '$appName', packageName: '$packageName' },
+          totalSeconds: { $sum: '$durationSeconds' },
+        },
+      },
+    ]);
+
+    return rows
+      .map((r: any) => ({
+        date: r._id.date as string,
+        appName: r._id.appName as string,
+        packageName: (r._id.packageName as string | undefined) ?? null,
+        totalSeconds: r.totalSeconds as number,
+      }))
+      .sort((a, b) =>
+        b.totalSeconds !== a.totalSeconds
+          ? b.totalSeconds - a.totalSeconds
+          : a.date.localeCompare(b.date),
+      );
+  }
+
+  private isIsoDateString(d: string): boolean {
+    return typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d);
   }
 
   // ─── Private Helpers ──────────────────────────────────────────────────────
 
   private async assertParentChildAccess(parentId: string, childId: string): Promise<void> {
-    const child = await this.prisma.childProfile.findUnique({ where: { id: childId } });
+    const child = await this.db.childProfile.findOne({ _id: childId }).lean();
     if (!child) throw new NotFoundException('Child not found');
 
-    const membership = await this.prisma.familyMember.findFirst({
-      where: { familyId: child.familyId, userId: parentId },
-    });
+    const membership = await this.db.familyMember
+      .findOne({
+        familyId: child.familyId,
+        userId: parentId,
+      })
+      .lean();
     if (!membership) throw new ForbiddenException('Access denied');
   }
 
@@ -506,19 +798,17 @@ export class SafetyService {
     lon: number,
     eventType: LocationEventType,
   ): Promise<void> {
-    const geofences = await this.prisma.geofence.findMany({
-      where: { childId, isActive: true },
-    });
+    const geofences = await this.db.geofence.find({ childId, isActive: true }).lean();
 
     for (const fence of geofences) {
       const distance = this.calculateDistance(lat, lon, fence.centerLat, fence.centerLon);
       const isInside = distance <= fence.radiusMeters;
 
       if (!isInside && eventType === LocationEventType.CHECK_IN) {
-        const child = await this.prisma.childProfile.findUniqueOrThrow({ where: { id: childId } });
+        const child = await this.db.childProfile.findOne({ _id: childId }).lean();
+        if (!child) throw new NotFoundException('Child not found');
 
-        // Child is outside all safe zones — alert parents
-        await this.notifications.sendSafetyAlertToFamily(child.familyId, childId, {
+        await this.notifications.sendSafetyAlertToFamily(String(child.familyId), childId, {
           type: NotificationType.SAFETY_ALERT,
           title: `📍 ${child.name} left ${fence.name}`,
           body: `${child.name} is no longer at ${fence.name}. Check their location.`,

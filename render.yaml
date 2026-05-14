@@ -1,0 +1,99 @@
+## render.yaml — ParentingMyKid Render deployment
+##
+## Defines two Web Services:
+##   1. pmk-api        — NestJS REST + WebSocket API (apps/server)
+##   2. pmk-socket     — Dedicated Socket.IO pub-sub server (apps/socket-server)
+##
+## Both run on Render's free tier (750 hours/month each).
+##
+## To deploy:
+##   1. Push this repo to GitHub.
+##   2. Go to https://render.com → New → Blueprint → select this repo.
+##   3. Render reads render.yaml and creates both services automatically.
+##   4. Fill in the secret environment variables in the Render dashboard
+##      (they are marked `sync: false` below to avoid storing secrets in git).
+
+services:
+
+  # ── 1. NestJS API ────────────────────────────────────────────────────────────
+  - type: web
+    name: pmk-api
+    runtime: node
+    rootDir: apps/server
+    buildCommand: npm install && npm run build
+    startCommand: node dist/main.js
+    healthCheckPath: /api/v1/health
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3001
+      # MongoDB Atlas connection string — set in Render dashboard
+      - key: MONGODB_URI
+        sync: false
+      # JWT — set in Render dashboard (same values as socket-server)
+      - key: JWT_SECRET
+        sync: false
+      - key: JWT_REFRESH_SECRET
+        sync: false
+      - key: JWT_EXPIRES_IN
+        value: 30d
+      - key: JWT_REFRESH_EXPIRES_IN
+        value: 365d
+      # PIN crypto
+      - key: CHILD_PIN_ENCRYPTION_KEY
+        sync: false
+      # Cloudinary
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false
+      - key: CLOUDINARY_API_KEY
+        sync: false
+      - key: CLOUDINARY_API_SECRET
+        sync: false
+      # OpenAI
+      - key: OPENAI_API_KEY
+        sync: false
+      # Email (Resend)
+      - key: RESEND_API_KEY
+        sync: false
+      - key: EMAIL_FROM
+        value: noreply@parentingmykid.com
+      - key: PUBLIC_WEB_URL
+        value: https://www.parentingmykid.com
+      # RevenueCat
+      - key: REVENUECAT_WEBHOOK_SECRET
+        sync: false
+      # Prayer times (free, no key needed)
+      - key: PRAYER_TIMES_API_URL
+        value: https://api.aladhan.com/v1
+      # CORS origins (update when you know your Render URLs)
+      - key: ALLOWED_ORIGINS
+        value: https://www.parentingmykid.com,https://pmk-socket.onrender.com
+      # YouTube
+      - key: YOUTUBE_API_KEY
+        sync: false
+      # Socket server URL (used for any server-to-socket communication if needed)
+      - key: SOCKET_SERVER_URL
+        value: https://pmk-socket.onrender.com
+
+  # ── 2. Socket.IO Pub-Sub Server ──────────────────────────────────────────────
+  - type: web
+    name: pmk-socket
+    runtime: node
+    rootDir: apps/socket-server
+    buildCommand: npm install && npm run build
+    startCommand: node dist/index.js
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3002
+      # Must match JWT_SECRET in pmk-api exactly
+      - key: JWT_SECRET
+        sync: false
+      # Allow connections from any origin (Expo app, web, etc.)
+      - key: ALLOWED_ORIGINS
+        value: "*"

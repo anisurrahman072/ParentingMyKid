@@ -20,6 +20,7 @@ import Animated, { FadeInDown, ZoomIn } from 'react-native-reanimated';
 import { COLORS } from '../../../src/constants/colors';
 import { SPACING } from '../../../src/constants/spacing';
 import { KidsButton } from '../../../src/components/kids/KidsButton';
+import { usePolicyStore } from '../../../src/store/policy.store';
 
 interface GameCardProps {
   emoji: string;
@@ -126,6 +127,15 @@ const GAMES: Omit<GameCardProps, 'onPlay'>[] = [
 export default function GamesScreen() {
   const [activeTab, setActiveTab] = useState<'games' | 'battle' | 'daily'>('games');
 
+  const parentalBoost = usePolicyStore((s) => {
+    const gs = s.controls?.gameSettings;
+    const line =
+      gs && typeof (gs as { celebrationLine?: string }).celebrationLine === 'string'
+        ? (gs as { celebrationLine?: string }).celebrationLine!.trim()
+        : '';
+    return line.slice(0, 400);
+  });
+
   function handlePlay(gameName: string) {
     Alert.alert(
       `Playing: ${gameName}`,
@@ -145,6 +155,13 @@ export default function GamesScreen() {
         <Text style={styles.headerTitle}>🎮 Games Zone</Text>
         <Text style={styles.headerSubtitle}>Learn while you play!</Text>
       </LinearGradient>
+
+      {parentalBoost ? (
+        <View style={styles.parentBanner}>
+          <Text style={styles.parentBannerLabel}>A note from home</Text>
+          <Text style={styles.parentBannerText}>{parentalBoost}</Text>
+        </View>
+      ) : null}
 
       {/* Tabs */}
       <View style={styles.tabs}>
@@ -274,6 +291,36 @@ const styles = StyleSheet.create({
     fontFamily: 'Nunito_400Regular',
     color: 'rgba(255,255,255,0.8)',
     marginTop: 2,
+  },
+  parentBanner: {
+    marginHorizontal: SPACING[4],
+    marginTop: -SPACING[3],
+    marginBottom: SPACING[2],
+    padding: SPACING[4],
+    borderRadius: 16,
+    backgroundColor: 'rgba(255,255,255,0.94)',
+    borderWidth: 1,
+    borderColor: 'rgba(124,58,237,0.15)',
+    shadowColor: '#7C3AED',
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  parentBannerLabel: {
+    fontSize: 11,
+    fontFamily: 'Nunito_400Regular',
+    fontWeight: '900',
+    color: '#7C3AED',
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+    marginBottom: SPACING[2],
+  },
+  parentBannerText: {
+    fontSize: 15,
+    fontFamily: 'Nunito_400Regular',
+    fontWeight: '700',
+    color: '#333',
+    lineHeight: 22,
   },
   tabs: {
     flexDirection: 'row',

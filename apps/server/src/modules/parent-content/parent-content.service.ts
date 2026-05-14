@@ -5,7 +5,7 @@
  */
 
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { PrismaService } from '../../database/prisma.service';
+import { DatabaseService } from '../../database/database.service';
 import { IsString, IsOptional, IsEnum } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
@@ -47,52 +47,45 @@ export class CreateParentContentDto {
 
 @Injectable()
 export class ParentContentService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly db: DatabaseService) {}
 
   async create(dto: CreateParentContentDto) {
-    return this.prisma.parentContent.create({
-      data: {
-        familyId: dto.familyId,
-        childId: dto.childId,
-        type: dto.type as any,
-        title: dto.title,
-        body: dto.body,
-        mediaUrl: dto.mediaUrl,
-      },
+    return this.db.parentContent.create({
+      familyId: dto.familyId,
+      childId: dto.childId,
+      type: dto.type,
+      title: dto.title,
+      body: dto.body,
+      mediaUrl: dto.mediaUrl,
     });
   }
 
   async findByFamily(familyId: string) {
-    return this.prisma.parentContent.findMany({
-      where: { familyId },
-      orderBy: { createdAt: 'desc' },
-    });
+    return this.db.parentContent.find({ familyId }).sort({ createdAt: -1 }).lean();
   }
 
   async findByChild(childId: string) {
-    const child = await this.prisma.childProfile.findUnique({
-      where: { id: childId },
-      select: { familyId: true },
-    });
+    const child = await this.db.childProfile.findOne({ _id: childId }).select('familyId').lean();
     if (!child) throw new NotFoundException('Child not found');
 
-    return this.prisma.parentContent.findMany({
-      where: {
+    return this.db.parentContent
+      .find({
         familyId: child.familyId,
-        OR: [{ childId }, { childId: null }],
-      },
-      orderBy: { createdAt: 'desc' },
-    });
+        $or: [{ childId }, { childId: null }],
+      })
+      .sort({ createdAt: -1 })
+      .lean();
   }
 
   async markRead(id: string, isRead: boolean) {
-    return this.prisma.parentContent.update({
-      where: { id },
-      data: { isRead },
-    });
+    return this.db.parentContent.findOneAndUpdate(
+      { _id: id },
+      { $set: { isRead } },
+      { new: true },
+    ).lean();
   }
 
   async remove(id: string) {
-    return this.prisma.parentContent.delete({ where: { id } });
+    return this.db.parentContent.findOneAndDelete({ _id: id });
   }
 }

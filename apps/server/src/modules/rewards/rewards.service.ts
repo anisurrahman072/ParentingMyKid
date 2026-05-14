@@ -18,7 +18,7 @@
  */
 
 import { Injectable, ForbiddenException, NotFoundException, Logger } from '@nestjs/common';
-import { PrismaService } from '../../database/prisma.service';
+import { DatabaseService } from '../../database/database.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { NotificationType, PointsBalance, Badge, BadgeTier, RewardStatus, WishStatus } from '@parentingmykid/shared-types';
 import { IsString, IsNumber, IsOptional } from 'class-validator';
@@ -132,7 +132,7 @@ export class RewardsService {
   private readonly logger = new Logger(RewardsService.name);
 
   constructor(
-    private readonly prisma: PrismaService,
+    private readonly db: DatabaseService,
     private readonly notifications: NotificationsService,
   ) {}
 
@@ -152,27 +152,24 @@ export class RewardsService {
     sourceType: string,
     sourceId?: string,
   ): Promise<{ leveledUp: boolean; newBadges: Badge[] }> {
-    // Atomic update of all point counters
-    const child = await this.prisma.childProfile.update({
-      where: { id: childId },
-      data: {
-        totalPoints: { increment: points },
-        xp: { increment: xp },
-        spendableCoins: { increment: coins },
-      },
-    });
+    // Atomic increment of all point counters
+    const child = await this.db.childProfile.findOneAndUpdate(
+      { _id: childId },
+      { $inc: { totalPoints: points, xp, spendableCoins: coins } },
+      { new: true },
+    ).lean();
+
+    if (!child) throw new NotFoundException(`Child ${childId} not found`);
 
     // Log the transaction
-    await this.prisma.pointsLedgerEntry.create({
-      data: {
-        childId,
-        points,
-        coins,
-        xp,
-        reason,
-        sourceType,
-        sourceId,
-      },
+    await this.db.pointsLedgerEntry.create({
+      childId,
+      points,
+      coins,
+      xp,
+      reason,
+      sourceType,
+      sourceId,
     });
 
     // Check for level-up
@@ -181,22 +178,25 @@ export class RewardsService {
     const requiredXp = getXpForLevel(child.level + 1);
 
     if (totalXp >= requiredXp && child.level < 100) {
-      await this.prisma.childProfile.update({
-        where: { id: childId },
-        data: { level: { increment: 1 } },
-      });
+      await this.db.childProfile.findOneAndUpdate(
+        { _id: childId },
+        { $inc: { level: 1 } },
+        { new: true },
+      );
       leveledUp = true;
       this.logger.log(`Child ${childId} leveled up to level ${child.level + 1}!`);
 
       // Notify parent of level-up (emotional engagement moment)
-      const updatedChild = await this.prisma.childProfile.findUniqueOrThrow({ where: { id: childId } });
-      await this.notifications.sendToUser(updatedChild.parentId, {
-        type: NotificationType.LEVEL_UP,
-        title: `🎉 ${updatedChild.name} reached Level ${updatedChild.level}!`,
-        body: `Amazing growth! ${updatedChild.name} just leveled up. Check their progress!`,
-        data: { screen: 'growth', childId },
-        priority: 'high',
-      });
+      const updatedChild = await this.db.childProfile.findOne({ _id: childId }).lean();
+      if (updatedChild) {
+        await this.notifications.sendToUser(updatedChild.parentId, {
+          type: NotificationType.LEVEL_UP,
+          title: `🎉 ${updatedChild.name} reached Level ${updatedChild.level}!`,
+          body: `Amazing growth! ${updatedChild.name} just leveled up. Check their progress!`,
+          data: { screen: 'growth', childId },
+          priority: 'high',
+        });
+      }
     }
 
     // Check for new badges
@@ -208,29 +208,27 @@ export class RewardsService {
   // ─── Badge System ─────────────────────────────────────────────────────────
 
   private async checkAndAwardBadges(childId: string): Promise<Badge[]> {
-    const child = await this.prisma.childProfile.findUniqueOrThrow({ where: { id: childId } });
-    const totalMissions = await this.prisma.habitCompletion.count({ where: { childId } });
+    const child = await this.db.childProfile.findOne({ _id: childId }).lean();
+    if (!child) return [];
 
+    const totalMissions = await this.db.habitCompletion.countDocuments({ childId });
     const stats = { missions: totalMissions, streak: child.currentStreak, level: child.level };
 
-    const existingBadgeTypes = new Set(
-      (await this.prisma.badge.findMany({ where: { childId }, select: { badgeType: true } })).map(
-        (b) => b.badgeType,
-      ),
-    );
+    const earnedBadgeDocs = await this.db.badge
+      .find({ childId }, { badgeType: 1 })
+      .lean();
+    const existingBadgeTypes = new Set(earnedBadgeDocs.map((b) => b.badgeType));
 
     const newBadges: Badge[] = [];
 
     for (const def of BADGE_DEFINITIONS) {
       if (!existingBadgeTypes.has(def.type) && def.triggerFn(stats)) {
-        const badge = await this.prisma.badge.create({
-          data: {
-            childId,
-            badgeType: def.type,
-            tier: def.tier,
-            title: def.title,
-            description: def.description,
-          },
+        const badge = await this.db.badge.create({
+          childId,
+          badgeType: def.type,
+          tier: def.tier,
+          title: def.title,
+          description: def.description,
         });
 
         newBadges.push({
@@ -262,12 +260,14 @@ export class RewardsService {
   // ─── Points Balance ───────────────────────────────────────────────────────
 
   async getPointsBalance(childId: string): Promise<PointsBalance> {
-    const child = await this.prisma.childProfile.findUniqueOrThrow({ where: { id: childId } });
+    const child = await this.db.childProfile.findOne({ _id: childId }).lean();
+    if (!child) throw new NotFoundException(`Child ${childId} not found`);
+
     const xpToNext = getXpForLevel(child.level + 1);
     const progress = Math.round((child.xp / xpToNext) * 100);
 
     return {
-      childId: child.id,
+      childId: String(child._id),
       totalPoints: child.totalPoints,
       spendableCoins: child.spendableCoins,
       xp: child.xp,
@@ -280,71 +280,68 @@ export class RewardsService {
   // ─── Reward Contracts ─────────────────────────────────────────────────────
 
   async createRewardContract(parentId: string, dto: CreateRewardContractDto) {
-    const child = await this.prisma.childProfile.findFirst({
-      where: { id: dto.childId, parentId },
-    });
+    const child = await this.db.childProfile.findOne({ _id: dto.childId, parentId }).lean();
     if (!child) throw new ForbiddenException('Child not found or access denied');
 
-    return this.prisma.reward.create({
-      data: {
-        childId: dto.childId,
-        parentId,
-        title: dto.title,
-        conditionType: dto.conditionType,
-        conditionDescription: dto.conditionDescription,
-        conditionValue: dto.conditionValue,
-        rewardDescription: dto.rewardDescription,
-        status: RewardStatus.ACTIVE,
-        targetDate: dto.targetDate ? new Date(dto.targetDate) : undefined,
-      },
+    return this.db.reward.create({
+      childId: dto.childId,
+      parentId,
+      title: dto.title,
+      conditionType: dto.conditionType,
+      conditionDescription: dto.conditionDescription,
+      conditionValue: dto.conditionValue,
+      rewardDescription: dto.rewardDescription,
+      status: RewardStatus.ACTIVE,
+      targetDate: dto.targetDate ? new Date(dto.targetDate) : undefined,
     });
   }
 
   // ─── Wish Requests ────────────────────────────────────────────────────────
 
   async createWishRequest(childId: string, dto: CreateWishRequestDto) {
-    const wish = await this.prisma.wishRequest.create({
-      data: {
-        childId,
-        itemName: dto.itemName,
-        description: dto.description,
-        voiceUrl: dto.voiceUrl,
-      },
+    const wish = await this.db.wishRequest.create({
+      childId,
+      itemName: dto.itemName,
+      description: dto.description,
+      voiceUrl: dto.voiceUrl,
     });
 
     // Notify parent about child's wish
-    const child = await this.prisma.childProfile.findUniqueOrThrow({ where: { id: childId } });
-    await this.notifications.sendToUser(child.parentId, {
-      type: NotificationType.WISH_REQUEST,
-      title: `✨ ${child.name} made a wish!`,
-      body: `"${dto.itemName}" — Tap to see their wish and respond with love.`,
-      data: { screen: 'rewards/wishes', childId, wishId: wish.id },
-      priority: 'default',
-    });
+    const child = await this.db.childProfile.findOne({ _id: childId }).lean();
+    if (child) {
+      await this.notifications.sendToUser(child.parentId, {
+        type: NotificationType.WISH_REQUEST,
+        title: `✨ ${child.name} made a wish!`,
+        body: `"${dto.itemName}" — Tap to see their wish and respond with love.`,
+        data: { screen: 'rewards/wishes', childId, wishId: wish.id },
+        priority: 'default',
+      });
+    }
 
     return wish;
   }
 
   async respondToWish(parentId: string, wishId: string, dto: RespondToWishDto) {
-    const wish = await this.prisma.wishRequest.findUnique({
-      where: { id: wishId },
-      include: { child: true },
-    });
+    const wish = await this.db.wishRequest.findOne({ _id: wishId }).lean();
     if (!wish) throw new NotFoundException('Wish not found');
-    if (wish.child.parentId !== parentId) throw new ForbiddenException('Access denied');
 
-    const updated = await this.prisma.wishRequest.update({
-      where: { id: wishId },
-      data: {
+    const child = await this.db.childProfile.findOne({ _id: wish.childId }).lean();
+    if (!child) throw new NotFoundException('Child not found');
+    if (child.parentId !== parentId) throw new ForbiddenException('Access denied');
+
+    const updated = await this.db.wishRequest.findOneAndUpdate(
+      { _id: wishId },
+      {
         status: dto.status as WishStatus,
         parentResponse: dto.parentMessage,
         goalCondition: dto.goalCondition,
         respondedAt: new Date(),
       },
-    });
+      { new: true },
+    ).lean();
 
     // Notify child of parent's response
-    await this.notifications.sendToUser(wish.child.userId, {
+    await this.notifications.sendToUser(child.userId, {
       type: NotificationType.WISH_RESPONSE,
       title: dto.status === 'DECLINED' ? 'A message from your parent 💌' : '🎉 Your wish was answered!',
       body: dto.parentMessage,
@@ -356,12 +353,13 @@ export class RewardsService {
   }
 
   async getBadges(childId: string): Promise<Badge[]> {
-    const badges = await this.prisma.badge.findMany({
-      where: { childId },
-      orderBy: { earnedAt: 'desc' },
-    });
+    const badges = await this.db.badge
+      .find({ childId })
+      .sort({ earnedAt: -1 })
+      .lean();
+
     return badges.map((b) => ({
-      id: b.id,
+      id: String(b._id),
       childId: b.childId,
       badgeType: b.badgeType,
       tier: b.tier as BadgeTier,

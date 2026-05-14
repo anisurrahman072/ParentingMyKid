@@ -49,9 +49,9 @@ async function bootstrap(): Promise<void> {
   // This protects against malformed input that could crash business logic
   app.useGlobalPipes(
     new ValidationPipe({
-      whitelist: true,         // Strip unknown fields from request bodies
+      whitelist: true, // Strip unknown fields from request bodies
       forbidNonWhitelisted: true, // Throw error on unknown fields
-      transform: true,         // Auto-transform types (string '5' → number 5)
+      transform: true, // Auto-transform types (string '5' → number 5)
       transformOptions: {
         enableImplicitConversion: true,
       },

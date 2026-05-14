@@ -1,6 +1,6 @@
 /**
  * Parent Control Center — the new post-login landing page for parents.
- * Shows: greeting, live clock, kid selector bar, Switch to Kid Mode CTA, 8 feature cards.
+ * Shows: greeting, live clock, kid selector bar, Switch to Kid Mode CTA, feature cards.
  */
 import React, { useState, useEffect, useCallback } from 'react';
 import {
@@ -10,6 +10,7 @@ import {
   ScrollView,
   TouchableOpacity,
   Alert,
+  Platform,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -20,7 +21,7 @@ import Animated, {
   useAnimatedStyle,
   withSpring,
 } from 'react-native-reanimated';
-import { router } from 'expo-router';
+import { router, useFocusEffect, usePathname } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { useAuthStore } from '../../../src/store/auth.store';
 import { useFamilyStore } from '../../../src/store/family.store';
@@ -29,6 +30,8 @@ import { API_ENDPOINTS } from '../../../src/constants/api';
 import { COLORS } from '../../../src/constants/colors';
 import type { ChildDashboardCard, FamilyDashboard } from '@parentingmykid/shared-types';
 import { SPACING } from '../../../src/constants/spacing';
+import { DevicePermissionsAttentionCard } from '../../../src/components/parent/DevicePermissionsAttentionCard';
+import { setKidModeActive, stopVpn } from '../../../modules/parental-control/src/index';
 
 const FEATURE_CARDS = [
   {
@@ -79,6 +82,13 @@ const FEATURE_CARDS = [
     title: 'Stop Internet',
     desc: 'Pause internet access',
     gradient: ['#EC4899', '#F43F5E'] as const,
+  },
+  {
+    id: 'network-lock',
+    emoji: '📡',
+    title: 'Network Lock',
+    desc: 'Block Wi-Fi & data toggles in Kid Mode',
+    gradient: ['#6366F1', '#8B5CF6'] as const,
   },
   {
     id: 'troubleshoot',
@@ -156,6 +166,7 @@ export default function ControlCenterScreen() {
   const { user } = useAuthStore();
   const { activeFamilyId, dashboard, setDashboard } = useFamilyStore();
   const [activeKidId, setActiveKidId] = useState<string | null>(null);
+  const pathname = usePathname();
 
   /** Same payload as the legacy dashboard tab — Control Center is the parent landing page, so we must hydrate here or children stay empty. */
   useQuery({
@@ -172,6 +183,16 @@ export default function ControlCenterScreen() {
     staleTime: 60_000,
   });
 
+  const { data: parentalSnapshot } = useQuery({
+    queryKey: ['parental-controls-summary', activeKidId],
+    queryFn: async () => {
+      const { data } = await apiClient.get(`/safety/${activeKidId}/parental-controls`);
+      return data;
+    },
+    enabled: !!activeKidId && Platform.OS === 'android',
+    staleTime: 45_000,
+  });
+
   const kids: ChildDashboardCard[] = dashboard?.children ?? [];
 
   useEffect(() => {
@@ -181,6 +202,24 @@ export default function ControlCenterScreen() {
   }, [kids]);
 
   const activeKid = kids.find((k) => k.childId === activeKidId);
+
+  // Parent landing only — never tear down VPN while Kid Mode or category handoff is the active route.
+  useFocusEffect(
+    useCallback(() => {
+      if (Platform.OS !== 'android') return;
+      const p = pathname ?? '';
+      if (p.includes('kid-mode') || p.includes('/category/')) return;
+      if (!p.includes('control-center')) return;
+      void (async () => {
+        try {
+          await setKidModeActive(false);
+          await stopVpn();
+        } catch {
+          /* native module missing */
+        }
+      })();
+    }, [pathname]),
+  );
 
   return (
     <LinearGradient
@@ -229,6 +268,10 @@ export default function ControlCenterScreen() {
                 ))}
               </ScrollView>
             </Animated.View>
+          )}
+
+          {Platform.OS === 'android' && !!activeKidId && kids.length > 0 && (
+            <DevicePermissionsAttentionCard policySnapshot={parentalSnapshot} />
           )}
 
           {/* No kids prompt */}

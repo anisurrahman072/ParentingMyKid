@@ -6,10 +6,9 @@
 
 import { ConflictException, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { Prisma } from '@prisma/client';
 import { Resend } from 'resend';
 
-import { PrismaService } from '../../database/prisma.service';
+import { DatabaseService } from '../../database/database.service';
 import { CreateLeadDto } from './dto/create-lead.dto';
 import {
   buildAlreadySubscribedEmail,
@@ -23,7 +22,7 @@ export class LeadsService {
   private readonly resend: Resend | null;
 
   constructor(
-    private readonly prisma: PrismaService,
+    private readonly db: DatabaseService,
     private readonly config: ConfigService,
   ) {
     const key = this.config.get<string>('RESEND_API_KEY')?.trim();
@@ -86,46 +85,36 @@ export class LeadsService {
     const emailNorm = dto.email.trim().toLowerCase();
 
     if (message) {
-      await this.prisma.siteFeedback.create({
-        data: {
-          email: emailNorm,
-          name: dto.name ?? null,
-          message,
-          country: dto.country ?? null,
-          language: dto.language,
-          source: dto.source ?? null,
-        },
+      await this.db.siteFeedback.create({
+        email: emailNorm,
+        name: dto.name ?? null,
+        message,
+        country: dto.country ?? null,
+        language: dto.language,
+        source: dto.source ?? null,
       });
       await this.sendFeedbackThankYou(emailNorm, dto.name, dto.language);
       return { ok: true, kind: 'feedback' };
     }
 
-    const existing = await this.prisma.lead.findFirst({
-      where: {
-        email: { equals: emailNorm, mode: 'insensitive' },
-      },
-    });
+    const existing = await this.db.lead.findOne({ email: emailNorm }).lean();
     if (existing) {
       await this.sendAlreadySubscribedEmail(emailNorm, dto.name, dto.language);
       throw new ConflictException('This email is already on the list.');
     }
 
     try {
-      await this.prisma.lead.create({
-        data: {
-          email: emailNorm,
-          name: dto.name ?? null,
-          country: dto.country ?? null,
-          language: dto.language,
-          source: dto.source ?? null,
-        },
+      await this.db.lead.create({
+        email: emailNorm,
+        name: dto.name ?? null,
+        country: dto.country ?? null,
+        language: dto.language,
+        source: dto.source ?? null,
       });
-    } catch (e) {
-      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
-        // `Lead` only has @@unique on `email` — races or legacy casing can land here after a missed findFirst.
-        this.logger.warn(
-          `Lead unique violation for normalized email=${emailNorm} meta=${JSON.stringify(e.meta)}`,
-        );
+    } catch (e: unknown) {
+      // MongoDB duplicate key error (code 11000) — races or legacy casing can land here after a missed findOne.
+      if ((e as any)?.code === 11000) {
+        this.logger.warn(`Lead unique violation for normalized email=${emailNorm}`);
         await this.sendAlreadySubscribedEmail(emailNorm, dto.name, dto.language);
         throw new ConflictException('This email is already on the list.');
       }

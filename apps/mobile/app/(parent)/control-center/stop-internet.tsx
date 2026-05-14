@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -10,6 +10,8 @@ import {
   TextInput,
   ActivityIndicator,
   Platform,
+  AppState,
+  Linking,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -19,9 +21,19 @@ import { apiClient } from '../../../src/services/api.client';
 import { useFamilyStore } from '../../../src/store/family.store';
 import { COLORS } from '../../../src/constants/colors';
 import { SPACING } from '../../../src/constants/spacing';
-import { isVpnRunning, requestVpnPermission } from '../../../src/services/ParentalControl';
+import {
+  computeEffectiveStopInternet,
+  fetchAndPushParentalPolicyForChild,
+} from '../../../src/services/policySync.service';
+import {
+  hasVpnPermission,
+  isVpnRunning,
+  requestVpnPermission,
+} from '../../../src/services/ParentalControl';
 
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+const DELAY_PRESETS = [5, 15, 30, 60];
 
 type ScheduleSlot = {
   id: string;
@@ -184,45 +196,87 @@ export default function StopInternetScreen() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [stopInternetEnabled, setStopInternetEnabled] = useState(false);
+  const [activationMode, setActivationMode] = useState<'IMMEDIATE' | 'DELAYED'>('IMMEDIATE');
+  const [delayMinutes, setDelayMinutes] = useState(30);
+  const [blockStartsAtIso, setBlockStartsAtIso] = useState<string | null>(null);
+  const [nowTick, setNowTick] = useState(0);
   const [scheduleSlots, setScheduleSlots] = useState<ScheduleSlot[]>([]);
-  const [vpnStatus, setVpnStatus] = useState<'granted' | 'required'>('required');
+  /** OS consent dialog — not the same as “internet blocked”. */
+  const [vpnConsentGranted, setVpnConsentGranted] = useState(false);
+  const [vpnTunnelActive, setVpnTunnelActive] = useState(false);
+  const [stopFormDirty, setStopFormDirty] = useState(false);
+
+  const refreshVpnState = useCallback(async () => {
+    if (Platform.OS !== 'android') return;
+    try {
+      const [consent, tunnel] = await Promise.all([hasVpnPermission(), isVpnRunning()]);
+      setVpnConsentGranted(consent);
+      setVpnTunnelActive(tunnel);
+    } catch {
+      setVpnConsentGranted(false);
+      setVpnTunnelActive(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    const id = setInterval(() => setNowTick((n) => n + 1), 1000);
+    return () => clearInterval(id);
+  }, []);
 
   const load = useCallback(async () => {
     if (!childId) return;
     try {
       const { data } = await apiClient.get(`/safety/${childId}/parental-controls`);
       setStopInternetEnabled(data?.stopInternetEnabled ?? false);
-      setScheduleSlots(data?.scheduleSlots ?? []);
+      setActivationMode(data?.stopInternetActivation === 'DELAYED' ? 'DELAYED' : 'IMMEDIATE');
+      setDelayMinutes(
+        typeof data?.stopInternetDelayedMinutes === 'number' ? data.stopInternetDelayedMinutes : 30,
+      );
+      const starts = data?.stopInternetBlockStartsAtUtc;
+      setBlockStartsAtIso(
+        typeof starts === 'string' ? starts : starts != null ? String(starts) : null,
+      );
+      const rawSchedule = data?.stopInternetSchedule ?? data?.scheduleSlots;
+      setScheduleSlots(Array.isArray(rawSchedule) ? rawSchedule : []);
+      setStopFormDirty(false);
     } catch {
       Alert.alert('Error', 'Failed to load settings.');
     } finally {
       setLoading(false);
     }
 
-    if (Platform.OS === 'android') {
-      const running = await isVpnRunning();
-      setVpnStatus(running ? 'granted' : 'required');
-    }
-  }, [childId]);
+    void refreshVpnState();
+  }, [childId, refreshVpnState]);
 
   useEffect(() => {
     load();
   }, [load]);
 
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (s) => {
+      if (s === 'active') void refreshVpnState();
+    });
+    return () => sub.remove();
+  }, [refreshVpnState]);
+
   function handleToggleInternet(value: boolean) {
     if (!value) {
       setStopInternetEnabled(false);
+      setStopFormDirty(true);
       return;
     }
     Alert.alert(
       'Stop Internet Access?',
-      `This will block all internet access for ${kid?.name ?? 'your child'}'s device.`,
+      `This will block all internet access for ${kid?.name ?? 'your child'}'s device (immediately or after a delay, depending on your choice below).`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Block',
+          text: 'Continue',
           style: 'destructive',
-          onPress: () => setStopInternetEnabled(true),
+          onPress: () => {
+            setStopInternetEnabled(true);
+            setStopFormDirty(true);
+          },
         },
       ],
     );
@@ -236,14 +290,17 @@ export default function StopInternetScreen() {
       endTime: '06:00',
     };
     setScheduleSlots((prev) => [...prev, newSlot]);
+    setStopFormDirty(true);
   }
 
   function handleUpdateSlot(id: string, updated: ScheduleSlot) {
     setScheduleSlots((prev) => prev.map((s) => (s.id === id ? updated : s)));
+    setStopFormDirty(true);
   }
 
   function handleRemoveSlot(id: string) {
     setScheduleSlots((prev) => prev.filter((s) => s.id !== id));
+    setStopFormDirty(true);
   }
 
   async function handleGrantVpn() {
@@ -255,16 +312,27 @@ export default function StopInternetScreen() {
         'Use a dev or production build with the Parental Control native module.',
       );
     }
+    void refreshVpnState();
   }
 
   async function handleSave() {
     if (!childId) return;
     setSaving(true);
     try {
-      await apiClient.patch(`/safety/${childId}/parental-controls`, {
+      const { data } = await apiClient.patch(`/safety/${childId}/parental-controls`, {
         stopInternetEnabled,
+        stopInternetActivation: activationMode,
+        stopInternetDelayedMinutes: delayMinutes,
         scheduleSlots,
       });
+      const starts = data?.stopInternetBlockStartsAtUtc;
+      setBlockStartsAtIso(
+        typeof starts === 'string' ? starts : starts != null ? String(starts) : null,
+      );
+      if (Platform.OS === 'android') {
+        await fetchAndPushParentalPolicyForChild(childId, { clearEnforcementPause: true });
+      }
+      setStopFormDirty(false);
       Alert.alert('Saved', 'Stop Internet settings updated successfully.');
     } catch {
       Alert.alert('Error', 'Failed to save settings.');
@@ -272,6 +340,34 @@ export default function StopInternetScreen() {
       setSaving(false);
     }
   }
+
+  const nativeFullBlockEffective = useMemo(
+    () =>
+      !stopFormDirty &&
+      computeEffectiveStopInternet({
+        stopInternetEnabled,
+        stopInternetActivation: activationMode,
+        stopInternetBlockStartsAtUtc: blockStartsAtIso,
+      }),
+    [stopFormDirty, stopInternetEnabled, activationMode, blockStartsAtIso],
+  );
+
+  const pendingArmedUi =
+    stopInternetEnabled &&
+    !nativeFullBlockEffective &&
+    (stopFormDirty || activationMode === 'DELAYED');
+
+  const countdownLabel = useMemo(() => {
+    if (!stopInternetEnabled || activationMode !== 'DELAYED' || !blockStartsAtIso) return null;
+    const end = Date.parse(blockStartsAtIso);
+    if (!Number.isFinite(end)) return null;
+    const left = Math.max(0, end - Date.now());
+    if (left <= 0) return null;
+    const totalSec = Math.ceil(left / 1000);
+    const m = Math.floor(totalSec / 60);
+    const s = totalSec % 60;
+    return `Full block starts in ${m}m ${s}s`;
+  }, [stopInternetEnabled, activationMode, blockStartsAtIso, nowTick]);
 
   if (loading) {
     return (
@@ -302,21 +398,46 @@ export default function StopInternetScreen() {
           {/* Big toggle card */}
           <Animated.View entering={FadeInDown.delay(100).springify()} style={styles.bigToggleWrap}>
             <LinearGradient
-              colors={stopInternetEnabled ? ['#EF4444', '#DC2626'] : ['#10B981', '#059669']}
+              colors={
+                !stopInternetEnabled
+                  ? ['#10B981', '#059669']
+                  : nativeFullBlockEffective
+                    ? ['#EF4444', '#DC2626']
+                    : pendingArmedUi
+                      ? ['#F59E0B', '#D97706']
+                      : ['#10B981', '#059669']
+              }
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
               style={styles.bigToggleCard}
             >
               <View style={styles.bigToggleLeft}>
-                <Text style={styles.bigToggleEmoji}>{stopInternetEnabled ? '📵' : '🌐'}</Text>
+                <Text style={styles.bigToggleEmoji}>
+                  {!stopInternetEnabled ? '🌐' : nativeFullBlockEffective ? '📵' : '⏳'}
+                </Text>
                 <View>
                   <Text style={styles.bigToggleTitle}>
-                    {stopInternetEnabled ? 'Internet Blocked' : 'Internet Active'}
+                    {!stopInternetEnabled
+                      ? 'Internet Active'
+                      : nativeFullBlockEffective
+                        ? 'Internet Blocked'
+                        : pendingArmedUi && activationMode === 'DELAYED'
+                          ? 'Block scheduled'
+                          : pendingArmedUi
+                            ? 'Ready to block'
+                            : 'Internet Active'}
                   </Text>
                   <Text style={styles.bigToggleDesc}>
-                    {stopInternetEnabled
-                      ? `${kid?.name ?? 'Child'} cannot access the internet`
-                      : `${kid?.name ?? 'Child'} has internet access`}
+                    {!stopInternetEnabled
+                      ? `${kid?.name ?? 'Child'} has internet access`
+                      : nativeFullBlockEffective
+                        ? `${kid?.name ?? 'Child'} cannot access the internet`
+                        : activationMode === 'DELAYED'
+                          ? countdownLabel ??
+                            `Tap Save — block begins ${delayMinutes} minute${delayMinutes === 1 ? '' : 's'} after that.`
+                          : stopFormDirty
+                            ? 'Tap Save — full block applies on this phone after syncing.'
+                            : `${kid?.name ?? 'Child'} cannot access the internet`}
                   </Text>
                 </View>
               </View>
@@ -328,6 +449,76 @@ export default function StopInternetScreen() {
               />
             </LinearGradient>
           </Animated.View>
+
+          {stopInternetEnabled ? (
+            <Animated.View entering={FadeInDown.delay(135).springify()} style={styles.card}>
+              <Text style={styles.sectionLabelInset}>HOW THE BLOCK STARTS</Text>
+              <Text style={styles.helpHint}>
+                “Stop Internet” turns on full shutdown (VPN routes all traffic). Pick whether that happens now or after a delay.
+              </Text>
+              <View style={styles.modeRow}>
+                <TouchableOpacity
+                  style={[styles.modeChip, activationMode === 'IMMEDIATE' && styles.modeChipActive]}
+                  onPress={() => {
+                    setActivationMode('IMMEDIATE');
+                    setStopFormDirty(true);
+                  }}
+                  activeOpacity={0.85}
+                >
+                  <Text
+                    style={[styles.modeChipText, activationMode === 'IMMEDIATE' && styles.modeChipTextActive]}
+                  >
+                    Immediately
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.modeChip, activationMode === 'DELAYED' && styles.modeChipActive]}
+                  onPress={() => {
+                    setActivationMode('DELAYED');
+                    setStopFormDirty(true);
+                  }}
+                  activeOpacity={0.85}
+                >
+                  <Text style={[styles.modeChipText, activationMode === 'DELAYED' && styles.modeChipTextActive]}>
+                    After delay
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              {activationMode === 'DELAYED' ? (
+                <>
+                  <Text style={styles.presetLabel}>Minutes after Save</Text>
+                  <View style={styles.presetRow}>
+                    {DELAY_PRESETS.map((m) => (
+                      <TouchableOpacity
+                        key={m}
+                        style={[styles.presetChip, delayMinutes === m && styles.presetChipActive]}
+                        onPress={() => {
+                          setDelayMinutes(m);
+                          setStopFormDirty(true);
+                        }}
+                      >
+                        <Text
+                          style={[styles.presetChipText, delayMinutes === m && styles.presetChipTextActive]}
+                        >
+                          {m}m
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                  {countdownLabel ? (
+                    <Text style={styles.countdownBanner}>{countdownLabel}</Text>
+                  ) : (
+                    <Text style={styles.delayFootnote}>
+                      Saving starts the countdown from this phone&apos;s clock. Kid Mode refreshes policy every 30 seconds.
+                    </Text>
+                  )}
+                </>
+              ) : (
+                <Text style={styles.delayFootnote}>Applies as soon as you tap Save — device needs VPN consent.</Text>
+              )}
+            </Animated.View>
+          ) : null}
 
           {/* Scheduled Block Times */}
           <Animated.View entering={FadeInDown.delay(180).springify()}>
@@ -359,35 +550,58 @@ export default function StopInternetScreen() {
 
           {Platform.OS === 'android' ? (
             <Animated.View entering={FadeInDown.delay(320).springify()} style={styles.card}>
+              <Text style={styles.vpnClarify}>
+                Granting VPN only gives Android permission for our tunnel. Nothing is blocked until Stop Internet is on (and delay
+                finished, if you chose After delay). Website filtering uses DNS-only routing unless Stop Internet applies a full block.
+              </Text>
+              {vpnTunnelActive ? (
+                <Text style={styles.vpnTunnelHint}>Filtering tunnel active (key icon may show in the status bar).</Text>
+              ) : (
+                <Text style={styles.vpnTunnelHintMuted}>Tunnel idle — turns on after Save when blocking or website filter needs it.</Text>
+              )}
               <View style={styles.permRow}>
                 <View style={styles.permInfo}>
-                  <Text style={styles.permLabel}>VPN Service</Text>
-                  <Text style={styles.permDesc}>Required for DNS-based internet filtering</Text>
+                  <Text style={styles.permLabel}>VPN consent</Text>
+                  <Text style={styles.permDesc}>One-time Android approval for DNS / pause-internet features.</Text>
                 </View>
                 <View style={styles.permRight}>
                   <View
                     style={[
                       styles.badge,
-                      vpnStatus === 'granted' ? styles.badgeGranted : styles.badgeRequired,
+                      vpnConsentGranted ? styles.badgeGranted : styles.badgeRequired,
                     ]}
                   >
                     <Text
                       style={[
                         styles.badgeText,
-                        vpnStatus === 'granted'
-                          ? styles.badgeTextGranted
-                          : styles.badgeTextRequired,
+                        vpnConsentGranted ? styles.badgeTextGranted : styles.badgeTextRequired,
                       ]}
                     >
-                      {vpnStatus === 'granted' ? 'Granted' : 'Required'}
+                      {vpnConsentGranted ? 'Granted' : 'Required'}
                     </Text>
                   </View>
-                  {vpnStatus !== 'granted' && (
-                    <TouchableOpacity style={styles.grantBtn} onPress={handleGrantVpn}>
+                  {!vpnConsentGranted && (
+                    <TouchableOpacity style={styles.grantBtn} onPress={() => void handleGrantVpn()}>
                       <Text style={styles.grantBtnText}>Grant</Text>
                     </TouchableOpacity>
                   )}
                 </View>
+              </View>
+              <View style={styles.alwaysOnVpnRow}>
+                <Text style={styles.alwaysOnVpnText}>
+                  Enable <Text style={styles.alwaysOnVpnBold}>Always-on VPN</Text> for ParentingMyKid in system settings so
+                  another VPN cannot silently replace this app.
+                </Text>
+                <TouchableOpacity
+                  style={styles.alwaysOnVpnBtn}
+                  onPress={() => {
+                    void Linking.openURL('android.settings.VPN_SETTINGS').catch(() =>
+                      Alert.alert('VPN settings', 'Open Settings → Network & internet → VPN on this device.'),
+                    );
+                  }}
+                >
+                  <Text style={styles.alwaysOnVpnBtnText}>Set up</Text>
+                </TouchableOpacity>
               </View>
             </Animated.View>
           ) : (
@@ -470,6 +684,71 @@ const styles = StyleSheet.create({
     marginBottom: SPACING[2],
     marginTop: SPACING[2],
   },
+  sectionLabelInset: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 11,
+    color: COLORS.parent.textMuted,
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
+    marginBottom: SPACING[2],
+  },
+  helpHint: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 12,
+    color: COLORS.parent.textSecondary,
+    lineHeight: 18,
+    marginBottom: SPACING[3],
+  },
+  modeRow: { flexDirection: 'row', gap: SPACING[2], marginBottom: SPACING[2] },
+  modeChip: {
+    flex: 1,
+    paddingVertical: SPACING[2],
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(92,61,46,0.18)',
+    alignItems: 'center',
+  },
+  modeChipActive: {
+    borderColor: COLORS.parent.primary,
+    backgroundColor: 'rgba(59,130,246,0.1)',
+  },
+  modeChipText: { fontFamily: 'Inter_600SemiBold', fontSize: 13, color: COLORS.parent.textSecondary },
+  modeChipTextActive: { color: COLORS.parent.primary },
+  presetLabel: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 12,
+    color: COLORS.parent.textSecondary,
+    marginBottom: SPACING[2],
+  },
+  presetRow: { flexDirection: 'row', flexWrap: 'wrap', gap: SPACING[2], marginBottom: SPACING[2] },
+  presetChip: {
+    paddingHorizontal: SPACING[3],
+    paddingVertical: SPACING[2],
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(92,61,46,0.15)',
+    backgroundColor: 'rgba(255,255,255,0.5)',
+  },
+  presetChipActive: {
+    borderColor: COLORS.parent.primary,
+    backgroundColor: 'rgba(59,130,246,0.12)',
+  },
+  presetChipText: { fontFamily: 'Inter_600SemiBold', fontSize: 13, color: COLORS.parent.textSecondary },
+  presetChipTextActive: { color: COLORS.parent.primary },
+  countdownBanner: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 13,
+    color: COLORS.parent.danger,
+    textAlign: 'center',
+    marginTop: SPACING[1],
+  },
+  delayFootnote: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 11,
+    color: COLORS.parent.textMuted,
+    lineHeight: 16,
+    marginTop: SPACING[1],
+  },
 
   bigToggleWrap: {
     borderRadius: 20,
@@ -543,6 +822,26 @@ const styles = StyleSheet.create({
     color: COLORS.parent.primary,
   },
 
+  vpnClarify: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 12,
+    color: COLORS.parent.textSecondary,
+    lineHeight: 18,
+    marginBottom: SPACING[2],
+  },
+  vpnTunnelHint: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 11,
+    color: COLORS.parent.primary,
+    marginBottom: SPACING[3],
+  },
+  vpnTunnelHintMuted: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 11,
+    color: COLORS.parent.textMuted,
+    marginBottom: SPACING[3],
+  },
+
   permRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -581,6 +880,38 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_600SemiBold',
     fontSize: 12,
     color: '#FFFFFF',
+  },
+  alwaysOnVpnRow: {
+    marginTop: SPACING[4],
+    paddingTop: SPACING[3],
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(92,61,46,0.1)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING[2],
+    flexWrap: 'wrap',
+  },
+  alwaysOnVpnText: {
+    flex: 1,
+    minWidth: 200,
+    fontFamily: 'Inter_400Regular',
+    fontSize: 12,
+    color: COLORS.parent.textSecondary,
+    lineHeight: 18,
+  },
+  alwaysOnVpnBold: { fontFamily: 'Inter_600SemiBold', color: COLORS.parent.textPrimary },
+  alwaysOnVpnBtn: {
+    paddingVertical: SPACING[2],
+    paddingHorizontal: SPACING[3],
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: COLORS.parent.primary,
+    backgroundColor: 'rgba(59,130,246,0.08)',
+  },
+  alwaysOnVpnBtnText: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 12,
+    color: COLORS.parent.primary,
   },
 
   infoCard: {

@@ -46,7 +46,7 @@ function getApiBaseUrl(): string {
   }
 
   if (process.env.NODE_ENV === 'production') {
-    return 'https://parentingmykid-server.up.railway.app/api/v1';
+    return 'https://pmk-api.onrender.com/api/v1';
   }
 
   const fromBundle = getDevHostFromBundle();
@@ -72,6 +72,41 @@ function getApiBaseUrl(): string {
 
 export const API_BASE_URL = getApiBaseUrl();
 
+/**
+ * Base URL for the dedicated Socket.IO server (apps/socket-server).
+ * Set EXPO_PUBLIC_SOCKET_URL in apps/mobile/.env for overrides.
+ * In production this points at the Render pmk-socket service.
+ */
+function getSocketBaseUrl(): string {
+  const fromEnv = process.env.EXPO_PUBLIC_SOCKET_URL?.trim();
+  if (fromEnv) return fromEnv.replace(/\/$/, '');
+  if (process.env.NODE_ENV === 'production') return 'https://pmk-socket.onrender.com';
+  const fromBundle = getDevHostFromBundle();
+  if (fromBundle) return `http://${fromBundle}:3002`;
+  if (Platform.OS === 'android') return 'http://10.0.2.2:3002';
+  return 'http://localhost:3002';
+}
+
+export const SOCKET_BASE_URL = getSocketBaseUrl();
+
+/**
+ * Hostnames that must resolve for ParentingMyKid to sync policy (VPN DNS filtering bypass).
+ */
+export function getApiBypassHostnames(): string[] {
+  const hosts = new Set<string>();
+  try {
+    const raw = API_BASE_URL.includes('://') ? API_BASE_URL : `https://${API_BASE_URL}`;
+    const url = new URL(raw);
+    if (url.hostname) hosts.add(url.hostname.toLowerCase());
+  } catch {
+    /* ignore */
+  }
+  hosts.add('localhost');
+  hosts.add('127.0.0.1');
+  hosts.add('10.0.2.2');
+  return [...hosts];
+}
+
 if (typeof __DEV__ !== 'undefined' && __DEV__) {
   // Helps verify the client is not stuck on localhost on Android (see getApiBaseUrl).
   // eslint-disable-next-line no-console
@@ -84,6 +119,8 @@ export const API_ENDPOINTS = {
     register: '/auth/register',
     login: '/auth/login',
     childPinLogin: '/auth/child-login',
+    switchToParentWithPin: '/auth/switch-to-parent-with-pin',
+    verifyParentalPin: '/auth/verify-parental-pin',
     refresh: '/auth/refresh',
     me: '/auth/me',
     logout: '/auth/logout',

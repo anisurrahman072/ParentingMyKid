@@ -29,7 +29,7 @@ import { COLORS } from '../../src/constants/colors';
 import { SPACING } from '../../src/constants/spacing';
 import { AppLogoMark } from '../../src/components/branding/AppLogoMark';
 import { LOGO_PNG, APP_DISPLAY_NAME } from '../../src/constants/branding';
-import { getRoleHomeHref } from '../../src/utils/roleHomeHref';
+import { getParentPostAuthHref } from '../../src/utils/parentPostAuthHref';
 
 type Step = 'personal' | 'religion' | 'consent' | 'success';
 
@@ -61,10 +61,7 @@ export default function RegisterScreen() {
   const { login, isLoading: authLoading, isAuthenticated, user } = useAuthStore();
 
   if (step !== 'success' && !authLoading && isAuthenticated && user) {
-    const href = getRoleHomeHref(user.role);
-    if (href) {
-      return <Redirect href={href} />;
-    }
+    return <Redirect href={getParentPostAuthHref(user)} />;
   }
 
   function validatePersonal(): boolean {
@@ -94,7 +91,10 @@ export default function RegisterScreen() {
       await login(data.accessToken, data.refreshToken, data.user);
       setStep('success');
 
-      setTimeout(() => router.replace('/(parent)/control-center'), 2000);
+      setTimeout(() => {
+        const u = useAuthStore.getState().user;
+        if (u) router.replace(getParentPostAuthHref(u));
+      }, 2000);
     } catch (err: any) {
       const raw = err.response?.data?.message;
       const fromServer = Array.isArray(raw) ? raw.join('\n') : raw;

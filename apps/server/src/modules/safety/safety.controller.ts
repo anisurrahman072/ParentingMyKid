@@ -3,13 +3,14 @@
  * @description Safety endpoints — child location, SOS, screen time, alerts.
  */
 
-import { Controller, Get, Post, Patch, Body, Param, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Body, Param, Query, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import {
   SafetyService,
   LogLocationDto,
   CreateGeofenceDto,
   UpdateScreenTimeDto,
+  BatchScreenUsageBodyDto,
 } from './safety.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
@@ -110,14 +111,47 @@ export class SafetyController {
   @ApiOperation({ summary: 'Get extended parental controls for child' })
   @Roles(UserRole.PARENT)
   @Get(':childId/parental-controls')
-  getParentalControls(@Param('childId') childId: string) {
-    return this.safetyService.getParentalControls(childId);
+  getParentalControls(
+    @CurrentUser() user: AuthTokenPayload,
+    @Param('childId') childId: string,
+  ) {
+    return this.safetyService.getParentalControls(user.sub, childId);
   }
 
   @ApiOperation({ summary: 'Update extended parental controls for child' })
   @Roles(UserRole.PARENT)
   @Patch(':childId/parental-controls')
-  updateParentalControls(@Param('childId') childId: string, @Body() dto: any) {
-    return this.safetyService.updateParentalControls(childId, dto);
+  updateParentalControls(
+    @CurrentUser() user: AuthTokenPayload,
+    @Param('childId') childId: string,
+    @Body() dto: any,
+  ) {
+    return this.safetyService.updateParentalControls(user.sub, childId, dto);
+  }
+
+  @ApiOperation({ summary: 'Batch-upload native kid-scoped usage segments from device' })
+  @Roles(UserRole.PARENT)
+  @Post(':childId/screen-usage/batch')
+  batchScreenUsage(
+    @CurrentUser() user: AuthTokenPayload,
+    @Param('childId') childId: string,
+    @Body() body: BatchScreenUsageBodyDto,
+  ) {
+    return this.safetyService.batchUpsertScreenUsage(user.sub, childId, body);
+  }
+
+  @ApiOperation({ summary: 'Aggregated app usage report (by day and app)' })
+  @Roles(UserRole.PARENT)
+  @Get(':childId/usage-report')
+  getUsageReport(
+    @CurrentUser() user: AuthTokenPayload,
+    @Param('childId') childId: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+  ) {
+    const today = new Date().toISOString().slice(0, 10);
+    const f = from && /^\d{4}-\d{2}-\d{2}$/.test(from) ? from : today;
+    const t = to && /^\d{4}-\d{2}-\d{2}$/.test(to) ? to : today;
+    return this.safetyService.getUsageReport(user.sub, childId, f, t);
   }
 }

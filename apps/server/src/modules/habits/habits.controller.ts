@@ -12,7 +12,7 @@ export class HabitsController {
 
   @Get(':childId')
   @ApiOperation({ summary: "Get child's habits" })
-  getHabits(@Param('childId') childId: string) {
+  getHabits(@Param('childId') childId: string): Promise<{ habits: Array<Record<string, unknown>> }> {
     return this.habits.getChildHabits(childId);
   }
 
