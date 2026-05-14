@@ -21,7 +21,8 @@ services:
     name: pmk-api
     runtime: node
     rootDir: apps/server
-    buildCommand: npm install && npm run build
+    # NODE_ENV=production omits devDependencies by default; Nest CLI and TypeScript live there.
+    buildCommand: npm install --include=dev && npm run build
     startCommand: node dist/main.js
     healthCheckPath: /api/v1/health
     autoDeploy: true
@@ -84,7 +85,7 @@ services:
     name: pmk-socket
     runtime: node
     rootDir: apps/socket-server
-    buildCommand: npm install && npm run build
+    buildCommand: npm install --include=dev && npm run build
     startCommand: node dist/index.js
     healthCheckPath: /health
     autoDeploy: true
