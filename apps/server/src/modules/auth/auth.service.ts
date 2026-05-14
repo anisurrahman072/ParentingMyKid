@@ -102,6 +102,7 @@ export class AuthService {
       passwordHash,
       name: dto.name,
       phone: dto.phone,
+      religion: dto.religion,
       role: UserRole.PARENT,
       parentalConsentGiven: true,
       parentalConsentAt: new Date(),

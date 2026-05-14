@@ -80,13 +80,32 @@ export default function RegisterScreen() {
     setLoading(true);
     try {
       const name = [firstName.trim(), lastName.trim()].filter(Boolean).join(' ').trim() || firstName.trim();
-      const { data } = await apiClient.post(API_ENDPOINTS.auth.register, {
+      const payload = {
         email: email.trim().toLowerCase(),
         password,
         name,
         religion,
         parentalConsentGiven: consentToTerms && consentToDataProcessing,
-      });
+      };
+
+      let data: any;
+      try {
+        ({ data } = await apiClient.post(API_ENDPOINTS.auth.register, payload));
+      } catch (firstErr: any) {
+        const raw = firstErr?.response?.data?.message;
+        const fromServer = Array.isArray(raw) ? raw.join('\n') : String(raw ?? '');
+        const isLegacyServerReligionMismatch =
+          firstErr?.response?.status === 400 &&
+          /religion\s+should\s+not\s+exist/i.test(fromServer);
+
+        if (!isLegacyServerReligionMismatch) {
+          throw firstErr;
+        }
+
+        // Backward compatibility: retry for old API versions that don't accept `religion` yet.
+        const { religion: _ignoredReligion, ...legacyPayload } = payload;
+        ({ data } = await apiClient.post(API_ENDPOINTS.auth.register, legacyPayload));
+      }
 
       await login(data.accessToken, data.refreshToken, data.user);
       setStep('success');

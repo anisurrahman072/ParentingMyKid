@@ -5,7 +5,7 @@
  *              reaching the service — invalid data never enters business logic.
  */
 
-import { IsEmail, IsString, MinLength, IsBoolean, IsOptional, IsPhoneNumber, Length } from 'class-validator';
+import { IsEmail, IsString, MinLength, IsBoolean, IsOptional, IsPhoneNumber, Length, IsIn } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class RegisterParentDto {
@@ -39,6 +39,17 @@ export class RegisterParentDto {
   @IsOptional()
   @IsString()
   languagePreference?: string;
+
+  @ApiProperty({
+    required: false,
+    enum: ['ISLAM', 'CHRISTIAN', 'OTHER'],
+    example: 'ISLAM',
+    description: 'Family religion preference used for content personalization',
+  })
+  @IsOptional()
+  @IsString()
+  @IsIn(['ISLAM', 'CHRISTIAN', 'OTHER'])
+  religion?: 'ISLAM' | 'CHRISTIAN' | 'OTHER';
 }
 
 export class LoginDto {
