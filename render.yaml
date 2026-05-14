@@ -4,7 +4,7 @@
 ##   1. pmk-api        — NestJS REST + WebSocket API (apps/server)
 ##   2. pmk-socket     — Dedicated Socket.IO pub-sub server (apps/socket-server)
 ##
-## Both run on Render's free tier (750 hours/month each).
+## Each web service sets `plan: free` explicitly (Blueprint default would be paid `starter`).
 ##
 ## To deploy:
 ##   1. Push this repo to GitHub.
@@ -17,6 +17,7 @@ services:
 
   # ── 1. NestJS API ────────────────────────────────────────────────────────────
   - type: web
+    plan: free
     name: pmk-api
     runtime: node
     rootDir: apps/server
@@ -79,6 +80,7 @@ services:
 
   # ── 2. Socket.IO Pub-Sub Server ──────────────────────────────────────────────
   - type: web
+    plan: free
     name: pmk-socket
     runtime: node
     rootDir: apps/socket-server
