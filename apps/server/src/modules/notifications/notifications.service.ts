@@ -94,6 +94,9 @@ export class NotificationsService {
 
   /**
    * Daily mission reminder — sent at 9 AM Bangladesh time (UTC+6 = 03:00 UTC).
+   *
+   * Performance: 3 bulk DB queries + 1 Expo batch call regardless of user count.
+   * Previously: 1 + N DB queries + N individual Expo calls (serial N+1 pattern).
    */
   @Cron('0 3 * * *')
   async sendDailyMissionReminders(): Promise<void> {
@@ -103,6 +106,9 @@ export class NotificationsService {
     if (!childProfiles.length) return;
 
     const userIds = childProfiles.map((c) => c.userId);
+    const childIds = childProfiles.map((c) => String(c._id));
+
+    // Query 2: bulk fetch all users with push tokens
     const usersWithToken = await this.db.user
       .find({ _id: { $in: userIds }, expoPushToken: { $exists: true, $ne: null } })
       .select('_id expoPushToken')
@@ -114,31 +120,52 @@ export class NotificationsService {
 
     const today = new Date().toISOString().split('T')[0];
 
+    // Query 3: single bulk fetch of ALL today's missions (was N individual findOne calls)
+    const todayMissions = await this.db.dailyMission
+      .find({ childId: { $in: childIds }, date: today })
+      .lean();
+
+    const missionMap = new Map(
+      todayMissions.map((m) => [String(m.childId), m]),
+    );
+
+    // Build all push messages in memory — no DB calls inside this loop
+    const messages: ExpoPushMessage[] = [];
+
     for (const child of childProfiles) {
       const pushToken = tokenMap.get(child.userId);
-      if (!pushToken) continue;
+      if (!pushToken || !Expo.isExpoPushToken(pushToken)) continue;
 
-      const todayMission = await this.db.dailyMission
-        .findOne({ childId: String(child._id), date: today })
-        .lean();
-
+      const todayMission = missionMap.get(String(child._id));
       const completionPct = (todayMission?.completionPct as number) ?? 0;
+
       if (!todayMission || completionPct < 100) {
         const total = ((todayMission?.missionsJson as { total?: number })?.total ?? 5);
         const remaining = Math.round(((100 - completionPct) / 100) * total);
 
-        await this.sendToTokens([pushToken], {
-          type: NotificationType.MISSION_REMINDER,
+        messages.push({
+          to: pushToken,
           title: `Time to complete your missions, ${child.name}! 🌟`,
           body:
             remaining > 0
               ? `You have ${remaining} missions left today. Let's go!`
               : 'Start your missions for today!',
           data: { screen: 'missions' },
+          sound: 'default',
           priority: 'default',
+          channelId: 'default',
         });
       }
     }
+
+    if (!messages.length) {
+      this.logger.log('Daily mission reminders: no pending missions today.');
+      return;
+    }
+
+    // Single batched Expo call instead of N individual HTTP calls
+    await this.sendRawMessages(messages);
+    this.logger.log(`Daily mission reminders: ${messages.length} notifications dispatched.`);
   }
 
   /**
@@ -188,6 +215,29 @@ export class NotificationsService {
   }
 
   // ─── Internal Delivery ───────────────────────────────────────────────────
+
+  /**
+   * Sends a pre-built array of ExpoPushMessages in optimally-sized chunks.
+   * Use this when each message has a different body (e.g. personalised reminders).
+   * Expo's chunkPushNotifications handles the 100-message-per-request limit automatically.
+   */
+  private async sendRawMessages(messages: ExpoPushMessage[]): Promise<void> {
+    const valid = messages.filter((m) => Expo.isExpoPushToken(String(m.to)));
+    if (!valid.length) return;
+
+    const chunks = this.expo.chunkPushNotifications(valid);
+    for (const chunk of chunks) {
+      try {
+        const tickets = await this.expo.sendPushNotificationsAsync(chunk);
+        const errors = tickets.filter((t) => t.status === 'error');
+        if (errors.length > 0) {
+          this.logger.warn(`${errors.length} push notification delivery errors in batch`);
+        }
+      } catch (error) {
+        this.logger.error('Batch push notification delivery failed:', error);
+      }
+    }
+  }
 
   private async sendToTokens(tokens: string[], payload: PushNotificationPayload): Promise<void> {
     const validTokens = tokens.filter((t) => Expo.isExpoPushToken(t));

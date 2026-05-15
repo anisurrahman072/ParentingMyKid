@@ -270,8 +270,8 @@ export default function ControlCenterScreen() {
             </Animated.View>
           )}
 
-          {Platform.OS === 'android' && !!activeKidId && kids.length > 0 && (
-            <DevicePermissionsAttentionCard policySnapshot={parentalSnapshot} />
+          {Platform.OS === 'android' && (
+            <DevicePermissionsAttentionCard policySnapshot={activeKidId ? parentalSnapshot : null} />
           )}
 
           {/* No kids prompt */}

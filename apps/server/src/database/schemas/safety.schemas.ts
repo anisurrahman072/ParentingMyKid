@@ -35,6 +35,10 @@ export const LocationEventSchema = SchemaFactory.createForClass(LocationEvent);
 LocationEventSchema.virtual('id').get(function () {
   return this._id;
 });
+// Compound index: covers location history queries { childId, timestamp }
+LocationEventSchema.index({ childId: 1, timestamp: -1 });
+// TTL: GPS pings expire after 30 days — no feature needs older location history
+LocationEventSchema.index({ createdAt: 1 }, { expireAfterSeconds: 2_592_000 });
 
 // ---------------------------------------------------------------------------
 
@@ -111,6 +115,10 @@ export const ScreenUsageLogSchema =
 ScreenUsageLogSchema.virtual('id').get(function () {
   return this._id;
 });
+// Compound index: covers screen usage queries { childId, date }
+ScreenUsageLogSchema.index({ childId: 1, date: 1 });
+// TTL: screen usage logs expire after 90 days — analytics uses last 30 days max
+ScreenUsageLogSchema.index({ createdAt: 1 }, { expireAfterSeconds: 7_776_000 });
 
 // ---------------------------------------------------------------------------
 
@@ -281,6 +289,10 @@ export const ContentFilterEventSchema =
 ContentFilterEventSchema.virtual('id').get(function () {
   return this._id;
 });
+// Compound index: covers content filter history queries { childId, timestamp }
+ContentFilterEventSchema.index({ childId: 1, timestamp: -1 });
+// TTL: blocked-URL events expire after 30 days — short-term forensics only
+ContentFilterEventSchema.index({ createdAt: 1 }, { expireAfterSeconds: 2_592_000 });
 
 // ---------------------------------------------------------------------------
 

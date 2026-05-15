@@ -92,6 +92,10 @@ export const ActivityLogSchema = SchemaFactory.createForClass(ActivityLog);
 ActivityLogSchema.virtual('id').get(function () {
   return this._id;
 });
+// Compound index: covers getTodayActivity() query { activeKidId, createdAt range }
+ActivityLogSchema.index({ activeKidId: 1, createdAt: -1 });
+// TTL: auto-expire after 90 days to protect Atlas M0 512 MB storage budget
+ActivityLogSchema.index({ createdAt: 1 }, { expireAfterSeconds: 7_776_000 });
 
 // ---------------------------------------------------------------------------
 
@@ -120,6 +124,10 @@ export const KidSectionTimeLogSchema =
 KidSectionTimeLogSchema.virtual('id').get(function () {
   return this._id;
 });
+// Compound index: covers upsert and read queries { childId, date, section }
+KidSectionTimeLogSchema.index({ childId: 1, date: 1 });
+// TTL: auto-expire after 90 days — analytics only uses last 30 days of data
+KidSectionTimeLogSchema.index({ createdAt: 1 }, { expireAfterSeconds: 7_776_000 });
 
 // ---------------------------------------------------------------------------
 

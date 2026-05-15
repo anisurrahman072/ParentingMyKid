@@ -80,58 +80,74 @@ export class AnalyticsService {
   /**
    * Public entry point for weekly report generation — called by the cron job
    * above and also exposed via POST /analytics/cron/weekly-analytics.
+   *
+   * Performance: processes families in pages of 50 to bound RAM usage.
+   * Previously loaded ALL families into memory at once (OOM risk on 512 MB Render).
    */
   async runWeeklyAnalytics() {
     this.logger.log('Starting weekly report generation...');
 
-    const families = await this.db.familyGroup.find().lean();
-
+    const PAGE_SIZE = 50;
+    let skip = 0;
     let sent = 0;
-    for (const family of families) {
-      const primaryMember = await this.db.familyMember
-        .findOne({ familyId: (family as any)._id, role: 'PRIMARY' })
-        .lean();
-      if (!primaryMember) continue;
+    let totalFamilies = 0;
 
-      const user = await this.db.user
-        .findOne({ _id: (primaryMember as any).userId })
-        .lean();
-      if (!user?.email) continue;
-
-      const children = await this.db.childProfile
-        .find({ familyId: (family as any)._id, wellbeingScore: { $ne: null } })
+    while (true) {
+      const page = await this.db.familyGroup
+        .find()
+        .skip(skip)
+        .limit(PAGE_SIZE)
         .lean();
 
-      try {
-        const report = await this.buildWeeklyReport({ ...(family as any), children });
-        await this.sendWeeklyEmail(
-          (user as any).email,
-          (user as any).name,
-          report,
-        );
-        sent++;
-      } catch (err) {
-        this.logger.error(
-          `Failed to send report to family ${(family as any)._id}:`,
-          err,
-        );
+      if (!page.length) break;
+
+      for (const family of page) {
+        const primaryMember = await this.db.familyMember
+          .findOne({ familyId: (family as any)._id, role: 'PRIMARY' })
+          .lean();
+        if (!primaryMember) continue;
+
+        const user = await this.db.user
+          .findOne({ _id: (primaryMember as any).userId })
+          .lean();
+        if (!user?.email) continue;
+
+        const children = await this.db.childProfile
+          .find({ familyId: (family as any)._id, wellbeingScore: { $ne: null } })
+          .lean();
+
+        try {
+          const report = await this.buildWeeklyReport({ ...(family as any), children });
+          await this.sendWeeklyEmail(
+            (user as any).email,
+            (user as any).name,
+            report,
+          );
+          sent++;
+        } catch (err) {
+          this.logger.error(
+            `Failed to send report to family ${(family as any)._id}:`,
+            err,
+          );
+        }
       }
+
+      totalFamilies += page.length;
+      if (page.length < PAGE_SIZE) break;
+      skip += PAGE_SIZE;
     }
 
-    this.logger.log(`Weekly reports sent: ${sent}/${families.length}`);
+    this.logger.log(`Weekly reports sent: ${sent}/${totalFamilies}`);
   }
 
   private async buildWeeklyReport(family: any) {
-    const children = [];
-
-    for (const child of family.children) {
-      const analytics = await this.getChildAnalytics(child._id ?? child.id, 7);
-      children.push({
-        name: child.name,
-        wellbeingScore: child.wellbeingScore,
-        ...analytics,
-      });
-    }
+    // Run all children's analytics queries in parallel — independent of each other
+    const children = await Promise.all(
+      (family.children as any[]).map(async (child) => {
+        const analytics = await this.getChildAnalytics(child._id ?? child.id, 7);
+        return { name: child.name, wellbeingScore: child.wellbeingScore, ...analytics };
+      }),
+    );
 
     return {
       familyName: family.name,
