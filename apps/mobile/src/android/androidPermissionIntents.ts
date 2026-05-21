@@ -50,6 +50,19 @@ export async function launchAndroidOverlayPermission(): Promise<boolean> {
   }
 }
 
+/** System Location on/off (quick-settings master switch). */
+export async function launchAndroidLocationSettings(): Promise<boolean> {
+  if (Platform.OS !== 'android') return false;
+  try {
+    await IntentLauncher.startActivityAsync(
+      IntentLauncher.ActivityAction.LOCATION_SOURCE_SETTINGS,
+    );
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /** Settings → Special app access → Usage access */
 export async function launchAndroidUsageAccessSettings(): Promise<boolean> {
   if (Platform.OS !== 'android') return false;

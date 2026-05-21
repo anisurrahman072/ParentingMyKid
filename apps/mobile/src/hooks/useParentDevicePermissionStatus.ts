@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { AppState } from 'react-native';
 import type { ParentDevicePermissionDefinition } from '../services/parentDevicePermissions.definitions';
 
@@ -6,13 +6,23 @@ export function useParentDevicePermissionStatus(definitions: ParentDevicePermiss
   const [statusById, setStatusById] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(true);
 
-  const idsKey = useMemo(() => definitions.map((d) => d.id).join(','), [definitions]);
+  /** Stable across renders — avoids infinite loops when callers pass a new `definitions` array each render. */
+  const idsKey = definitions.map((d) => d.id).join('|');
+
+  const defsRef = useRef(definitions);
+  defsRef.current = definitions;
 
   const refresh = useCallback(async () => {
+    const defs = defsRef.current;
+    if (defs.length === 0) {
+      setStatusById({});
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     const next: Record<string, boolean> = {};
     await Promise.all(
-      definitions.map(async (d) => {
+      defs.map(async (d) => {
         try {
           next[d.id] = await d.checkFn();
         } catch {
@@ -22,11 +32,11 @@ export function useParentDevicePermissionStatus(definitions: ParentDevicePermiss
     );
     setStatusById(next);
     setLoading(false);
-  }, [definitions]);
+  }, [idsKey]);
 
   useEffect(() => {
     void refresh();
-  }, [refresh, idsKey]);
+  }, [refresh]);
 
   useEffect(() => {
     const sub = AppState.addEventListener('change', (state) => {

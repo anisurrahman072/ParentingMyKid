@@ -64,7 +64,7 @@ export default function SwitchToParentScreen() {
   const animated = useAnimatedStyle(() => ({ transform: [{ translateX: shakeX.value }] }));
 
   return (
-    <LinearGradient colors={['#312e81', '#6366f1', '#312e81']} style={styles.gradient}>
+    <LinearGradient colors={['#EAF4FF', '#DCEBFF', '#EAF4FF']} style={styles.gradient}>
       <View style={styles.container}>
         <TouchableOpacity onPress={() => router.back()} style={styles.back}>
           <Text style={styles.backText}>Back</Text>
@@ -107,29 +107,31 @@ const styles = StyleSheet.create({
   gradient: { flex: 1 },
   container: { flex: 1, padding: SPACING[6], paddingTop: 48, alignItems: 'center' },
   back: { alignSelf: 'flex-start', marginBottom: SPACING[4] },
-  backText: { color: 'rgba(255,255,255,0.75)', fontSize: 16 },
-  title: { color: '#fff', fontSize: 24, fontWeight: '900' },
-  sub: { color: 'rgba(255,255,255,0.75)', marginTop: 8, marginBottom: 24 },
+  backText: { color: '#4B5F7A', fontSize: 16 },
+  title: { color: '#22324D', fontSize: 24, fontWeight: '900' },
+  sub: { color: '#5E7394', marginTop: 8, marginBottom: 24 },
   dots: { flexDirection: 'row', gap: 12, marginBottom: 28 },
   dot: {
     width: 18,
     height: 18,
     borderRadius: 9,
     borderWidth: 2,
-    borderColor: 'rgba(255,255,255,0.4)',
+    borderColor: 'rgba(59,130,246,0.35)',
   },
-  dotOn: { backgroundColor: '#fff', borderColor: '#fff' },
+  dotOn: { backgroundColor: '#3B82F6', borderColor: '#3B82F6' },
   pad: { gap: 10, maxWidth: 280 },
   row: { flexDirection: 'row', justifyContent: 'center', gap: 10 },
   key: {
     width: 72,
     height: 72,
     borderRadius: 36,
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    backgroundColor: 'rgba(255,255,255,0.82)',
+    borderWidth: 1,
+    borderColor: 'rgba(59,130,246,0.16)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   keyEmpty: { backgroundColor: 'transparent' },
-  keyText: { color: '#fff', fontSize: 26, fontWeight: '700' },
-  alt: { color: 'rgba(255,255,255,0.65)', marginTop: 24, fontSize: 15 },
+  keyText: { color: '#22324D', fontSize: 26, fontWeight: '700' },
+  alt: { color: '#3B82F6', marginTop: 24, fontSize: 15 },
 });

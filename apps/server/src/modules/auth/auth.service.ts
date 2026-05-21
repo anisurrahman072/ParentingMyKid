@@ -546,7 +546,22 @@ export class AuthService {
 
   // ─── Google Sign-In ────────────────────────────────────────────────────────
 
-  async googleSignIn(idToken: string): Promise<AuthResponse> {
+  async googleSignIn(
+    input:
+      | string
+      | {
+          idToken: string;
+          parentalConsentGiven?: boolean;
+          religion?: 'ISLAM' | 'CHRISTIAN' | 'OTHER';
+          name?: string;
+        },
+  ): Promise<AuthResponse> {
+    const isLegacyInput = typeof input === 'string';
+    const idToken = isLegacyInput ? input : input.idToken;
+    const parentalConsentGiven = isLegacyInput ? undefined : input.parentalConsentGiven;
+    const religion = isLegacyInput ? undefined : input.religion;
+    const requestedName = isLegacyInput ? undefined : input.name;
+
     const { data } = await firstValueFrom(
       this.httpService.get(`https://oauth2.googleapis.com/tokeninfo?id_token=${idToken}`),
     );
@@ -554,14 +569,20 @@ export class AuthService {
 
     let user = await this.db.user.findOne({ email }).lean();
     if (!user) {
+      if (parentalConsentGiven === false) {
+        throw new BadRequestException('Parental consent is required to create an account.');
+      }
       const passwordHash = await bcrypt.hash(googleId, this.BCRYPT_ROUNDS);
+      const consentGiven = parentalConsentGiven ?? true;
+      const finalName = requestedName?.trim() || name || email.split('@')[0];
       await this.db.user.create({
         email,
-        name: name || email.split('@')[0],
+        name: finalName,
         passwordHash,
+        religion,
         role: 'PARENT',
-        parentalConsentGiven: true,
-        parentalConsentAt: new Date(),
+        parentalConsentGiven: consentGiven,
+        parentalConsentAt: consentGiven ? new Date() : undefined,
         parentalConsentVersion: '1.0',
       });
       user = await this.db.user.findOne({ email }).lean();

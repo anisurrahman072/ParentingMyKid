@@ -3,12 +3,12 @@
  *
  * Flow:
  * - Shows all registered kids as large colorful cards
- * - Correct kid → confetti welcome + quick-launch content tiles (dismissable)
+ * - Correct kid → immediate continue into Kid screen
  * - Different kid → gentle message "You're in [X]'s app. Ask a parent to switch."
  *   Kids cannot switch accounts independently.
  * - Dual identity tracking: logs claimedKidId vs activeKidId for parent review.
  */
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -16,23 +16,19 @@ import {
   TouchableOpacity,
   Modal,
   Dimensions,
-  Alert,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, {
   FadeInDown,
-  FadeInUp,
-  BounceIn,
   SlideInUp,
   useSharedValue,
   useAnimatedStyle,
   withSpring,
-  withSequence,
-  withTiming,
 } from 'react-native-reanimated';
 import { useFamilyStore } from '../../store/family.store';
 import { apiClient } from '../../services/api.client';
 import { SPACING } from '../../constants/spacing';
+import { COLORS } from '../../constants/colors';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
@@ -45,58 +41,16 @@ const KID_GRADIENTS: [string, string][] = [
   ['#2193B0', '#6DD5ED'],
 ];
 
-function ConfettiPiece({ delay, x }: { delay: number; x: number }) {
-  const colors = ['#FF6B6B', '#FFE66D', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7'];
-  const color = colors[Math.floor(Math.random() * colors.length)];
-  const translateY = useSharedValue(-30);
-  const opacity = useSharedValue(1);
-
-  useEffect(() => {
-    setTimeout(() => {
-      translateY.value = withTiming(SCREEN_W * 1.5, { duration: 2000 });
-      opacity.value = withTiming(0, { duration: 2000 });
-    }, delay);
-  }, []);
-
-  const style = useAnimatedStyle(() => ({
-    transform: [{ translateY: translateY.value }],
-    opacity: opacity.value,
-    position: 'absolute',
-    left: x,
-    top: -30,
-  }));
-
-  return (
-    <Animated.View style={style}>
-      <Text style={{ fontSize: 18 }}>{['🎉', '⭐', '✨', '🌟', '💫'][Math.floor(Math.random() * 5)]}</Text>
-    </Animated.View>
-  );
-}
-
-function ConfettiOverlay() {
-  const pieces = Array.from({ length: 20 }, (_, i) => ({
-    id: i,
-    delay: Math.random() * 800,
-    x: Math.random() * SCREEN_W,
-  }));
-
-  return (
-    <View style={StyleSheet.absoluteFill} pointerEvents="none">
-      {pieces.map((p) => (
-        <ConfettiPiece key={p.id} delay={p.delay} x={p.x} />
-      ))}
-    </View>
-  );
-}
-
-type ModalState = 'selecting' | 'welcome' | 'wrong-kid';
+type ModalState = 'selecting' | 'wrong-kid';
 
 export function KidIdentityModal({
   activeKidId,
   onDismiss,
+  onConfirmed,
 }: {
   activeKidId: string;
   onDismiss: () => void;
+  onConfirmed: () => void;
 }) {
   const { dashboard } = useFamilyStore();
   const [state, setState] = useState<ModalState>('selecting');
@@ -122,7 +76,8 @@ export function KidIdentityModal({
     void logIdentityClaim(kidId);
 
     if (kidId === activeKidId) {
-      setState('welcome');
+      onConfirmed();
+      onDismiss();
     } else {
       setState('wrong-kid');
     }
@@ -134,16 +89,30 @@ export function KidIdentityModal({
     <Modal visible transparent animationType="none">
       <View style={styles.overlay}>
         <LinearGradient
-          colors={['rgba(15,12,41,0.97)', 'rgba(48,43,99,0.97)']}
+          colors={['rgba(59,130,246,0.18)', 'rgba(168,85,247,0.16)', 'rgba(16,185,129,0.14)']}
           style={StyleSheet.absoluteFill}
         />
-
-        {state === 'welcome' && <ConfettiOverlay />}
 
         <Animated.View
           entering={SlideInUp.springify()}
           style={styles.sheet}
         >
+          <LinearGradient
+            colors={['rgba(255,255,255,0.96)', 'rgba(238,246,255,0.96)', 'rgba(245,238,255,0.96)']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.sheetGradient}
+          />
+
+          <TouchableOpacity
+            style={styles.closeButton}
+            onPress={onDismiss}
+            accessibilityRole="button"
+            accessibilityLabel="Close"
+          >
+            <Text style={styles.closeText}>✕</Text>
+          </TouchableOpacity>
+
           {/* State: selecting */}
           {state === 'selecting' && (
             <>
@@ -168,31 +137,6 @@ export function KidIdentityModal({
             </>
           )}
 
-          {/* State: welcome (correct kid) */}
-          {state === 'welcome' && claimedKid && (
-            <Animated.View entering={BounceIn.delay(100)} style={styles.welcomeSection}>
-              <Text style={styles.welcomeEmoji}>🎉</Text>
-              <Text style={styles.welcomeTitle}>
-                Welcome, {claimedKid.name}!
-              </Text>
-              <Text style={styles.welcomeSubtitle}>
-                So great to see you today! What would you like to explore?
-              </Text>
-
-              <View style={styles.quickLaunch}>
-                {['📺 Videos', '📚 Stories', '🔢 Maths', '🎨 Drawing'].map((item) => (
-                  <TouchableOpacity key={item} style={styles.quickLaunchChip} onPress={onDismiss}>
-                    <Text style={styles.quickLaunchText}>{item}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-
-              <TouchableOpacity style={styles.dismissButton} onPress={onDismiss}>
-                <Text style={styles.dismissText}>Let's Go! →</Text>
-              </TouchableOpacity>
-            </Animated.View>
-          )}
-
           {/* State: wrong kid */}
           {state === 'wrong-kid' && (
             <Animated.View entering={FadeInDown.delay(100)} style={styles.wrongKidSection}>
@@ -205,7 +149,13 @@ export function KidIdentityModal({
               </Text>
 
               <View style={styles.wrongKidActions}>
-                <TouchableOpacity style={styles.wrongKidContinue} onPress={onDismiss}>
+                <TouchableOpacity
+                  style={styles.wrongKidContinue}
+                  onPress={() => {
+                    onConfirmed();
+                    onDismiss();
+                  }}
+                >
                   <Text style={styles.wrongKidContinueText}>
                     Continue in {activeKid?.name}'s view
                   </Text>
@@ -274,11 +224,38 @@ const styles = StyleSheet.create({
   sheet: {
     borderTopLeftRadius: 32,
     borderTopRightRadius: 32,
-    backgroundColor: 'rgba(30,25,60,0.98)',
+    backgroundColor: 'transparent',
     paddingBottom: 48,
     paddingTop: SPACING[6],
     paddingHorizontal: SPACING[5],
     maxHeight: '90%',
+    borderWidth: 1,
+    borderColor: 'rgba(59,130,246,0.22)',
+    overflow: 'hidden',
+  },
+  sheetGradient: {
+    ...StyleSheet.absoluteFillObject,
+    borderTopLeftRadius: 32,
+    borderTopRightRadius: 32,
+  },
+  closeButton: {
+    position: 'absolute',
+    right: SPACING[4],
+    top: SPACING[4],
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.88)',
+    borderWidth: 1,
+    borderColor: COLORS.parent.surfaceBorder,
+    zIndex: 5,
+  },
+  closeText: {
+    fontSize: 18,
+    color: COLORS.parent.textPrimary,
+    fontFamily: 'Inter_700Bold',
   },
   sheetHeader: {
     alignItems: 'center',
@@ -288,13 +265,13 @@ const styles = StyleSheet.create({
   sheetTitle: {
     fontFamily: 'Inter_700Bold',
     fontSize: 28,
-    color: '#FFFFFF',
+    color: COLORS.parent.textPrimary,
     marginBottom: SPACING[2],
   },
   sheetSubtitle: {
     fontFamily: 'Inter_400Regular',
     fontSize: 16,
-    color: 'rgba(255,255,255,0.7)',
+    color: COLORS.parent.textSecondary,
     textAlign: 'center',
   },
   kidsGrid: {
@@ -318,7 +295,7 @@ const styles = StyleSheet.create({
     width: 68,
     height: 68,
     borderRadius: 34,
-    backgroundColor: 'rgba(255,255,255,0.3)',
+    backgroundColor: 'rgba(255,255,255,0.4)',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 3,
@@ -338,59 +315,7 @@ const styles = StyleSheet.create({
   kidCardTap: {
     fontFamily: 'Inter_400Regular',
     fontSize: 12,
-    color: 'rgba(255,255,255,0.7)',
-  },
-
-  // Welcome state
-  welcomeSection: {
-    alignItems: 'center',
-    paddingTop: SPACING[4],
-    gap: SPACING[4],
-  },
-  welcomeEmoji: { fontSize: 72 },
-  welcomeTitle: {
-    fontFamily: 'Inter_700Bold',
-    fontSize: 28,
-    color: '#FFFFFF',
-    textAlign: 'center',
-  },
-  welcomeSubtitle: {
-    fontFamily: 'Inter_400Regular',
-    fontSize: 16,
-    color: 'rgba(255,255,255,0.7)',
-    textAlign: 'center',
-    lineHeight: 24,
-  },
-  quickLaunch: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: SPACING[3],
-    justifyContent: 'center',
-  },
-  quickLaunchChip: {
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    borderRadius: 20,
-    paddingHorizontal: SPACING[4],
-    paddingVertical: SPACING[2],
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.25)',
-  },
-  quickLaunchText: {
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 15,
-    color: '#FFFFFF',
-  },
-  dismissButton: {
-    backgroundColor: '#3B82F6',
-    borderRadius: 16,
-    paddingVertical: SPACING[4],
-    paddingHorizontal: SPACING[8],
-    marginTop: SPACING[2],
-  },
-  dismissText: {
-    fontFamily: 'Inter_700Bold',
-    fontSize: 17,
-    color: '#FFFFFF',
+    color: 'rgba(255,255,255,0.85)',
   },
 
   // Wrong kid state
@@ -403,13 +328,13 @@ const styles = StyleSheet.create({
   wrongKidTitle: {
     fontFamily: 'Inter_700Bold',
     fontSize: 22,
-    color: '#FFFFFF',
+    color: COLORS.parent.textPrimary,
     textAlign: 'center',
   },
   wrongKidDesc: {
     fontFamily: 'Inter_400Regular',
     fontSize: 15,
-    color: 'rgba(255,255,255,0.7)',
+    color: COLORS.parent.textSecondary,
     textAlign: 'center',
     lineHeight: 22,
   },
@@ -420,29 +345,29 @@ const styles = StyleSheet.create({
     marginTop: SPACING[2],
   },
   wrongKidContinue: {
-    backgroundColor: 'rgba(255,255,255,0.15)',
+    backgroundColor: COLORS.parent.surface,
     borderRadius: 14,
     paddingVertical: SPACING[4],
     paddingHorizontal: SPACING[6],
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.25)',
+    borderColor: COLORS.parent.surfaceBorder,
     width: '100%',
     alignItems: 'center',
   },
   wrongKidContinueText: {
     fontFamily: 'Inter_600SemiBold',
     fontSize: 16,
-    color: '#FFFFFF',
+    color: COLORS.parent.textPrimary,
   },
   wrongKidOr: {
     fontFamily: 'Inter_400Regular',
     fontSize: 14,
-    color: 'rgba(255,255,255,0.4)',
+    color: COLORS.parent.textMuted,
   },
   wrongKidAskParent: {
     fontFamily: 'Inter_500Medium',
     fontSize: 14,
-    color: 'rgba(255,255,255,0.6)',
+    color: COLORS.parent.textSecondary,
     textAlign: 'center',
     lineHeight: 20,
   },

@@ -31,26 +31,46 @@ import {
   PARENT_DEVICE_PERMISSION_SLOT_IDS,
   type ParentDevicePermissionDefinition,
 } from '../../../src/services/parentDevicePermissions.definitions';
+import {
+  isAppLocationPermissionGranted,
+  isDeviceLocationServicesEnabled,
+} from '../../../src/utils/locationPermission';
 import { AccessibilityRestrictedSettingsGuideModal } from '../../../src/components/parent/AccessibilityRestrictedSettingsGuideModal';
 
 const PERMISSION_IDS = [...PARENT_DEVICE_PERMISSION_SLOT_IDS];
 
-type StatusMap = Record<string, 'granted' | 'required' | 'checking' | 'unknown'>;
+type PermissionStatus = 'granted' | 'required' | 'partial' | 'checking' | 'unknown';
+type StatusMap = Record<string, PermissionStatus>;
 
 function PermissionCard({
   perm,
   status,
+  actionLabel,
   onGrant,
 }: {
   perm: ParentDevicePermissionDefinition;
-  status: string;
+  status: PermissionStatus;
+  actionLabel?: string;
   onGrant: () => void;
 }) {
   const isGranted = status === 'granted';
+  const isPartial = status === 'partial';
+  const showAction = !isGranted && status !== 'checking';
+
+  let badgeText = '! Required';
+  if (isGranted) badgeText = '✓ Granted';
+  else if (status === 'unknown') badgeText = 'Unknown';
+  else if (isPartial) badgeText = 'Step 2 needed';
+
   return (
     <View style={cardStyles.card}>
       <View style={cardStyles.top}>
-        <View style={[cardStyles.iconWrap, isGranted ? cardStyles.iconGranted : cardStyles.iconRequired]}>
+        <View
+          style={[
+            cardStyles.iconWrap,
+            isGranted ? cardStyles.iconGranted : cardStyles.iconRequired,
+          ]}
+        >
           <Text style={cardStyles.icon}>{perm.icon}</Text>
         </View>
         <View style={cardStyles.info}>
@@ -59,18 +79,28 @@ function PermissionCard({
         </View>
       </View>
       <View style={cardStyles.bottom}>
-        <View style={[cardStyles.badge, isGranted ? cardStyles.badgeGranted : cardStyles.badgeRequired]}>
+        <View
+          style={[
+            cardStyles.badge,
+            isGranted ? cardStyles.badgeGranted : cardStyles.badgeRequired,
+          ]}
+        >
           {status === 'checking' ? (
             <ActivityIndicator size="small" color={COLORS.parent.primary} />
           ) : (
-            <Text style={[cardStyles.badgeText, isGranted ? cardStyles.badgeTextGranted : cardStyles.badgeTextRequired]}>
-              {isGranted ? '✓ Granted' : status === 'unknown' ? 'Unknown' : '! Required'}
+            <Text
+              style={[
+                cardStyles.badgeText,
+                isGranted ? cardStyles.badgeTextGranted : cardStyles.badgeTextRequired,
+              ]}
+            >
+              {badgeText}
             </Text>
           )}
         </View>
-        {!isGranted && status !== 'checking' && (
+        {showAction && (
           <TouchableOpacity style={cardStyles.grantBtn} onPress={onGrant}>
-            <Text style={cardStyles.grantBtnText}>Grant Permission</Text>
+            <Text style={cardStyles.grantBtnText}>{actionLabel ?? 'Grant Permission'}</Text>
           </TouchableOpacity>
         )}
       </View>
@@ -167,6 +197,7 @@ export default function TroubleshootScreen() {
   const [statuses, setStatuses] = useState<StatusMap>(() =>
     Object.fromEntries(PERMISSION_IDS.map((id) => [id, 'checking'])),
   );
+  const [actionLabels, setActionLabels] = useState<Record<string, string>>({});
   const [checking, setChecking] = useState(false);
 
   const refreshStatuses = useCallback(async () => {
@@ -175,6 +206,28 @@ export default function TroubleshootScreen() {
 
     for (const perm of permissions) {
       try {
+        if (perm.id === 'location') {
+          const appOk = await isAppLocationPermissionGranted();
+          const deviceOk = await isDeviceLocationServicesEnabled();
+          if (appOk && deviceOk) {
+            setStatuses((prev) => ({ ...prev, location: 'granted' }));
+            setActionLabels((prev) => ({ ...prev, location: '' }));
+          } else if (appOk && !deviceOk) {
+            setStatuses((prev) => ({ ...prev, location: 'partial' }));
+            setActionLabels((prev) => ({
+              ...prev,
+              location: 'Turn on device location',
+            }));
+          } else {
+            setStatuses((prev) => ({ ...prev, location: 'required' }));
+            setActionLabels((prev) => ({
+              ...prev,
+              location: 'Allow app access',
+            }));
+          }
+          continue;
+        }
+
         const result = await perm.checkFn();
         setStatuses((prev) => ({ ...prev, [perm.id]: result ? 'granted' : 'required' }));
       } catch {
@@ -325,7 +378,8 @@ export default function TroubleshootScreen() {
             <Animated.View key={perm.id} entering={FadeInDown.delay(200 + i * 60).springify()}>
               <PermissionCard
                 perm={perm}
-                status={statuses[perm.id]}
+                status={statuses[perm.id] ?? 'unknown'}
+                actionLabel={actionLabels[perm.id]}
                 onGrant={perm.grantFn}
               />
             </Animated.View>

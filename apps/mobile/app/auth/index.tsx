@@ -33,7 +33,67 @@ export default function WelcomeScreen() {
     >
       {/* Logo and tagline */}
       <Animated.View entering={FadeInDown.duration(800).delay(200)} style={styles.hero}>
-        <AppLogoMark size={128} showWordmark={false} />
+
+        {/* Ambient color blobs — the premium backdrop */}
+        <View style={styles.blobWrap} pointerEvents="none">
+          <LinearGradient
+            colors={['rgba(116,148,255,0.28)', 'rgba(116,148,255,0)']}
+            style={[styles.blob, styles.blobTopLeft]}
+          />
+          <LinearGradient
+            colors={['rgba(218,120,244,0.24)', 'rgba(218,120,244,0)']}
+            style={[styles.blob, styles.blobTopRight]}
+          />
+          <LinearGradient
+            colors={['rgba(72,196,175,0.22)', 'rgba(72,196,175,0)']}
+            style={[styles.blob, styles.blobBottomLeft]}
+          />
+          <LinearGradient
+            colors={['rgba(255,160,120,0.18)', 'rgba(255,160,120,0)']}
+            style={[styles.blob, styles.blobBottomRight]}
+          />
+        </View>
+
+        {/* Sparkle dots — tiny, tasteful */}
+        <Text style={[styles.sparkle, styles.sparkleTL]}>✦</Text>
+        <Text style={[styles.sparkle, styles.sparkleTR]}>✦</Text>
+        <Text style={[styles.sparkle, styles.sparkleBL]}>✧</Text>
+        <Text style={[styles.sparkle, styles.sparkleBR]}>✧</Text>
+
+        {/* Logo card */}
+        <View style={styles.logoCard}>
+          <View style={styles.logoCardInner}>
+            {/* Diagonal premium lines behind logo */}
+            <LinearGradient
+              colors={['rgba(130,158,255,0.22)', 'rgba(130,158,255,0)']}
+              start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+              style={[styles.diagLine, styles.diagLine1]}
+            />
+            <LinearGradient
+              colors={['rgba(218,120,244,0.18)', 'rgba(218,120,244,0)']}
+              start={{ x: 1, y: 0 }} end={{ x: 0, y: 1 }}
+              style={[styles.diagLine, styles.diagLine2]}
+            />
+            <LinearGradient
+              colors={['rgba(72,196,175,0.16)', 'rgba(72,196,175,0)']}
+              start={{ x: 0, y: 1 }} end={{ x: 1, y: 0 }}
+              style={[styles.diagLine, styles.diagLine3]}
+            />
+            <LinearGradient
+              colors={['rgba(255,160,100,0.14)', 'rgba(255,160,100,0)']}
+              start={{ x: 1, y: 1 }} end={{ x: 0, y: 0 }}
+              style={[styles.diagLine, styles.diagLine4]}
+            />
+            <LinearGradient
+              colors={['rgba(130,158,255,0.12)', 'rgba(218,120,244,0.12)', 'rgba(72,196,175,0.1)']}
+              start={{ x: 0, y: 0.5 }} end={{ x: 1, y: 0.5 }}
+              style={[styles.diagLine, styles.diagLine5]}
+            />
+            <AppLogoMark size={120} showWordmark={false} />
+          </View>
+        </View>
+
+        {/* Brand name */}
         <AppDisplayNameGradient style={styles.heroTitle} />
         <Text style={styles.tagline}>Grow together. Every day.</Text>
       </Animated.View>
@@ -105,18 +165,133 @@ const styles = StyleSheet.create({
   },
   hero: {
     alignItems: 'center',
-    gap: Spacing.sm,
+    gap: 6,
+    position: 'relative',
   },
+
+  /* ── ambient blobs ── */
+  blobWrap: {
+    position: 'absolute',
+    width: 340,
+    height: 260,
+    top: -36,
+  },
+  blob: {
+    position: 'absolute',
+    borderRadius: 999,
+  },
+  blobTopLeft: {
+    width: 160,
+    height: 140,
+    top: 0,
+    left: 0,
+    transform: [{ rotate: '-18deg' }],
+  },
+  blobTopRight: {
+    width: 150,
+    height: 140,
+    top: 0,
+    right: 0,
+    transform: [{ rotate: '14deg' }],
+  },
+  blobBottomLeft: {
+    width: 140,
+    height: 120,
+    bottom: 8,
+    left: 10,
+    transform: [{ rotate: '12deg' }],
+  },
+  blobBottomRight: {
+    width: 148,
+    height: 118,
+    bottom: 6,
+    right: 6,
+    transform: [{ rotate: '-14deg' }],
+  },
+
+  /* ── sparkles ── */
+  sparkle: {
+    position: 'absolute',
+    fontSize: 14,
+    color: 'rgba(110, 141, 248, 0.65)',
+    fontFamily: Typography.fonts.extraBold,
+  },
+  sparkleTL: { top: 14, left: 30 },
+  sparkleTR: { top: 10, right: 28 },
+  sparkleBL: { top: 160, left: 14 },
+  sparkleBR: { top: 156, right: 12 },
+
+  /* ── logo card ── */
+  logoCard: {
+    borderRadius: 32,
+    marginTop: 20,
+    shadowColor: '#4a6ef5',
+    shadowOpacity: 0.15,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 0,
+  },
+  logoCardInner: {
+    borderRadius: 32,
+    padding: 16,
+    backgroundColor: '#ffffff',
+    overflow: 'hidden',
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+  },
+  diagLine: {
+    position: 'absolute',
+    borderRadius: 999,
+  },
+  diagLine1: {
+    width: 220,
+    height: 60,
+    top: -10,
+    left: -30,
+    transform: [{ rotate: '32deg' }],
+  },
+  diagLine2: {
+    width: 200,
+    height: 55,
+    top: -8,
+    right: -30,
+    transform: [{ rotate: '-36deg' }],
+  },
+  diagLine3: {
+    width: 210,
+    height: 52,
+    bottom: -8,
+    left: -20,
+    transform: [{ rotate: '-30deg' }],
+  },
+  diagLine4: {
+    width: 200,
+    height: 50,
+    bottom: -10,
+    right: -28,
+    transform: [{ rotate: '34deg' }],
+  },
+  diagLine5: {
+    width: 260,
+    height: 38,
+    top: '48%',
+    transform: [{ rotate: '-18deg' }],
+  },
+
+  /* ── name / tagline ── */
   heroTitle: {
-    marginTop: Spacing.md,
+    marginTop: 4,
   },
   tagline: {
     fontFamily: Typography.fonts.semiBold,
     fontSize: Typography.parent.bodyLarge,
     color: Colors.parent.textSecondary,
     textAlign: 'center',
-    marginTop: Spacing.md,
+    marginTop: 2,
   },
+
+  /* ── value props ── */
   valueProps: {
     gap: Spacing.md,
     paddingVertical: Spacing.xl,
@@ -126,15 +301,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: Spacing.md,
   },
-  valuePropIcon: {
-    fontSize: 24,
-  },
+  valuePropIcon: { fontSize: 24 },
   valuePropText: {
     fontFamily: Typography.fonts.semiBold,
     fontSize: Typography.parent.bodyLarge,
     color: Colors.parent.textPrimary,
     flex: 1,
   },
+
+  /* ── buttons ── */
   buttons: {
     gap: Spacing.sm,
     alignItems: 'center',
@@ -157,7 +332,6 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.7)',
     marginTop: 2,
   },
-  /** Text-style secondary action — tight vertical hit area to save screen height */
   secondaryLink: {
     paddingVertical: 4,
     paddingHorizontal: Spacing.sm,

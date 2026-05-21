@@ -30,6 +30,12 @@ import { getParentPostAuthHref } from '../../src/utils/parentPostAuthHref';
 import { getResolvedActiveFamilyId } from '../../src/store/activeFamily.persistence';
 import { FamilyDashboard } from '@parentingmykid/shared-types';
 import { autoPairCurrentDevice } from '../../src/services/devicePairing.service';
+import {
+  configureGoogleSignIn,
+  formatGoogleSignInError,
+  getGoogleIdTokenWithAccountPicker,
+  getGoogleWebClientId,
+} from '../../src/config/googleSignIn';
 
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
@@ -83,17 +89,23 @@ export default function LoginScreen() {
   async function handleGoogleLogin() {
     setGoogleLoading(true);
     try {
-      const { GoogleSignin, statusCodes } = await import('@react-native-google-signin/google-signin');
-      await GoogleSignin.hasPlayServices();
-      const userInfo = await GoogleSignin.signIn();
-      const idToken = (userInfo as any).idToken || (userInfo as any).data?.idToken;
-      if (!idToken) throw new Error('No ID token returned from Google');
+      configureGoogleSignIn();
+      if (!getGoogleWebClientId()) {
+        Alert.alert(
+          'Google Sign-In not configured',
+          'Add EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID to apps/mobile/.env (Web OAuth client from Google Cloud), restart Metro with --clear, then rebuild the app (expo run:android).',
+        );
+        return;
+      }
+      const { statusCodes } = await import('@react-native-google-signin/google-signin');
+      const idToken = await getGoogleIdTokenWithAccountPicker();
       const { data } = await apiClient.post('/auth/google', { idToken });
       await login(data.accessToken, data.refreshToken, data.user);
+      await tryAutoPairOnParentLogin(data.user.familyIds ?? []);
     } catch (err: any) {
       const { statusCodes } = await import('@react-native-google-signin/google-signin');
       if (err.code !== statusCodes.SIGN_IN_CANCELLED) {
-        Alert.alert('Google Sign-In failed', err.message || 'Please try again.');
+        Alert.alert('Google Sign-In failed', formatGoogleSignInError(err));
       }
     } finally {
       setGoogleLoading(false);
@@ -131,15 +143,17 @@ export default function LoginScreen() {
           showsVerticalScrollIndicator={false}
         >
           <Animated.View entering={FadeInUp.delay(100).springify()} style={styles.header}>
-            <TouchableOpacity
-              onPress={() => router.back()}
-              style={styles.backButton}
-              accessibilityLabel="Go back"
-              accessibilityRole="button"
-            >
-              <Ionicons name="chevron-back" size={28} color={COLORS.parent.textSecondary} />
-            </TouchableOpacity>
-            <Text style={styles.title}>Welcome back</Text>
+            <View style={styles.titleRow}>
+              <TouchableOpacity
+                onPress={() => router.back()}
+                style={styles.backButton}
+                accessibilityLabel="Go back"
+                accessibilityRole="button"
+              >
+                <Ionicons name="chevron-back" size={28} color={COLORS.parent.textSecondary} />
+              </TouchableOpacity>
+              <Text style={styles.title}>Welcome back</Text>
+            </View>
             <Text style={styles.subtitle}>Sign in to continue your family journey</Text>
           </Animated.View>
 
@@ -262,27 +276,33 @@ const styles = StyleSheet.create({
   container: {
     flexGrow: 1,
     paddingHorizontal: SPACING[6],
-    paddingTop: 60,
+    paddingTop: 56,
     paddingBottom: 40,
   },
   header: { marginBottom: SPACING[8] },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: SPACING[3],
+  },
   backButton: {
-    width: 40,
-    height: 40,
+    width: 36,
+    height: 36,
     justifyContent: 'center',
-    marginBottom: SPACING[4],
+    marginRight: SPACING[3],
   },
   title: {
     fontSize: 32,
     fontFamily: 'Inter_700Bold',
     color: COLORS.parent.textPrimary,
-    marginBottom: SPACING[2],
+    flexShrink: 1,
   },
   subtitle: {
     fontSize: 16,
     fontFamily: 'Inter_400Regular',
     color: COLORS.parent.textSecondary,
     lineHeight: 22,
+    marginTop: SPACING[1],
   },
   form: { gap: SPACING[4] },
   inputGroup: { gap: SPACING[2] },

@@ -168,7 +168,10 @@ export class ChildrenService {
     const today = new Date().toISOString().split('T')[0];
     const now = new Date();
 
-    const [alertGroups, latestMoods, todayMissionRows, activeDevices, usageGroups, calendarEvents] =
+    // String versions of child IDs for collections that store childId as plain string
+    const childIdStrings = childIds.map((id) => String(id));
+
+    const [alertGroups, latestMoods, todayMissionRows, activeDevices, usageGroups, screenUsageLastRows, activityLogLastRows, calendarEvents] =
       await Promise.all([
         childIds.length
           ? this.db.safetyAlert.aggregate<{ _id: string; count: number }>([
@@ -195,6 +198,28 @@ export class ChildrenService {
               { $group: { _id: '$childId', totalSeconds: { $sum: '$durationSeconds' } } },
             ])
           : Promise.resolve([]),
+        childIds.length
+          ? this.db.screenUsageLog.aggregate<{ _id: string; latestUpdated?: Date; latestLogged?: Date; latestCreated?: Date }>([
+              { $match: { childId: { $in: childIds } } },
+              {
+                $group: {
+                  _id: '$childId',
+                  latestUpdated: { $max: '$updatedAt' },
+                  latestLogged: { $max: '$loggedAt' },
+                  latestCreated: { $max: '$createdAt' },
+                },
+              },
+            ])
+          : Promise.resolve([]),
+        // activityLog stores activeKidId as a plain string — must match against stringified IDs.
+        // This captures every Kid Mode session started on the parent's phone (IDENTITY_CLAIMED events
+        // plus URL_VISITED / APP_OPENED etc.) even when no child_devices row exists.
+        childIdStrings.length
+          ? this.db.activityLog.aggregate<{ _id: string; latestCreated: Date }>([
+              { $match: { activeKidId: { $in: childIdStrings } } },
+              { $group: { _id: '$activeKidId', latestCreated: { $max: '$createdAt' } } },
+            ])
+          : Promise.resolve([]),
         this.db.familyCalendarEvent
           .find({ familyId, startAt: { $gte: now } })
           .sort({ startAt: 1 })
@@ -204,7 +229,7 @@ export class ChildrenService {
 
     const alertCountByChild = new Map<string, number>();
     for (const row of alertGroups) {
-      alertCountByChild.set(row._id, row.count);
+      alertCountByChild.set(String(row._id), row.count);
     }
 
     const latestMoodByChild = new Map<string, (typeof latestMoods)[0]>();
@@ -220,14 +245,32 @@ export class ChildrenService {
 
     const usageByChildId = new Map<string, number>();
     for (const row of usageGroups) {
-      usageByChildId.set(row._id, row.totalSeconds ?? 0);
+      usageByChildId.set(String(row._id), row.totalSeconds ?? 0);
+    }
+
+    const screenUsageLastMsByChild = new Map<string, number>();
+    for (const row of screenUsageLastRows) {
+      const u = row.latestUpdated ? new Date(row.latestUpdated).getTime() : 0;
+      const l = row.latestLogged ? new Date(row.latestLogged).getTime() : 0;
+      const c = row.latestCreated ? new Date(row.latestCreated).getTime() : 0;
+      const mx = Math.max(u, l, c);
+      if (mx > 0) screenUsageLastMsByChild.set(String(row._id), mx);
+    }
+
+    // Latest activityLog event (IDENTITY_CLAIMED, URL_VISITED, APP_OPENED, etc.) per kid.
+    // This is the primary signal when Kid Mode runs on the parent phone and no child_devices row exists.
+    const activityLogLastMsByChild = new Map<string, number>();
+    for (const row of activityLogLastRows) {
+      const ms = row.latestCreated ? new Date(row.latestCreated).getTime() : 0;
+      if (ms > 0) activityLogLastMsByChild.set(String(row._id), ms);
     }
 
     const devicesByChild = new Map<string, typeof activeDevices>();
     for (const d of activeDevices) {
-      const list = devicesByChild.get(d.childId) ?? [];
+      const cid = String(d.childId);
+      const list = devicesByChild.get(cid) ?? [];
       list.push(d);
-      devicesByChild.set(d.childId, list);
+      devicesByChild.set(cid, list);
     }
 
     const childCards: ChildDashboardCard[] = children.map((child) => {
@@ -242,8 +285,12 @@ export class ChildrenService {
       const lastDeviceMs = devices
         .map((d) => (d.lastActiveAt ? new Date(d.lastActiveAt).getTime() : 0))
         .reduce((a, b) => Math.max(a, b), 0);
+      const screenUsageMs = screenUsageLastMsByChild.get(childId) ?? 0;
+      // activityLog covers Kid Mode sessions on the parent phone (no child_devices row needed).
+      const activityLogMs = activityLogLastMsByChild.get(childId) ?? 0;
+      const lastActivityMs = Math.max(lastDeviceMs, screenUsageMs, activityLogMs);
       const lastDeviceActivityAt =
-        lastDeviceMs > 0 ? new Date(lastDeviceMs).toISOString() : undefined;
+        lastActivityMs > 0 ? new Date(lastActivityMs).toISOString() : undefined;
 
       const missionsJson = todayMissions?.missionsJson as { total?: number }[] | null | undefined;
       const missionTotal = Array.isArray(missionsJson) ? missionsJson.length : 0;

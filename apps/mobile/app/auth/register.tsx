@@ -8,7 +8,6 @@ import React, { useState } from 'react';
 import {
   View,
   Text,
-  Image,
   StyleSheet,
   TextInput,
   TouchableOpacity,
@@ -21,29 +20,37 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Redirect, router } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 import Animated, { FadeInDown, FadeInUp, FadeOutUp } from 'react-native-reanimated';
 import { useAuthStore } from '../../src/store/auth.store';
 import { apiClient } from '../../src/services/api.client';
 import { API_ENDPOINTS } from '../../src/constants/api';
 import { COLORS } from '../../src/constants/colors';
 import { SPACING } from '../../src/constants/spacing';
-import { AppLogoMark } from '../../src/components/branding/AppLogoMark';
 import { LOGO_PNG, APP_DISPLAY_NAME } from '../../src/constants/branding';
 import { getParentPostAuthHref } from '../../src/utils/parentPostAuthHref';
+import {
+  configureGoogleSignIn,
+  formatGoogleSignInError,
+  getGoogleSignInResultWithAccountPicker,
+  getGoogleWebClientId,
+} from '../../src/config/googleSignIn';
 
 type Step = 'personal' | 'religion' | 'consent' | 'success';
 
-type Religion = 'ISLAM' | 'CHRISTIAN' | 'OTHER';
+type Religion = 'ISLAM' | 'OTHER';
 
 const RELIGIONS: { value: Religion; label: string; emoji: string; desc: string }[] = [
   { value: 'ISLAM', label: 'Islam', emoji: '🕌', desc: 'Islamic content & Halal filtering' },
-  { value: 'CHRISTIAN', label: 'Christian', emoji: '⛪', desc: 'Faith-based family values' },
   { value: 'OTHER', label: 'Other / Prefer not to say', emoji: '🌍', desc: 'General family content' },
 ];
 
 export default function RegisterScreen() {
   const [step, setStep] = useState<Step>('personal');
   const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [googleIdToken, setGoogleIdToken] = useState<string | null>(null);
 
   // Personal info
   const [firstName, setFirstName] = useState('');
@@ -89,22 +96,31 @@ export default function RegisterScreen() {
       };
 
       let data: any;
-      try {
-        ({ data } = await apiClient.post(API_ENDPOINTS.auth.register, payload));
-      } catch (firstErr: any) {
-        const raw = firstErr?.response?.data?.message;
-        const fromServer = Array.isArray(raw) ? raw.join('\n') : String(raw ?? '');
-        const isLegacyServerReligionMismatch =
-          firstErr?.response?.status === 400 &&
-          /religion\s+should\s+not\s+exist/i.test(fromServer);
+      if (googleIdToken) {
+        ({ data } = await apiClient.post('/auth/google', {
+          idToken: googleIdToken,
+          parentalConsentGiven: true,
+          religion,
+          name,
+        }));
+      } else {
+        try {
+          ({ data } = await apiClient.post(API_ENDPOINTS.auth.register, payload));
+        } catch (firstErr: any) {
+          const raw = firstErr?.response?.data?.message;
+          const fromServer = Array.isArray(raw) ? raw.join('\n') : String(raw ?? '');
+          const isLegacyServerReligionMismatch =
+            firstErr?.response?.status === 400 &&
+            /religion\s+should\s+not\s+exist/i.test(fromServer);
 
-        if (!isLegacyServerReligionMismatch) {
-          throw firstErr;
+          if (!isLegacyServerReligionMismatch) {
+            throw firstErr;
+          }
+
+          // Backward compatibility: retry for old API versions that don't accept `religion` yet.
+          const { religion: _ignoredReligion, ...legacyPayload } = payload;
+          ({ data } = await apiClient.post(API_ENDPOINTS.auth.register, legacyPayload));
         }
-
-        // Backward compatibility: retry for old API versions that don't accept `religion` yet.
-        const { religion: _ignoredReligion, ...legacyPayload } = payload;
-        ({ data } = await apiClient.post(API_ENDPOINTS.auth.register, legacyPayload));
       }
 
       await login(data.accessToken, data.refreshToken, data.user);
@@ -131,12 +147,47 @@ export default function RegisterScreen() {
     }
   }
 
+  async function handleGoogleSignUp() {
+    setGoogleLoading(true);
+    try {
+      configureGoogleSignIn();
+      if (!getGoogleWebClientId()) {
+        Alert.alert(
+          'Google Sign-In not configured',
+          'Add EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID to apps/mobile/.env (Web OAuth client from Google Cloud), restart Metro with --clear, then rebuild the app (expo run:android).',
+        );
+        return;
+      }
+      const { statusCodes } = await import('@react-native-google-signin/google-signin');
+      const result = await getGoogleSignInResultWithAccountPicker();
+      setGoogleIdToken(result.idToken);
+      if (result.email) {
+        setEmail(result.email);
+      }
+      if (result.name) {
+        const parts = result.name.trim().split(/\s+/);
+        if (parts.length > 0) {
+          setFirstName(parts[0]);
+          setLastName(parts.slice(1).join(' '));
+        }
+      }
+      setStep('religion');
+    } catch (err: any) {
+      const { statusCodes } = await import('@react-native-google-signin/google-signin');
+      if (err.code !== statusCodes.SIGN_IN_CANCELLED) {
+        Alert.alert('Google Sign-In failed', formatGoogleSignInError(err));
+      }
+    } finally {
+      setGoogleLoading(false);
+    }
+  }
+
   if (step === 'success') {
     return (
-      <LinearGradient colors={['#0F0A1E', '#1A1035', '#0F0A1E']} style={styles.gradient}>
+      <LinearGradient colors={COLORS.parent.gradientHero} style={styles.gradient}>
         <View style={styles.successContainer}>
           <Animated.View entering={FadeInUp.springify()} style={styles.successLogoWrap}>
-            <Image source={LOGO_PNG} style={styles.successLogo} resizeMode="cover" />
+            <Animated.Image source={LOGO_PNG} style={styles.successLogo} resizeMode="cover" />
           </Animated.View>
           <Animated.Text entering={FadeInUp.delay(80).springify()} style={styles.successEmoji}>🎉</Animated.Text>
           <Animated.Text entering={FadeInDown.delay(200)} style={styles.successTitle}>
@@ -152,7 +203,7 @@ export default function RegisterScreen() {
   }
 
   return (
-    <LinearGradient colors={['#0F0A1E', '#1A1035', '#0F0A1E']} style={styles.gradient}>
+    <LinearGradient colors={COLORS.parent.gradientHero} style={styles.gradient}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.flex}>
         <ScrollView
           contentContainerStyle={styles.container}
@@ -161,13 +212,6 @@ export default function RegisterScreen() {
         >
           {/* Header */}
           <Animated.View entering={FadeInUp.delay(100).springify()} style={styles.header}>
-            <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-              <Text style={styles.backIcon}>←</Text>
-            </TouchableOpacity>
-            <View style={styles.logoBlock}>
-              <AppLogoMark size={80} showWordmark wordmarkColor="light" />
-            </View>
-
             {/* Step indicator */}
             <View style={styles.stepIndicator}>
               <View style={[styles.stepDot, step === 'personal' && styles.stepDotActive]} />
@@ -177,9 +221,19 @@ export default function RegisterScreen() {
               <View style={[styles.stepDot, step === 'consent' && styles.stepDotActive]} />
             </View>
 
-            <Text style={styles.title}>
-              {step === 'personal' ? 'Create your account' : step === 'religion' ? 'Family profile' : 'Almost there!'}
-            </Text>
+            <View style={styles.titleRow}>
+              <TouchableOpacity
+                onPress={() => router.back()}
+                style={styles.backButton}
+                accessibilityLabel="Go back"
+                accessibilityRole="button"
+              >
+                <Ionicons name="chevron-back" size={28} color={COLORS.parent.textSecondary} />
+              </TouchableOpacity>
+              <Text style={styles.title}>
+                {step === 'personal' ? 'Create Account' : step === 'religion' ? 'Family profile' : 'Almost there!'}
+              </Text>
+            </View>
             <Text style={styles.subtitle}>
               {step === 'personal'
                 ? 'Free account — no credit card needed'
@@ -200,7 +254,7 @@ export default function RegisterScreen() {
                     value={firstName}
                     onChangeText={setFirstName}
                     placeholder="Sarah"
-                    placeholderTextColor="rgba(255,255,255,0.3)"
+                    placeholderTextColor={COLORS.parent.textMuted}
                     autoCapitalize="words"
                   />
                 </View>
@@ -211,7 +265,7 @@ export default function RegisterScreen() {
                     value={lastName}
                     onChangeText={setLastName}
                     placeholder="Johnson"
-                    placeholderTextColor="rgba(255,255,255,0.3)"
+                    placeholderTextColor={COLORS.parent.textMuted}
                     autoCapitalize="words"
                   />
                 </View>
@@ -224,7 +278,7 @@ export default function RegisterScreen() {
                   value={email}
                   onChangeText={setEmail}
                   placeholder="parent@email.com"
-                  placeholderTextColor="rgba(255,255,255,0.3)"
+                  placeholderTextColor={COLORS.parent.textMuted}
                   keyboardType="email-address"
                   autoCapitalize="none"
                 />
@@ -232,22 +286,57 @@ export default function RegisterScreen() {
 
               <View style={styles.inputGroup}>
                 <Text style={styles.label}>Password</Text>
-                <TextInput
-                  style={styles.input}
-                  value={password}
-                  onChangeText={setPassword}
-                  placeholder="Min. 8 characters"
-                  placeholderTextColor="rgba(255,255,255,0.3)"
-                  secureTextEntry
-                />
+                <View style={styles.passwordContainer}>
+                  <TextInput
+                    style={[styles.input, styles.passwordInput]}
+                    value={password}
+                    onChangeText={setPassword}
+                    placeholder="Min. 8 characters"
+                    placeholderTextColor={COLORS.parent.textMuted}
+                    secureTextEntry={!showPassword}
+                  />
+                  <TouchableOpacity
+                    style={styles.eyeButton}
+                    onPress={() => setShowPassword(!showPassword)}
+                    accessibilityLabel={showPassword ? 'Hide password' : 'Show password'}
+                    accessibilityRole="button"
+                  >
+                    <Text style={styles.eyeIcon}>{showPassword ? '🙈' : '👁️'}</Text>
+                  </TouchableOpacity>
+                </View>
                 <Text style={styles.hint}>Must be at least 8 characters</Text>
               </View>
 
               <TouchableOpacity
                 style={styles.primaryButton}
-                onPress={() => validatePersonal() && setStep('religion')}
+                onPress={() => {
+                  if (!validatePersonal()) return;
+                  setGoogleIdToken(null);
+                  setStep('religion');
+                }}
               >
                 <Text style={styles.primaryButtonText}>Continue →</Text>
+              </TouchableOpacity>
+
+              <View style={styles.divider}>
+                <View style={styles.dividerLine} />
+                <Text style={styles.dividerText}>or</Text>
+                <View style={styles.dividerLine} />
+              </View>
+
+              <TouchableOpacity
+                style={[styles.googleButton, googleLoading && styles.disabled]}
+                onPress={handleGoogleSignUp}
+                disabled={googleLoading}
+              >
+                {googleLoading ? (
+                  <ActivityIndicator color="#333" />
+                ) : (
+                  <>
+                    <Text style={styles.googleIcon}>G</Text>
+                    <Text style={styles.googleButtonText}>Continue with Google</Text>
+                  </>
+                )}
               </TouchableOpacity>
             </Animated.View>
           )}
@@ -381,7 +470,7 @@ const styles = StyleSheet.create({
   container: {
     flexGrow: 1,
     paddingHorizontal: SPACING[6],
-    paddingTop: 60,
+    paddingTop: 56,
     paddingBottom: 40,
   },
   successContainer: {
@@ -394,119 +483,130 @@ const styles = StyleSheet.create({
     marginBottom: SPACING[3],
     padding: 6,
     borderRadius: 24,
-    backgroundColor: 'rgba(255,255,255,0.12)',
+    backgroundColor: COLORS.parent.surface,
   },
   successLogo: { width: 88, height: 88, borderRadius: 20 },
   successEmoji: { fontSize: 72 },
   successTitle: {
     fontSize: 28,
-    fontFamily: 'Inter',
-    fontWeight: '700',
-    color: '#FFFFFF',
+    fontFamily: 'Inter_700Bold',
+    color: COLORS.parent.textPrimary,
     marginTop: SPACING[3],
     textAlign: 'center',
   },
   successSubtitle: {
     fontSize: 16,
-    fontFamily: 'Inter',
-    color: 'rgba(255,255,255,0.6)',
+    fontFamily: 'Inter_400Regular',
+    color: COLORS.parent.textSecondary,
     textAlign: 'center',
     marginTop: SPACING[3],
     lineHeight: 24,
   },
   header: { marginBottom: SPACING[8] },
-  backButton: { width: 40, height: 40, justifyContent: 'center', marginBottom: SPACING[4] },
-  backIcon: { fontSize: 24, color: 'rgba(255,255,255,0.7)' },
-  logoBlock: { alignItems: 'center', marginBottom: SPACING[3] },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: SPACING[3],
+  },
+  backButton: { width: 36, height: 36, justifyContent: 'center', marginRight: SPACING[3] },
   stepIndicator: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: SPACING[5],
+    marginBottom: SPACING[6],
   },
   stepDot: {
     width: 10,
     height: 10,
     borderRadius: 5,
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    backgroundColor: 'rgba(92, 61, 46, 0.2)',
   },
   stepDotActive: { backgroundColor: COLORS.parent.primary },
   stepLine: {
     flex: 1,
     height: 2,
-    backgroundColor: 'rgba(255,255,255,0.15)',
+    backgroundColor: 'rgba(92, 61, 46, 0.15)',
     marginHorizontal: SPACING[2],
   },
   title: {
     fontSize: 28,
-    fontFamily: 'Inter',
-    fontWeight: '700',
-    color: '#FFFFFF',
-    marginBottom: SPACING[2],
+    fontFamily: 'Inter_700Bold',
+    color: COLORS.parent.textPrimary,
+    flexShrink: 1,
   },
   subtitle: {
     fontSize: 15,
-    fontFamily: 'Inter',
-    color: 'rgba(255,255,255,0.6)',
+    fontFamily: 'Inter_400Regular',
+    color: COLORS.parent.textSecondary,
+    lineHeight: 22,
+    marginTop: SPACING[1],
   },
-  form: { gap: SPACING[4] },
-  nameRow: { flexDirection: 'row', gap: SPACING[3] },
+  form: { gap: SPACING[5] },
+  nameRow: { flexDirection: 'row', gap: SPACING[4] },
   inputGroup: { gap: SPACING[2] },
   label: {
-    fontSize: 12,
-    fontFamily: 'Inter',
-    fontWeight: '600',
-    color: 'rgba(255,255,255,0.7)',
+    fontSize: 13,
+    fontFamily: 'Inter_600SemiBold',
+    color: COLORS.parent.textSecondary,
     textTransform: 'uppercase',
-    letterSpacing: 0.5,
   },
   input: {
-    backgroundColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: COLORS.parent.surface,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.12)',
+    borderColor: COLORS.parent.surfaceBorder,
     borderRadius: 12,
     paddingHorizontal: SPACING[4],
     paddingVertical: SPACING[4],
     fontSize: 16,
-    fontFamily: 'Inter',
-    color: '#FFFFFF',
+    fontFamily: 'Inter_400Regular',
+    color: COLORS.parent.textPrimary,
   },
+  passwordContainer: { position: 'relative' },
+  passwordInput: { paddingRight: 52 },
+  eyeButton: {
+    position: 'absolute',
+    right: SPACING[3],
+    top: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: 40,
+  },
+  eyeIcon: { fontSize: 18 },
   hint: {
     fontSize: 12,
-    color: 'rgba(255,255,255,0.4)',
-    fontFamily: 'Inter',
+    color: COLORS.parent.textMuted,
+    fontFamily: 'Inter_400Regular',
   },
   primaryButton: {
     backgroundColor: COLORS.parent.primary,
     borderRadius: 14,
     paddingVertical: SPACING[4],
     alignItems: 'center',
-    marginTop: SPACING[2],
+    marginTop: SPACING[1],
   },
   primaryButtonText: {
     fontSize: 16,
-    fontFamily: 'Inter',
-    fontWeight: '700',
+    fontFamily: 'Inter_700Bold',
     color: '#FFFFFF',
   },
   disabled: { opacity: 0.7 },
   consentCard: {
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: COLORS.parent.surface,
     borderRadius: 14,
     padding: SPACING[4],
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
+    borderColor: COLORS.parent.surfaceBorder,
   },
   consentTitle: {
     fontSize: 16,
-    fontFamily: 'Inter',
-    fontWeight: '700',
-    color: '#FFFFFF',
+    fontFamily: 'Inter_700Bold',
+    color: COLORS.parent.textPrimary,
     marginBottom: SPACING[3],
   },
   consentDescription: {
     fontSize: 14,
-    fontFamily: 'Inter',
-    color: 'rgba(255,255,255,0.6)',
+    fontFamily: 'Inter_400Regular',
+    color: COLORS.parent.textSecondary,
     lineHeight: 22,
   },
   consentRow: {
@@ -517,8 +617,8 @@ const styles = StyleSheet.create({
   consentText: {
     flex: 1,
     fontSize: 14,
-    fontFamily: 'Inter',
-    color: 'rgba(255,255,255,0.7)',
+    fontFamily: 'Inter_400Regular',
+    color: COLORS.parent.textSecondary,
     lineHeight: 20,
     marginTop: 2,
   },
@@ -533,7 +633,8 @@ const styles = StyleSheet.create({
   },
   secondaryButton: {
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.2)',
+    borderColor: COLORS.parent.surfaceBorder,
+    backgroundColor: COLORS.parent.surface,
     borderRadius: 14,
     paddingVertical: SPACING[4],
     paddingHorizontal: SPACING[5],
@@ -541,41 +642,39 @@ const styles = StyleSheet.create({
   },
   secondaryButtonText: {
     fontSize: 15,
-    fontFamily: 'Inter',
-    fontWeight: '600',
-    color: 'rgba(255,255,255,0.7)',
+    fontFamily: 'Inter_600SemiBold',
+    color: COLORS.parent.textSecondary,
   },
   trialNote: {
     fontSize: 13,
-    fontFamily: 'Inter',
-    color: 'rgba(255,255,255,0.4)',
+    fontFamily: 'Inter_400Regular',
+    color: COLORS.parent.textMuted,
     textAlign: 'center',
   },
   religionCard: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: SPACING[3],
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: COLORS.parent.surface,
     borderRadius: 14,
     padding: SPACING[4],
-    borderWidth: 2,
-    borderColor: 'rgba(255,255,255,0.1)',
+    borderWidth: 1,
+    borderColor: COLORS.parent.surfaceBorder,
   },
   religionCardActive: {
     borderColor: COLORS.parent.primary,
-    backgroundColor: 'rgba(59,130,246,0.15)',
+    backgroundColor: 'rgba(59,130,246,0.08)',
   },
   religionEmoji: { fontSize: 28 },
   religionLabel: {
     fontSize: 16,
-    fontFamily: 'Inter',
-    fontWeight: '700',
-    color: '#FFFFFF',
+    fontFamily: 'Inter_700Bold',
+    color: COLORS.parent.textPrimary,
   },
   religionDesc: {
     fontSize: 13,
-    fontFamily: 'Inter',
-    color: 'rgba(255,255,255,0.55)',
+    fontFamily: 'Inter_400Regular',
+    color: COLORS.parent.textSecondary,
     marginTop: 2,
   },
   religionCheck: {
@@ -586,10 +685,47 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  footer: { marginTop: SPACING[8], alignItems: 'center' },
+  divider: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING[3],
+    marginVertical: 0,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: COLORS.parent.surfaceBorder,
+  },
+  dividerText: {
+    fontSize: 13,
+    color: COLORS.parent.textMuted,
+    fontFamily: 'Inter_400Regular',
+  },
+  googleButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: SPACING[3],
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    paddingVertical: SPACING[4],
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.1)',
+  },
+  googleIcon: {
+    fontSize: 20,
+    fontFamily: 'Inter_700Bold',
+    color: '#4285F4',
+  },
+  googleButtonText: {
+    fontSize: 15,
+    fontFamily: 'Inter_600SemiBold',
+    color: '#333333',
+  },
+  footer: { marginTop: SPACING[4], alignItems: 'center' },
   footerText: {
     fontSize: 14,
-    fontFamily: 'Inter',
-    color: 'rgba(255,255,255,0.5)',
+    fontFamily: 'Inter_400Regular',
+    color: COLORS.parent.textSecondary,
   },
 });

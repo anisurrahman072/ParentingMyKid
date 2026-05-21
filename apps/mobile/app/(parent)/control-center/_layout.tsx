@@ -10,6 +10,7 @@ export default function ControlCenterLayout() {
   const params = useGlobalSearchParams<{ childId?: string | string[] }>();
   const childId = childIdFromGlobalParams(params.childId);
   const handoff = isParentKidHandoffPath(pathname, childId);
+  const onKidLandingScreen = pathname?.includes('/control-center/kid-mode');
 
   useEffect(() => {
     if (Platform.OS !== 'android') return;
@@ -27,6 +28,11 @@ export default function ControlCenterLayout() {
           /* Expo Go / module missing */
         }
       })();
+      return;
+    }
+
+    // Defer kid-mode activation while identity modal/landing is still shown.
+    if (onKidLandingScreen) {
       return;
     }
 
@@ -52,16 +58,16 @@ export default function ControlCenterLayout() {
     return () => {
       cancelled = true;
     };
-  }, [handoff, childId]);
+  }, [handoff, childId, onKidLandingScreen]);
 
   // Re-sync native policy while handing the device off (delayed stop-internet countdown, server edits, etc.)
   useEffect(() => {
-    if (Platform.OS !== 'android' || !handoff || !childId) return;
+    if (Platform.OS !== 'android' || !handoff || !childId || onKidLandingScreen) return;
     const t = setInterval(() => {
       void fetchAndPushParentalPolicyForChild(childId, { clearEnforcementPause: true });
     }, 10_000);
     return () => clearInterval(t);
-  }, [handoff, childId]);
+  }, [handoff, childId, onKidLandingScreen]);
 
   return <Stack screenOptions={{ headerShown: false }} />;
 }

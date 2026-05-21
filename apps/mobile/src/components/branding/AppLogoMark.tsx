@@ -68,7 +68,7 @@ const styles = StyleSheet.create({
         shadowOpacity: 1,
         shadowRadius: 20,
       },
-      android: { elevation: 8 },
+      android: { elevation: 0 },
     }),
   },
   wordmark: {

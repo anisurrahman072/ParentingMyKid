@@ -280,7 +280,7 @@ export interface ChildDashboardCard {
   linkedDeviceCount: number;
   /** True if any screen-usage was logged for this child for today (UTC date, same as missions). */
   hasScreenUsageToday: boolean;
-  /** Latest activity time across the child’s linked devices, if any. */
+  /** Latest Kid Mode / device signal: max of linked device heartbeat and screen-usage log activity. */
   lastDeviceActivityAt?: string;
   /**
    * True when a kid login PIN is stored on the server (bcrypt hash).

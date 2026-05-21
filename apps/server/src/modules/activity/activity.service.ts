@@ -75,12 +75,21 @@ export class ActivityService {
   }
 
   async logIdentityClaimed(data: { activeKidId: string; claimedKidId: string }) {
-    return this.db.activityLog.create({
-      activeKidId: data.activeKidId,
-      claimedKidId: data.claimedKidId,
-      type: 'IDENTITY_CLAIMED',
-      payload: { claimedKidId: data.claimedKidId },
-    });
+    const [log] = await Promise.all([
+      this.db.activityLog.create({
+        activeKidId: data.activeKidId,
+        claimedKidId: data.claimedKidId,
+        type: 'IDENTITY_CLAIMED',
+        payload: { claimedKidId: data.claimedKidId },
+      }),
+      // Also bump lastActiveAt on any linked child_devices rows so the legacy
+      // device-based pipeline also reflects this Kid Mode session.
+      this.db.childDevice.updateMany(
+        { childId: data.activeKidId, isActive: true },
+        { $set: { lastActiveAt: new Date() } },
+      ),
+    ]);
+    return log;
   }
 
   async getTodayActivity(childId: string) {

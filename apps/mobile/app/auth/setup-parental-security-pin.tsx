@@ -228,17 +228,15 @@ export default function SetupParentalSecurityPinScreen() {
   return (
     <LinearGradient colors={[...COLORS.parent.gradientHero]} style={styles.screenGrad}>
       <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
-        <View style={styles.topBar}>
-          <TouchableOpacity
-            style={styles.topBackHit}
-            onPress={handleHeaderBack}
-            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-            accessibilityRole="button"
-            accessibilityLabel="Back"
-          >
-            <Text style={styles.topBackGlyph}>←</Text>
-          </TouchableOpacity>
-        </View>
+        <TouchableOpacity
+          style={styles.floatingBackHit}
+          onPress={handleHeaderBack}
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          accessibilityRole="button"
+          accessibilityLabel="Back"
+        >
+          <Text style={styles.floatingBackGlyph}>←</Text>
+        </TouchableOpacity>
 
         <Animated.View entering={FadeInUp.delay(80).springify()} style={styles.heroCard}>
           <Text style={styles.heroEmoji}>🔐</Text>
@@ -292,18 +290,17 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingBottom: SPACING[8],
   },
-  topBar: {
-    alignSelf: 'stretch',
-    flexDirection: 'row',
+  floatingBackHit: {
+    position: 'absolute',
+    left: SPACING[6],
+    top: SPACING[11],
+    width: 40,
+    height: 40,
     alignItems: 'center',
-    marginTop: SPACING[1],
-    marginBottom: SPACING[1],
+    justifyContent: 'center',
+    zIndex: 10,
   },
-  topBackHit: {
-    paddingVertical: SPACING[2],
-    paddingRight: SPACING[4],
-  },
-  topBackGlyph: {
+  floatingBackGlyph: {
     fontFamily: 'Inter_600SemiBold',
     fontSize: 24,
     color: COLORS.parent.textPrimary,

@@ -8,17 +8,24 @@
  */
 
 import { DefaultTheme, ThemeProvider, type Theme } from '@react-navigation/native';
-import { Stack } from 'expo-router';
-import { View, StyleSheet, ImageBackground } from 'react-native';
+import { Stack, router, usePathname, useGlobalSearchParams } from 'expo-router';
+import { View, StyleSheet, ImageBackground, Alert } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import { UserRole } from '@parentingmykid/shared-types';
 import { DeviceContextBanner } from '../../src/components/parent/DeviceContextBanner';
 import { KidSessionRibbon } from '../../src/components/parent/KidSessionRibbon';
 import { useThemeStore, GRADIENT_PRESETS } from '../../src/store/theme.store';
 import { useAuthStore } from '../../src/store/auth.store';
+import { useFamilyStore } from '../../src/store/family.store';
 import { useParentGuardStore } from '../../src/store/parentGuardSettings.store';
 import { syncPendingUsageForChild } from '../../src/services/kidUsageSync.service';
+import {
+  connectFamilyMonitor,
+  disconnectFamilyMonitor,
+} from '../../src/services/familyMonitorSocket.service';
+import { LoggedInTopHeader } from '../../src/components/navigation/LoggedInTopHeader';
+import { childIdFromGlobalParams, isParentKidHandoffPath } from '../../src/utils/kidHandoffSession';
 
 const parentNavTheme: Theme = {
   ...DefaultTheme,
@@ -34,6 +41,20 @@ export default function ParentLayout() {
   const gradient = GRADIENT_PRESETS[gradientPreset];
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const userRole = useAuthStore((s) => s.user?.role);
+  const userName = useAuthStore((s) => s.user?.name);
+  const accessToken = useAuthStore((s) => s.accessToken);
+  const dashboard = useFamilyStore((s) => s.dashboard);
+  const activeFamilyId = useFamilyStore((s) => s.activeFamilyId);
+  const selectedChildId = useFamilyStore((s) => s.selectedChildId);
+  const lastActiveChildId = useParentGuardStore((s) => s.lastActiveChildId);
+  const pathname = usePathname();
+  const params = useGlobalSearchParams<{ childId?: string | string[] }>();
+  const childId = childIdFromGlobalParams(params.childId);
+  const isKidModeRoute = pathname?.includes('/control-center/kid-mode');
+  const isKidHandoffRoute = isParentKidHandoffPath(pathname, childId);
+  const parentFirstName = userName?.split(' ')[0]?.trim() || 'You';
+  const managingLabel =
+    dashboard?.children.find((child) => child.childId === selectedChildId)?.name ?? parentFirstName;
 
   useEffect(() => {
     if (!isAuthenticated || userRole !== UserRole.PARENT) return;
@@ -47,6 +68,23 @@ export default function ParentLayout() {
       cancelled = true;
     };
   }, [isAuthenticated, userRole]);
+
+  // All kid IDs for the active family — derived from dashboard so it updates automatically
+  const familyKidIds = useMemo(
+    () => dashboard?.children?.map((c) => c.childId) ?? [],
+    [dashboard],
+  );
+
+  // Connect the parent to the family socket channel so we receive kid:online / kid:offline
+  // for ALL kids in real-time, regardless of which screen the parent is on.
+  useEffect(() => {
+    if (!isAuthenticated || userRole !== UserRole.PARENT) {
+      disconnectFamilyMonitor();
+      return;
+    }
+    if (!activeFamilyId || !accessToken || familyKidIds.length === 0) return;
+    connectFamilyMonitor(activeFamilyId, familyKidIds, accessToken);
+  }, [isAuthenticated, userRole, activeFamilyId, accessToken, familyKidIds]);
 
   if (!hydrated) {
     return (
@@ -68,7 +106,30 @@ export default function ParentLayout() {
         <LinearGradient colors={gradient} style={StyleSheet.absoluteFill} />
       )}
       <DeviceContextBanner />
-      <KidSessionRibbon />
+      {!isKidHandoffRoute && <KidSessionRibbon />}
+      <LoggedInTopHeader
+        mode="parent"
+        managingLabel={managingLabel}
+        switchLabel={isKidModeRoute ? '🔒 Parent' : 'Kid'}
+        switchStyle={isKidModeRoute ? 'lightBlue' : 'primary'}
+        showSettingsButton={!isKidModeRoute}
+        onSettingsPress={() => router.push('/(parent)/settings')}
+        onSwitchPress={() => {
+          if (isKidModeRoute) {
+            router.push('/auth/switch-to-parent');
+            return;
+          }
+          if (!lastActiveChildId) {
+            Alert.alert(
+              'No child selected',
+              'Select a child first from Control Center, then switch to Kid Mode.',
+            );
+            router.push('/(parent)/control-center');
+            return;
+          }
+          router.push(`/(parent)/control-center/kid-mode?childId=${lastActiveChildId}`);
+        }}
+      />
       <ThemeProvider value={parentNavTheme}>
         <View style={styles.stack}>
           <Stack

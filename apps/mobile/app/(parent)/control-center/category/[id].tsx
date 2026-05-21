@@ -17,11 +17,13 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import Animated, { FadeInDown, useSharedValue, useAnimatedStyle, withSpring } from 'react-native-reanimated';
 import { useLocalSearchParams, router } from 'expo-router';
 import { apiClient } from '../../../../src/services/api.client';
 import { useFamilyStore } from '../../../../src/store/family.store';
 import { SPACING } from '../../../../src/constants/spacing';
+import { COLORS } from '../../../../src/constants/colors';
 import { emitSearch } from '../../../../src/services/kidSocketEmitter.service';
 import {
   coercePersistedVideoManager,
@@ -167,12 +169,12 @@ export default function CategoryScreen() {
   }
 
   return (
-    <LinearGradient colors={['#0F0C29', '#302B63', '#24243E']} style={styles.container}>
-      <SafeAreaView style={styles.safeArea} edges={['top']}>
+    <LinearGradient colors={COLORS.parent.gradientHero} style={styles.container}>
+      <SafeAreaView style={styles.safeArea} edges={[]}>
         {/* Header */}
         <View style={styles.header}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-            <Text style={styles.backIcon}>←</Text>
+            <Ionicons name="chevron-back" size={24} color={COLORS.parent.textSecondary} />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>{categoryTitle}</Text>
         </View>
@@ -184,7 +186,7 @@ export default function CategoryScreen() {
             value={searchQuery}
             onChangeText={setSearchQuery}
             placeholder={`Search ${categoryTitle}...`}
-            placeholderTextColor="rgba(255,255,255,0.4)"
+            placeholderTextColor={COLORS.parent.textMuted}
             returnKeyType="search"
             onSubmitEditing={handleSearch}
           />
@@ -196,7 +198,7 @@ export default function CategoryScreen() {
         {/* Video list */}
         {loading || searching ? (
           <View style={styles.loadingCenter}>
-            <ActivityIndicator color="#FFFFFF" size="large" />
+            <ActivityIndicator color={COLORS.parent.primary} size="large" />
             <Text style={styles.loadingText}>Loading videos...</Text>
           </View>
         ) : (
@@ -234,15 +236,14 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: 'rgba(255,255,255,0.15)',
+    backgroundColor: COLORS.parent.surface,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  backIcon: { fontSize: 18, color: '#FFFFFF' },
   headerTitle: {
     fontFamily: 'Inter_700Bold',
     fontSize: 22,
-    color: '#FFFFFF',
+    color: COLORS.parent.textPrimary,
   },
   searchRow: {
     flexDirection: 'row',
@@ -252,21 +253,23 @@ const styles = StyleSheet.create({
   },
   searchInput: {
     flex: 1,
-    backgroundColor: 'rgba(255,255,255,0.12)',
+    backgroundColor: COLORS.parent.surface,
     borderRadius: 12,
     paddingHorizontal: SPACING[4],
     paddingVertical: SPACING[3],
     fontFamily: 'Inter_400Regular',
     fontSize: 15,
-    color: '#FFFFFF',
+    color: COLORS.parent.textPrimary,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.2)',
+    borderColor: COLORS.parent.surfaceBorder,
   },
   searchButton: {
     width: 48,
     height: 48,
     borderRadius: 12,
-    backgroundColor: 'rgba(255,255,255,0.15)',
+    backgroundColor: COLORS.parent.surface,
+    borderWidth: 1,
+    borderColor: COLORS.parent.surfaceBorder,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -278,20 +281,20 @@ const styles = StyleSheet.create({
   },
   videoCard: {
     flexDirection: 'row',
-    backgroundColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: COLORS.parent.surface,
     borderRadius: 16,
     overflow: 'hidden',
     gap: SPACING[3],
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.12)',
+    borderColor: COLORS.parent.surfaceBorder,
   },
   videoThumb: {
     width: 120,
     height: 90,
-    backgroundColor: '#1A1A2E',
+    backgroundColor: 'rgba(92,61,46,0.08)',
   },
   videoThumbPh: {
-    backgroundColor: '#2A2A3E',
+    backgroundColor: 'rgba(92,61,46,0.12)',
   },
   videoInfo: {
     flex: 1,
@@ -301,14 +304,14 @@ const styles = StyleSheet.create({
   videoTitle: {
     fontFamily: 'Inter_600SemiBold',
     fontSize: 14,
-    color: '#FFFFFF',
+    color: COLORS.parent.textPrimary,
     marginBottom: SPACING[1],
     lineHeight: 20,
   },
   videoChannel: {
     fontFamily: 'Inter_400Regular',
     fontSize: 12,
-    color: 'rgba(255,255,255,0.6)',
+    color: COLORS.parent.textSecondary,
   },
   loadingCenter: {
     flex: 1,
@@ -319,7 +322,7 @@ const styles = StyleSheet.create({
   loadingText: {
     fontFamily: 'Inter_400Regular',
     fontSize: 16,
-    color: 'rgba(255,255,255,0.7)',
+    color: COLORS.parent.textSecondary,
   },
   emptyState: {
     alignItems: 'center',
@@ -330,11 +333,11 @@ const styles = StyleSheet.create({
   emptyText: {
     fontFamily: 'Inter_700Bold',
     fontSize: 20,
-    color: '#FFFFFF',
+    color: COLORS.parent.textPrimary,
   },
   emptySubtext: {
     fontFamily: 'Inter_400Regular',
     fontSize: 15,
-    color: 'rgba(255,255,255,0.6)',
+    color: COLORS.parent.textSecondary,
   },
 });

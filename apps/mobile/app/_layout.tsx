@@ -52,6 +52,8 @@ import { useParentGuardStore } from '../src/store/parentGuardSettings.store';
 import { useAutoKidMode } from '../src/hooks/useAutoKidMode';
 import { consumePendingModeSwitch, setApplyRulesToParent, setKidModeActive, stopVpn } from '../modules/parental-control/src/index';
 
+import { configureGoogleSignIn } from '../src/config/googleSignIn';
+
 /**
  * Dev-only: this module re-executes on Fast Refresh, so the flag resets and we can
  * re-read SecureStore + refresh when the zustand store was wiped in memory.
@@ -159,6 +161,11 @@ export default function RootLayout() {
     };
 
     requestAnimationFrame(run);
+  }, []);
+
+  // Configure Google Sign-In after env is available (avoids empty webClientId at module load)
+  useEffect(() => {
+    configureGoogleSignIn();
   }, []);
 
   // Load auth state from SecureStore on startup

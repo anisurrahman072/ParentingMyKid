@@ -5,6 +5,13 @@
 import { Platform, PermissionsAndroid, Linking, Alert } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import * as Location from 'expo-location';
+import { setWeatherLocationOptIn } from '../utils/weatherLocationPrefs';
+import {
+  isAppLocationPermissionGranted,
+  isDeviceLocationServicesEnabled,
+  isLocationFullyReady,
+  openDeviceLocationSettings,
+} from '../utils/locationPermission';
 import {
   hasUsageStatsPermission,
   requestUsageStatsPermission,
@@ -143,14 +150,49 @@ export function buildParentDevicePermissionDefinitions(opts: {
     {
       id: 'location',
       icon: '📍',
-      title: 'Location',
-      description: 'Geofences and live safety views when you use those features.',
-      checkFn: async () => {
-        const r = await Location.getForegroundPermissionsAsync();
-        return r.status === 'granted';
-      },
+      title: 'Turn on location',
+      description:
+        'Two steps: allow the app, then turn on Location on your phone (quick-settings tile). Needed for local weather and safety features.',
+      checkFn: () => isLocationFullyReady(),
       grantFn: async () => {
-        await Location.requestForegroundPermissionsAsync();
+        const appOk = await isAppLocationPermissionGranted();
+        if (!appOk) {
+          const { status } = await Location.requestForegroundPermissionsAsync();
+          if (status !== 'granted') {
+            await setWeatherLocationOptIn(false);
+            Alert.alert(
+              'App location access',
+              'Allow location for ParentingMyKid, then turn on device Location in the next step.',
+              [
+                { text: 'Not now', style: 'cancel' },
+                { text: 'App settings', onPress: () => void Linking.openSettings() },
+              ],
+            );
+            return;
+          }
+        }
+
+        const deviceOk = await isDeviceLocationServicesEnabled();
+        if (!deviceOk) {
+          if (appOk) {
+            await openDeviceLocationSettings();
+          } else {
+            Alert.alert(
+              'Turn on device location',
+              'Allow app access first, then turn on Location on your phone (quick-settings tile).',
+              [
+                { text: 'Not now', style: 'cancel' },
+                {
+                  text: 'Open location settings',
+                  onPress: () => void openDeviceLocationSettings(),
+                },
+              ],
+            );
+          }
+          return;
+        }
+
+        await setWeatherLocationOptIn(true);
       },
     },
   ];

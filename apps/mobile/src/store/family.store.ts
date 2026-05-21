@@ -31,7 +31,7 @@ interface FamilyState {
   setActiveFamilyId: (id: string) => void;
   clearFamilyContext: () => void;
   setDashboard: (dashboard: FamilyDashboard) => void;
-  selectChild: (childId: string) => void;
+  selectChild: (childId: string | null) => void;
   updateChildProfile: (childId: string, profile: ChildProfile) => void;
   setSubscription: (sub: SubscriptionInfo) => void;
 
@@ -83,12 +83,9 @@ export const useFamilyStore = create<FamilyState>((set, get) => ({
       return;
     }
     set({ dashboard });
-    if (!get().selectedChildId && dashboard.children.length > 0) {
-      set({ selectedChildId: dashboard.children[0].childId });
-    }
   },
 
-  selectChild: (childId: string) => set({ selectedChildId: childId }),
+  selectChild: (childId: string | null) => set({ selectedChildId: childId }),
 
   updateChildProfile: (childId: string, profile: ChildProfile) => {
     set((state) => ({

@@ -158,8 +158,16 @@ export class AuthController {
 
   @ApiOperation({ summary: 'Sign in or register with Google ID token' })
   @Post('google')
-  googleSignIn(@Body() body: { idToken: string }) {
-    return this.authService.googleSignIn(body.idToken);
+  googleSignIn(
+    @Body()
+    body: {
+      idToken: string;
+      parentalConsentGiven?: boolean;
+      religion?: 'ISLAM' | 'CHRISTIAN' | 'OTHER';
+      name?: string;
+    },
+  ) {
+    return this.authService.googleSignIn(body);
   }
 
   @ApiOperation({ summary: 'Logout — revoke refresh token' })

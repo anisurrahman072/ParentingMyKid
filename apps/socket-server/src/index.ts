@@ -124,8 +124,9 @@ monitor.on('connection', (socket: Socket) => {
     socket.data.kidRoom = room;
     socket.data.kidId = data.kidId;
 
-    // Announce kid online to everyone in the room (parent sees this immediately)
-    if (role === 'CHILD' || data.kidId) {
+    // Announce kid online to everyone in the room — only emit when the KID device joins.
+    // Parents join multiple rooms to listen; they must not trigger false kid:online events.
+    if (role === 'CHILD') {
       monitor.to(room).emit('kid:online', { kidId: data.kidId, userId, timestamp: Date.now() });
     }
     console.log(`[monitor] ${userId} joined room ${room}`);

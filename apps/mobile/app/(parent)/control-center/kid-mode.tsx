@@ -6,7 +6,7 @@
  * - Switch to Parent Mode via 4-digit PIN modal
  * - Rich entrance animations + confetti on session start
  */
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -22,7 +22,7 @@ import {
   Platform,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, {
   FadeInDown,
   FadeInUp,
@@ -31,6 +31,9 @@ import Animated, {
   withSpring,
   withSequence,
   withTiming,
+  withRepeat,
+  interpolate,
+  Easing,
   BounceIn,
   SlideInDown,
   ZoomIn,
@@ -39,6 +42,7 @@ import { router, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { apiClient } from '../../../src/services/api.client';
 import { API_ENDPOINTS } from '../../../src/constants/api';
+import { COLORS } from '../../../src/constants/colors';
 import { useFamilyStore } from '../../../src/store/family.store';
 import { useAuthStore } from '../../../src/store/auth.store';
 import { SPACING } from '../../../src/constants/spacing';
@@ -47,13 +51,22 @@ import { useParentGuardStore } from '../../../src/store/parentGuardSettings.stor
 import { UserRole } from '@parentingmykid/shared-types';
 import {
   setKidModeActive,
+  setOverlayChildId,
   stopVpn,
   consumePendingGameQuotaMessage,
 } from '../../../modules/parental-control/src/index';
 import { hasVpnPermission, requestVpnPermission } from '../../../src/services/ParentalControl';
 import { getParentPinPlain } from '../../../src/services/parentPinPlainStorage';
+import { fetchAndPushParentalPolicyForChild } from '../../../src/services/policySync.service';
+import {
+  connectKidMonitor,
+  disconnectKidMonitor,
+} from '../../../src/services/kidSocketEmitter.service';
 
 const { width: SCREEN_W } = Dimensions.get('window');
+const GRID_SIDE_PADDING = SPACING[4];
+const GRID_GUTTER = SPACING[4];
+const CATEGORY_CARD_WIDTH = (SCREEN_W - GRID_SIDE_PADDING * 2 - GRID_GUTTER) / 2;
 
 const LAST_ACTIVE_KID_KEY = '@pmk_last_active_kid';
 
@@ -390,11 +403,14 @@ function ScreenTimeBar({ childId }: { childId: string }) {
 }
 
 export default function KidModeScreen() {
+  const insets = useSafeAreaInsets();
   const { childId } = useLocalSearchParams<{ childId: string }>();
   const { dashboard } = useFamilyStore();
   const [showPinModal, setShowPinModal] = useState(false);
   const [showIdentityModal, setShowIdentityModal] = useState(true);
+  const [kidEntryConfirmed, setKidEntryConfirmed] = useState(false);
   const [gameQuotaSplash, setGameQuotaSplash] = useState<{ title: string; body: string } | null>(null);
+  const idlePhase = useSharedValue(0);
   const kid = dashboard?.children?.find((c) => c.childId === childId);
   const religion = (kid as any)?.religion ?? 'OTHER';
   const updateGuardSettings = useParentGuardStore((s) => s.update);
@@ -406,6 +422,20 @@ export default function KidModeScreen() {
     void updateGuardSettings({ lastActiveChildId: childId });
     AsyncStorage.setItem(LAST_ACTIVE_KID_KEY, childId).catch(() => {});
   }, [childId, updateGuardSettings]);
+
+  // Connect this device to the family socket channel as the KID once the identity
+  // modal is confirmed. This emits kid:online to the parent's device immediately and
+  // keeps the connection alive so the parent's Control Center shows "active now" in
+  // real-time. Disconnects (kid:offline) automatically when Kid Mode is exited.
+  useEffect(() => {
+    if (!kidEntryConfirmed || !childId) return;
+    const fid = useFamilyStore.getState().activeFamilyId;
+    if (!fid) return;
+    connectKidMonitor(fid, childId);
+    return () => {
+      disconnectKidMonitor();
+    };
+  }, [kidEntryConfirmed, childId]);
 
   const refreshGameQuotaSplash = useCallback(() => {
     if (Platform.OS !== 'android') return;
@@ -430,19 +460,21 @@ export default function KidModeScreen() {
     return () => sub.remove();
   }, [refreshGameQuotaSplash]);
 
-  // VPN permission guard: Android resets VPN consent on app reinstall.
-  // Request the permission on mount if needed. Only re-trigger VPN start via AppState
-  // when we were actually waiting for the user to grant the permission dialog —
-  // NOT on every foreground resume (which would race with the parent-mode PIN switch).
+  // Activate kid enforcement only after identity confirmation modal is completed.
+  // This avoids applying kid rules while parent is still in the handoff step.
   useEffect(() => {
-    if (Platform.OS !== 'android') return;
+    if (Platform.OS !== 'android' || !childId || !kidEntryConfirmed) return;
     let mounted = true;
     let waitingForPermission = false;
 
     void (async () => {
       try {
         const ok = await hasVpnPermission();
-        if (!ok && mounted) {
+        if (ok && mounted) {
+          await setKidModeActive(true);
+          await setOverlayChildId(childId);
+          await fetchAndPushParentalPolicyForChild(childId, { clearEnforcementPause: true });
+        } else if (!ok && mounted) {
           waitingForPermission = true;
           await requestVpnPermission();
           // requestVpnPermission shows the system dialog and returns immediately.
@@ -459,6 +491,8 @@ export default function KidModeScreen() {
             if (ok) {
               waitingForPermission = false;
               await setKidModeActive(true);
+              await setOverlayChildId(childId);
+              await fetchAndPushParentalPolicyForChild(childId, { clearEnforcementPause: true });
             }
           } catch {}
         })();
@@ -469,32 +503,44 @@ export default function KidModeScreen() {
       mounted = false;
       sub.remove();
     };
-  }, []);
+  }, [childId, kidEntryConfirmed]);
 
   const visibleCategories = CATEGORIES.filter(
     (cat) => cat.religions.includes('ALL') || cat.religions.includes(religion as any)
   );
+  const rowNeedsTallCard = useMemo(() => {
+    const map = new Map<number, boolean>();
+    visibleCategories.forEach((cat, index) => {
+      const rowIndex = Math.floor(index / 2);
+      const likelyWraps = cat.title.length >= 13;
+      map.set(rowIndex, Boolean(map.get(rowIndex)) || likelyWraps);
+    });
+    return map;
+  }, [visibleCategories]);
+
+  // One shared native-thread clock for all emoji idle motion (lighter than one loop per card).
+  useEffect(() => {
+    idlePhase.value = withRepeat(
+      withTiming(1, { duration: 2600, easing: Easing.inOut(Easing.sin) }),
+      -1,
+      true,
+    );
+  }, [idlePhase]);
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" />
+      <StatusBar barStyle="dark-content" />
       <LinearGradient
-        colors={['#0F0C29', '#302B63', '#24243E']}
+        colors={COLORS.parent.gradientHero}
         style={styles.bgGradient}
       />
 
-      <SafeAreaView style={styles.safeArea} edges={['top']}>
+      <SafeAreaView style={styles.safeArea} edges={[]}>
         {/* Header bar */}
         <Animated.View entering={FadeInDown.delay(50).springify()} style={styles.kidHeader}>
           <View style={styles.kidHeaderLeft}>
             <Text style={styles.kidGreeting}>Hi {kid?.name?.split(' ')[0] ?? 'Explorer'} 👋</Text>
           </View>
-          <TouchableOpacity
-            style={styles.parentModeButton}
-            onPress={() => setShowPinModal(true)}
-          >
-            <Text style={styles.parentModeButtonText}>🔒 Parent</Text>
-          </TouchableOpacity>
         </Animated.View>
 
         {/* Screen Time Bar */}
@@ -511,9 +557,11 @@ export default function KidModeScreen() {
               category={cat}
               index={index}
               childId={childId ?? ''}
+              idlePhase={idlePhase}
+              rowTall={Boolean(rowNeedsTallCard.get(Math.floor(index / 2)))}
             />
           ))}
-          <View style={{ height: 40 }} />
+          <View style={{ height: Math.max(120, insets.bottom + 96) }} />
         </ScrollView>
       </SafeAreaView>
 
@@ -532,6 +580,7 @@ export default function KidModeScreen() {
         <KidIdentityModal
           activeKidId={childId}
           onDismiss={() => setShowIdentityModal(false)}
+          onConfirmed={() => setKidEntryConfirmed(true)}
         />
       )}
 
@@ -564,13 +613,61 @@ function CategoryCard({
   category,
   index,
   childId,
+  idlePhase,
+  rowTall,
 }: {
   category: CategoryDef;
   index: number;
   childId: string;
+  idlePhase: Animated.SharedValue<number>;
+  rowTall: boolean;
 }) {
   const scale = useSharedValue(1);
+  const emojiPress = useSharedValue(0);
+  const motionVariant = index % 5;
+  const motionOffset = (index * 0.13) % 1;
   const animStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
+  const emojiAnimStyle = useAnimatedStyle(() => {
+    // Offset each card motion so they don't move in sync.
+    const t = (idlePhase.value + motionOffset) % 1;
+    const pressBoost = interpolate(emojiPress.value, [0, 1], [1, 1.12]);
+
+    let translateY = 0;
+    let translateX = 0;
+    let rotate = 0;
+    let scaleV = 1;
+
+    if (motionVariant === 0) {
+      // Soft bob + tiny tilt
+      translateY = interpolate(t, [0, 0.5, 1], [0, -6, 0]);
+      rotate = interpolate(t, [0, 0.5, 1], [-1.5, 1.5, -1.5]);
+    } else if (motionVariant === 1) {
+      // Side sway
+      translateX = interpolate(t, [0, 0.5, 1], [-2, 2, -2]);
+      rotate = interpolate(t, [0, 0.5, 1], [0, 2, 0]);
+      translateY = interpolate(t, [0, 0.5, 1], [0, -2, 0]);
+    } else if (motionVariant === 2) {
+      // Breathing pulse
+      scaleV = interpolate(t, [0, 0.5, 1], [1, 1.08, 1]);
+    } else if (motionVariant === 3) {
+      // Pop + settle
+      translateY = interpolate(t, [0, 0.25, 0.5, 1], [0, -5, -2, 0]);
+      scaleV = interpolate(t, [0, 0.25, 0.5, 1], [1, 1.06, 1.02, 1]);
+    } else {
+      // Tiny wobble
+      rotate = interpolate(t, [0, 0.25, 0.5, 0.75, 1], [0, 2, -2, 1, 0]);
+      translateY = interpolate(t, [0, 0.5, 1], [0, -3, 0]);
+    }
+
+    return {
+      transform: [
+        { translateX },
+        { translateY },
+        { rotate: `${rotate}deg` },
+        { scale: scaleV * pressBoost },
+      ],
+    };
+  });
 
   return (
     <Animated.View
@@ -579,8 +676,14 @@ function CategoryCard({
     >
       <TouchableOpacity
         activeOpacity={0.85}
-        onPressIn={() => { scale.value = withSpring(0.92); }}
-        onPressOut={() => { scale.value = withSpring(1); }}
+        onPressIn={() => {
+          scale.value = withSpring(0.95);
+          emojiPress.value = withTiming(1, { duration: 110 });
+        }}
+        onPressOut={() => {
+          scale.value = withSpring(1);
+          emojiPress.value = withTiming(0, { duration: 180 });
+        }}
         onPress={() => {
           router.push(`/(parent)/control-center/${category.route}?childId=${childId}`);
         }}
@@ -589,9 +692,9 @@ function CategoryCard({
           colors={category.gradient as [string, string]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
-          style={styles.categoryCard}
+          style={[styles.categoryCard, rowTall && styles.categoryCardRowTall]}
         >
-          <Text style={styles.categoryEmoji}>{category.emoji}</Text>
+          <Animated.Text style={[styles.categoryEmoji, emojiAnimStyle]}>{category.emoji}</Animated.Text>
           <Text style={styles.categoryTitle}>{category.title}</Text>
         </LinearGradient>
       </TouchableOpacity>
@@ -607,30 +710,17 @@ const styles = StyleSheet.create({
   kidHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    justifyContent: 'flex-start',
     paddingHorizontal: SPACING[5],
-    paddingVertical: SPACING[3],
+    paddingTop: SPACING[1],
+    paddingBottom: SPACING[3],
   },
   kidHeaderLeft: {},
   kidGreeting: {
     fontFamily: 'Inter_700Bold',
     fontSize: 22,
-    color: '#FFFFFF',
+    color: COLORS.parent.textPrimary,
   },
-  parentModeButton: {
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    borderRadius: 20,
-    paddingHorizontal: SPACING[4],
-    paddingVertical: SPACING[2],
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.25)',
-  },
-  parentModeButtonText: {
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 14,
-    color: '#FFFFFF',
-  },
-
   quotaSplashBackdrop: {
     flex: 1,
     backgroundColor: 'rgba(15,12,41,0.55)',
@@ -688,16 +778,16 @@ const styles = StyleSheet.create({
   screenTimeLabel: {
     fontFamily: 'Inter_600SemiBold',
     fontSize: 13,
-    color: 'rgba(255,255,255,0.8)',
+    color: COLORS.parent.textSecondary,
   },
   screenTimeValue: {
     fontFamily: 'Inter_700Bold',
     fontSize: 13,
-    color: '#FFFFFF',
+    color: COLORS.parent.textPrimary,
   },
   screenTimeTrack: {
     height: 8,
-    backgroundColor: 'rgba(255,255,255,0.15)',
+    backgroundColor: 'rgba(92,61,46,0.14)',
     borderRadius: 4,
     overflow: 'hidden',
   },
@@ -709,22 +799,27 @@ const styles = StyleSheet.create({
   categoriesGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    paddingHorizontal: SPACING[4],
-    gap: SPACING[4],
+    paddingHorizontal: GRID_SIDE_PADDING,
+    justifyContent: 'space-between',
   },
   categoryCardWrap: {
-    width: (SCREEN_W - SPACING[4] * 2 - SPACING[4] * 3) / 2 - 2,
+    width: CATEGORY_CARD_WIDTH,
+    marginBottom: GRID_GUTTER,
   },
   categoryCard: {
     borderRadius: 24,
     padding: SPACING[5],
     minHeight: 140,
-    justifyContent: 'flex-end',
+    justifyContent: 'center',
+    alignItems: 'center',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
     elevation: 5,
+  },
+  categoryCardRowTall: {
+    minHeight: 162,
   },
   categoryEmoji: {
     fontSize: 42,
@@ -734,6 +829,7 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_700Bold',
     fontSize: 16,
     color: '#FFFFFF',
+    textAlign: 'center',
   },
 
   // PIN Modal
